@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 
 from main import app
 from app.api.deps import get_current_active_user, get_db
+from app.services.face_engine import face_engine
+from app.services.liveness import liveness_service
 
 
 # =====================================================

@@ -17,7 +17,9 @@ from app.schema.payroll import (
     PayrollResponse,
     PayrollCreate,
     PayrollUpdate,
+    PayrollGenerationRequest,
 )
+
 from app.db.models.all_models import (
     User,
     Payroll,
@@ -129,14 +131,16 @@ def read_payrolls(
 )
 async def generate_payroll(
     *,
+    payload: PayrollGenerationRequest,
     db: Session = Depends(get_db),
-    month: int,
-    year: int,
     current_user: User = Depends(
         deps.get_current_active_user
     ),
     background_tasks: BackgroundTasks,
 ) -> Any:
+
+    month = payload.month
+    year = payload.year
 
     if not is_admin_or_manager(current_user):
         raise HTTPException(

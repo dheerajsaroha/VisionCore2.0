@@ -839,3 +839,169 @@ class SystemSetting(Base):
     def __repr__(self): return f"<SystemSetting {self.setting_key}={self.setting_value!r}>"
 
 
+# ── Attendance Corrections Workflow (Phase 4.3) ─────────────────────────────
+class AttendanceRequest(Base):
+    """Employee-submitted attendance regularization/correction request."""
+
+    __tablename__ = "attendance_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    employee_user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    # Optionally reference an existing attendance record being corrected.
+    attendance_log_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("attendance_logs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    request_payload: Mapped[Optional[dict]] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Structured request details (e.g., missing check-in explanation)",
+    )
+
+    status: Mapped[str] = mapped_column(
+        NVARCHAR(30),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+        comment="pending|approved|rejected|overridden|cancelled",
+    )
+
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=text("NOW()"),
+        index=True,
+    )
+
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    employee: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[employee_user_id],
+    )
+
+    attendance_log: Mapped[Optional["AttendanceLog"]] = relationship(
+        "AttendanceLog",
+        foreign_keys=[attendance_log_id],
+    )
+
+    approvals: Mapped[List["AttendanceApproval"]] = relationship(
+        "AttendanceApproval",
+        back_populates="attendance_request",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','approved','rejected','overridden','cancelled')",
+            name="ck_attendance_request_status",
+        ),
+        Index("ix_attendance_requests_employee_status", "employee_user_id", "status"),
+        Index("ix_attendance_requests_org_time", "org_id", "submitted_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AttendanceRequest {self.id} employee={self.employee_user_id} status={self.status!r}>"
+
+
+class AttendanceApproval(Base):
+    """Immutable approval/review events for an AttendanceRequest."""
+
+    __tablename__ = "attendance_approvals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+
+    attendance_request_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("attendance_requests.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    approver_user_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Can be null for system/admin imports if needed.",
+    )
+
+    approval_status: Mapped[str] = mapped_column(
+        NVARCHAR(30),
+        nullable=False,
+        comment="pending marker is not used here; use request.status for workflow",
+    )
+
+    decision_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    override_reason: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Rationale for overrides (when overridden by admin)",
+    )
+
+    decided_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=text("NOW()"),
+        index=True,
+    )
+
+    created_by_ip: Mapped[Optional[str]] = mapped_column(NVARCHAR(64), nullable=True)
+    created_by_user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by_correlation_id: Mapped[Optional[str]] = mapped_column(NVARCHAR(64), nullable=True, index=True)
+
+    # Relationships
+    attendance_request: Mapped["AttendanceRequest"] = relationship(
+        "AttendanceRequest",
+        back_populates="approvals",
+        foreign_keys=[attendance_request_id],
+    )
+
+    approver: Mapped[Optional["User"]] = relationship(
+        "User",
+        foreign_keys=[approver_user_id],
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "approval_status IN ('approved','rejected','overridden','cancelled')",
+            name="ck_attendance_approval_status",
+        ),
+        Index("ix_attendance_approvals_request_time", "attendance_request_id", "decided_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AttendanceApproval {self.id} request={self.attendance_request_id} status={self.approval_status!r}>"
+
+
+
