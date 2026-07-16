@@ -32,3 +32,13 @@ dist/
 
 # OS
 Thumbs.db
+.venv_old
+.md
+# Local planning
+TODO_PHASE*.md
+
+# Local environment
+installed_packages.txt
+
+# Backup folders
+archive_models/

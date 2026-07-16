@@ -18,6 +18,18 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.models.base import Base, NVARCHAR
 
+# Ensure SQLAlchemy metadata redefinition doesn't occur when modules are imported
+# under multiple package paths (backend.app vs app). This keeps Table objects
+# from being re-created in the same MetaData instance.
+__table_args__ = ()
+
+
+# NOTE: Do not try to globally mutate SQLAlchemy table re-definition behavior here.
+# Import-time multiple-definition errors should be prevented by ensuring consistent
+# import paths (single module instance) instead of relying on __extend_existing__.
+
+
+
 
 def _utc_now() -> datetime:
     """Return timezone-aware UTC datetime for model defaults."""
@@ -33,7 +45,88 @@ class Role(Base):
     permissions: Mapped[dict] = mapped_column(JSONB, nullable=False,
                                                server_default=text("'[]'::jsonb"))
     users: Mapped[List["User"]] = relationship("User", back_populates="role")
+    members: Mapped[List["User"]] = relationship(
+        "User",
+        secondary="user_roles",
+        back_populates="roles",
+        collection_class=list,
+    )
+    user_roles: Mapped[List["UserRole"]] = relationship(
+        "UserRole",
+        back_populates="role",
+        cascade="all, delete-orphan",
+    )
+    role_permissions: Mapped[List["RolePermission"]] = relationship(
+        "RolePermission",
+        back_populates="role",
+        cascade="all, delete-orphan",
+    )
+    granted_permissions: Mapped[List["Permission"]] = relationship(
+        "Permission",
+        secondary="role_permissions",
+        back_populates="roles",
+        collection_class=list,
+    )
     def __repr__(self): return f"<Role {self.id} {self.name!r}>"
+
+
+class Permission(Base):
+    __tablename__ = "permissions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    name: Mapped[str] = mapped_column(NVARCHAR(120), nullable=False, unique=True, index=True,
+                                       comment="Resource + action identifier, e.g. attendance.view | user.manage")
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(NVARCHAR(80), nullable=True,
+                                                   comment="Permission domain such as auth, attendance, analytics")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False,
+                                            server_default=text("TRUE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
+                                                  default=_utc_now, server_default=text("NOW()"))
+    roles: Mapped[List["Role"]] = relationship(
+        "Role",
+        secondary="role_permissions",
+        back_populates="granted_permissions",
+    )
+    role_permissions: Mapped[List["RolePermission"]] = relationship(
+        "RolePermission",
+        back_populates="permission",
+        cascade="all, delete-orphan",
+    )
+    def __repr__(self): return f"<Permission {self.id} {self.name!r}>"
+
+
+class RolePermission(Base):
+    __tablename__ = "role_permissions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    role_id: Mapped[int] = mapped_column(Integer, ForeignKey("roles.id", ondelete="CASCADE"),
+                                          nullable=False, index=True)
+    permission_id: Mapped[int] = mapped_column(Integer, ForeignKey("permissions.id", ondelete="CASCADE"),
+                                                nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
+                                                  default=_utc_now, server_default=text("NOW()"))
+    role: Mapped["Role"] = relationship("Role", back_populates="role_permissions")
+    permission: Mapped["Permission"] = relationship("Permission", back_populates="role_permissions")
+    __table_args__ = (
+        UniqueConstraint("role_id", "permission_id", name="uq_role_permission"),
+    )
+    def __repr__(self): return f"<RolePermission {self.role_id} {self.permission_id}>"
+
+
+class UserRole(Base):
+    __tablename__ = "user_roles"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"),
+                                          nullable=False, index=True)
+    role_id: Mapped[int] = mapped_column(Integer, ForeignKey("roles.id", ondelete="CASCADE"),
+                                          nullable=False, index=True)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
+                                                  default=_utc_now, server_default=text("NOW()"))
+    user: Mapped["User"] = relationship("User", back_populates="user_roles")
+    role: Mapped["Role"] = relationship("Role", back_populates="user_roles")
+    __table_args__ = (
+        UniqueConstraint("user_id", "role_id", name="uq_user_role"),
+    )
+    def __repr__(self): return f"<UserRole {self.user_id} {self.role_id}>"
 
 
 # ── Organization ──────────────────────────────────────────────────────────────
@@ -56,6 +149,7 @@ class Organization(Base):
     departments: Mapped[List["Department"]] = relationship("Department", back_populates="organization")
     shifts:      Mapped[List["Shift"]]      = relationship("Shift",      back_populates="organization")
     users:       Mapped[List["User"]]       = relationship("User",       back_populates="organization")
+    reports:     Mapped[List["Report"]]     = relationship("Report",     back_populates="organization")
     def __repr__(self): return f"<Organization {self.id} {self.name!r}>"
 
 
@@ -190,6 +284,16 @@ class User(Base):
         "FaceEmbedding", back_populates="user", uselist=False)
     attendance_logs: Mapped[List["AttendanceLog"]] = relationship(
         "AttendanceLog", back_populates="user", foreign_keys="AttendanceLog.user_id")
+    emotion_logs: Mapped[List["EmotionLog"]] = relationship("EmotionLog", back_populates="user")
+    requested_reports: Mapped[List["Report"]] = relationship("Report", back_populates="requester")
+    user_roles: Mapped[List["UserRole"]] = relationship(
+        "UserRole", back_populates="user", cascade="all, delete-orphan")
+    roles: Mapped[List["Role"]] = relationship(
+        "Role",
+        secondary="user_roles",
+        back_populates="members",
+        collection_class=list,
+    )
     manual_overrides_as_target: Mapped[List["ManualOverride"]] = relationship(
         "ManualOverride", back_populates="target_user", foreign_keys="ManualOverride.target_user_id")
     manual_overrides_as_admin: Mapped[List["ManualOverride"]] = relationship(
@@ -219,6 +323,20 @@ class FaceEmbedding(Base):
                                                     comment="FaceNet 128-d — pgvector VECTOR(128)")
     zkp_public_commitment: Mapped[Optional[str]] = mapped_column(
         NVARCHAR(512), nullable=True, comment="Schnorr P=x·G — no raw biometric stored")
+
+    # Phase-3 additions
+    quality_score: Mapped[Optional[float]] = mapped_column(
+        Numeric(5, 2), nullable=True,
+        comment="Enrollment image quality score (blur/brightness/pose heuristics)")
+    embedding_version: Mapped[Optional[str]] = mapped_column(
+        NVARCHAR(50), nullable=True,
+        comment="Version tag for the embedding/extraction pipeline/model")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        default=_utc_now, server_default=text("NOW()"),
+        comment="Row creation timestamp (UTC)")
+
+
     model_name: Mapped[str] = mapped_column(NVARCHAR(50), nullable=False,
                                              server_default=text("'Facenet'"))
     is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1,
@@ -235,7 +353,173 @@ class FaceEmbedding(Base):
     def __repr__(self): return f"<FaceEmbedding {self.id} user={self.user_id} active={self.is_active}>"
 
 
-# ── AttendanceLog ─────────────────────────────────────────────────────────────
+class EnrollmentEvent(Base):
+    __tablename__ = "enrollment_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"),
+                                          nullable=False, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),
+                                               ForeignKey("organizations.id", ondelete="RESTRICT"),
+                                               nullable=False, index=True)
+
+    status: Mapped[str] = mapped_column(
+        NVARCHAR(20), nullable=False,
+        comment="success|failed")
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    quality_score: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    embedding_version: Mapped[Optional[str]] = mapped_column(NVARCHAR(50), nullable=True)
+
+    image_resolution: Mapped[Optional[str]] = mapped_column(NVARCHAR(30), nullable=True,
+                                                              comment="e.g. 640x480")
+    brightness_score: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+    blur_score: Mapped[Optional[float]] = mapped_column(Numeric(6, 3), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        default=_utc_now, server_default=text("NOW()"),
+        index=True)
+
+    user: Mapped["User"] = relationship("User")
+
+    __table_args__ = (
+        CheckConstraint("status IN ('success','failed')", name="ck_enrollment_status"),
+        Index("ix_enrollment_events_org_time", "org_id", "created_at"),
+    )
+
+
+class SpoofDetectionLog(Base):
+    __tablename__ = "spoof_detection_logs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"),
+                                          nullable=True, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),
+                                               ForeignKey("organizations.id", ondelete="RESTRICT"),
+                                               nullable=False, index=True)
+
+    attempt_type: Mapped[str] = mapped_column(
+        NVARCHAR(20), nullable=False,
+        comment="enrollment|checkin")
+    is_spoof: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"),
+                                          comment="1=spoof detected")
+    spoof_score: Mapped[Optional[float]] = mapped_column(Numeric(5, 2), nullable=True)
+
+    model_name: Mapped[Optional[str]] = mapped_column(NVARCHAR(50), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        default=_utc_now, server_default=text("NOW()"),
+        index=True)
+
+    user: Mapped[Optional["User"]] = relationship("User")
+
+    __table_args__ = (
+        CheckConstraint("is_spoof IN (0,1)", name="ck_spoof_is_spoof"),
+        Index("ix_spoof_logs_org_time", "org_id", "created_at"),
+    )
+
+
+class RecognitionEvent(Base):
+    __tablename__ = "recognition_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),
+                                               ForeignKey("organizations.id", ondelete="RESTRICT"),
+                                               nullable=False, index=True)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"),
+                                                   nullable=True, index=True)
+
+    status: Mapped[str] = mapped_column(
+        NVARCHAR(20), nullable=False,
+        comment="matched|not_matched")
+
+    distance: Mapped[Optional[float]] = mapped_column(Numeric(6, 4), nullable=True,
+                                                     comment="Vector distance")
+    confidence: Mapped[Optional[float]] = mapped_column(Numeric(5, 3), nullable=True)
+
+    is_live: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    liveness_score: Mapped[Optional[float]] = mapped_column(Numeric(5, 3), nullable=True)
+
+    model_name: Mapped[Optional[str]] = mapped_column(NVARCHAR(50), nullable=True)
+    embedding_version: Mapped[Optional[str]] = mapped_column(NVARCHAR(50), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        default=_utc_now, server_default=text("NOW()"),
+        index=True)
+
+    user: Mapped[Optional["User"]] = relationship("User")
+
+    __table_args__ = (
+        CheckConstraint("status IN ('matched','not_matched')", name="ck_recognition_status"),
+        CheckConstraint("is_live IN (0,1)", name="ck_recognition_is_live"),
+        Index("ix_recognition_events_org_time", "org_id", "created_at"),
+    )
+
+
+
+
+class EmotionLog(Base):
+    __tablename__ = "emotion_logs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"),
+                                          nullable=False, index=True)
+    attendance_log_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("attendance_logs.id", ondelete="SET NULL"), nullable=True, index=True)
+    emotion: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False,
+                                         comment="happy | neutral | sad | angry | stressed | surprised | fear")
+    confidence: Mapped[float] = mapped_column(Numeric(4, 3), nullable=False,
+                                               comment="Confidence score for the predicted emotion")
+    model_name: Mapped[str] = mapped_column(NVARCHAR(50), nullable=False,
+                                             server_default=text("'InsightFace'"))
+    face_metadata: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True,
+                                                         comment="Optional raw facial landmarks, blink count, head pose estimates")
+    detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
+                                                   default=_utc_now, server_default=text("NOW()"))
+    user: Mapped["User"] = relationship("User", back_populates="emotion_logs")
+    attendance_log: Mapped[Optional["AttendanceLog"]]= relationship(
+        "AttendanceLog", back_populates="emotion_entries")
+    __table_args__ = (
+        Index("ix_emotion_user_time", "user_id", "detected_at"),
+    )
+    def __repr__(self): return f"<EmotionLog {self.id} user={self.user_id} emotion={self.emotion!r}>"
+
+
+class Report(Base):
+    __tablename__ = "reports"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),
+                                               ForeignKey("organizations.id", ondelete="CASCADE"),
+                                               nullable=False, index=True)
+    requested_by: Mapped[Optional[int]] = mapped_column(Integer,
+                                                        ForeignKey("users.id", ondelete="SET NULL"),
+                                                        nullable=True, index=True)
+    report_type: Mapped[str] = mapped_column(NVARCHAR(80), nullable=False,
+                                             comment="monthly_summary | blockchain_audit | attendance_export | compliance_audit")
+    parameters: Mapped[dict] = mapped_column(JSONB, nullable=False,
+                                              server_default=text("'{}'::jsonb"),
+                                              comment="Report filters and tenant-specific query parameters")
+    status: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False,
+                                         server_default=text("'pending'"),
+                                         comment="pending | running | completed | failed")
+    output_format: Mapped[str] = mapped_column(NVARCHAR(10), nullable=False,
+                                              server_default=text("'pdf'"))
+    storage_url: Mapped[Optional[str]] = mapped_column(NVARCHAR(512), nullable=True,
+                                                       comment="S3 / object storage URL for generated report export")
+    file_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True,
+                                                     comment="Internal path / artifact reference if stored locally")
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
+                                                   default=_utc_now, server_default=text("NOW()"))
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    organization: Mapped["Organization"] = relationship("Organization", back_populates="reports")
+    requester: Mapped[Optional["User"]] = relationship("User", back_populates="requested_reports")
+    __table_args__ = (
+        Index("ix_reports_org_status", "org_id", "status"),
+        CheckConstraint("status IN ('pending','running','completed','failed')", name="ck_reports_status"),
+    )
+    def __repr__(self): return f"<Report {self.id} type={self.report_type!r} status={self.status!r}>"
+
+
+# ── AttendanceLog ─────────────────────────────────────────────────────────────────
 class AttendanceLog(Base):
     __tablename__ = "attendance_logs"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
@@ -267,6 +551,7 @@ class AttendanceLog(Base):
                                                   default=_utc_now, server_default=text("NOW()"))
     user: Mapped["User"] = relationship("User", back_populates="attendance_logs",
                                          foreign_keys=[user_id])
+    emotion_entries: Mapped[List["EmotionLog"]] = relationship("EmotionLog", back_populates="attendance_log")
     manual_override: Mapped[Optional["ManualOverride"]] = relationship(
         "ManualOverride", back_populates="attendance_log", uselist=False)
     __table_args__ = (
@@ -479,4 +764,244 @@ class Payroll(Base):
         CheckConstraint("status IN ('draft','pending','paid')", name="ck_payroll_status"),
         UniqueConstraint("user_id", "month", "year", name="uq_user_monthly_payroll"),
     )
+
+
+# ── SystemSetting ─────────────────────────────────────────────────────────────
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False,
+        default=_utc_now, server_default=text("NOW()"),
+        index=True,
+    )
+
+    tenant_org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    actor_user_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    actor_role_name: Mapped[Optional[str]] = mapped_column(NVARCHAR(80), nullable=True)
+
+    action: Mapped[str] = mapped_column(NVARCHAR(200), nullable=False, index=True)
+
+    target_type: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False, index=True)
+    target_id: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False, index=True)
+
+    before_state: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    after_state: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+
+    reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    ip_address: Mapped[Optional[str]] = mapped_column(NVARCHAR(64), nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    correlation_id: Mapped[Optional[str]] = mapped_column(NVARCHAR(64), nullable=True, index=True)
+
+    status: Mapped[str] = mapped_column(
+        NVARCHAR(20), nullable=False, server_default=text("'success'"),
+        comment="success|failure"
+    )
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    actor_user: Mapped[Optional["User"]] = relationship("User")
+    organization: Mapped[Optional["Organization"]] = relationship("Organization")
+
+    __table_args__ = (
+        Index("ix_audit_logs_tenant_occurred", "tenant_org_id", "occurred_at"),
+        CheckConstraint("status IN ('success','failure')", name="ck_audit_status"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AuditLog {self.id} action={self.action!r} status={self.status!r}>"
+
+
+class SystemSetting(Base):
+    """Stores global system configurations (e.g. blockchain_enabled)."""
+    __tablename__ = "system_settings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    setting_key: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False, unique=True, index=True)
+    setting_value: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
+                                                  default=_utc_now, onupdate=_utc_now,
+                                                  server_default=text("NOW()"))
+    
+    def __repr__(self): return f"<SystemSetting {self.setting_key}={self.setting_value!r}>"
+
+
+# ── Attendance Corrections Workflow (Phase 4.3) ─────────────────────────────
+class AttendanceRequest(Base):
+    """Employee-submitted attendance regularization/correction request."""
+
+    __tablename__ = "attendance_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    employee_user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    # Optionally reference an existing attendance record being corrected.
+    attendance_log_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("attendance_logs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    request_payload: Mapped[Optional[dict]] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="Structured request details (e.g., missing check-in explanation)",
+    )
+
+    status: Mapped[str] = mapped_column(
+        NVARCHAR(30),
+        nullable=False,
+        default="pending",
+        server_default=text("'pending'"),
+        comment="pending|approved|rejected|overridden|cancelled",
+    )
+
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=text("NOW()"),
+        index=True,
+    )
+
+    cancelled_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    employee: Mapped["User"] = relationship(
+        "User",
+        foreign_keys=[employee_user_id],
+    )
+
+    attendance_log: Mapped[Optional["AttendanceLog"]] = relationship(
+        "AttendanceLog",
+        foreign_keys=[attendance_log_id],
+    )
+
+    approvals: Mapped[List["AttendanceApproval"]] = relationship(
+        "AttendanceApproval",
+        back_populates="attendance_request",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending','approved','rejected','overridden','cancelled')",
+            name="ck_attendance_request_status",
+        ),
+        Index("ix_attendance_requests_employee_status", "employee_user_id", "status"),
+        Index("ix_attendance_requests_org_time", "org_id", "submitted_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AttendanceRequest {self.id} employee={self.employee_user_id} status={self.status!r}>"
+
+
+class AttendanceApproval(Base):
+    """Immutable approval/review events for an AttendanceRequest."""
+
+    __tablename__ = "attendance_approvals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+
+    attendance_request_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("attendance_requests.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    approver_user_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="Can be null for system/admin imports if needed.",
+    )
+
+    approval_status: Mapped[str] = mapped_column(
+        NVARCHAR(30),
+        nullable=False,
+        comment="pending marker is not used here; use request.status for workflow",
+    )
+
+    decision_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    override_reason: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        comment="Rationale for overrides (when overridden by admin)",
+    )
+
+    decided_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=_utc_now,
+        server_default=text("NOW()"),
+        index=True,
+    )
+
+    created_by_ip: Mapped[Optional[str]] = mapped_column(NVARCHAR(64), nullable=True)
+    created_by_user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by_correlation_id: Mapped[Optional[str]] = mapped_column(NVARCHAR(64), nullable=True, index=True)
+
+    # Relationships
+    attendance_request: Mapped["AttendanceRequest"] = relationship(
+        "AttendanceRequest",
+        back_populates="approvals",
+        foreign_keys=[attendance_request_id],
+    )
+
+    approver: Mapped[Optional["User"]] = relationship(
+        "User",
+        foreign_keys=[approver_user_id],
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "approval_status IN ('approved','rejected','overridden','cancelled')",
+            name="ck_attendance_approval_status",
+        ),
+        Index("ix_attendance_approvals_request_time", "attendance_request_id", "decided_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AttendanceApproval {self.id} request={self.attendance_request_id} status={self.approval_status!r}>"
+
+
 

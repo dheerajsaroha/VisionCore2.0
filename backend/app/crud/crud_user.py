@@ -42,7 +42,11 @@ class CRUDUser:
             db.refresh(org)
 
         # 2. Get or Create Role
+        # SECURITY FIX (P0): prevent arbitrary role creation from public inputs.
         role_name = obj_in.get("role", "Employee")
+        if role_name != "Employee":
+            role_name = "Employee"
+
         role = db.query(Role).filter(Role.name == role_name).first()
         if not role:
             role = Role(name=role_name, permissions=[])
@@ -50,46 +54,57 @@ class CRUDUser:
             db.commit()
             db.refresh(role)
 
+
         # 3. Create User — use org_id from payload if injected by admin flow
         org_id = obj_in.get("org_id") or org.id
+
+        # BUG-11 fix: derive a unique username by appending a numeric suffix if needed.
+        base_username = obj_in["email"].split("@")[0]
+        username = base_username
+        suffix = 1
+        while db.query(User).filter(User.username == username).first():
+            username = f"{base_username}{suffix}"
+            suffix += 1
 
         db_obj = User(
             email=obj_in["email"],
             hashed_password=get_password_hash(obj_in["password"]),
             full_name=name,
-            username=obj_in["email"].split("@")[0],
+            username=username,
             org_id=org_id,
             role_id=role.id,
             employee_id=f"EMP-{uuid.uuid4().hex[:6].upper()}",
-            is_active=True,
-            is_deleted=False,
+            is_active=1,   # Integer column: 1=active, 0=suspended
+            is_deleted=0,  # Integer column: 0=active, 1=soft-deleted
         )
         db.add(db_obj)
         db.commit()
         db.refresh(db_obj)
         return db_obj
 
-    def enroll_face(self, db: Session, *, user_id: int, embedding: list) -> FaceEmbedding:
-        """
-        Stores or replaces the face embedding for a user.
-        Marks any previous embedding as inactive.
-        """
-        # Deactivate previous
+
+    def enroll_face(self,db: Session,*,user_id: int,embedding: list,) -> FaceEmbedding:
+   
+
         db.query(FaceEmbedding).filter(
             FaceEmbedding.user_id == user_id,
-            FaceEmbedding.is_active == True
-        ).update({"is_active": False})
-        db.commit()
+            FaceEmbedding.is_active == 1,
+        ).update(
+            {"is_active": 0},
+            synchronize_session=False,
+        )
 
         face_obj = FaceEmbedding(
             user_id=user_id,
             embedding=embedding,
             model_name="face_recognition",
-            is_active=True
+            is_active=1,
         )
+
         db.add(face_obj)
         db.commit()
         db.refresh(face_obj)
+
         return face_obj
 
 
