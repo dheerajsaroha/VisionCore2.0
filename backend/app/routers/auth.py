@@ -1,16 +1,27 @@
 """
 auth.py — Public authentication endpoints.
 """
+<<<<<<< HEAD
 from datetime import datetime, timedelta, timezone
 import uuid
 
 from typing import Any, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+=======
+from datetime import timedelta
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+>>>>>>> refs/remotes/origin/main
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import jwt
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+
+
 from app.api import deps
+
 from app.core import security
 from app.core.config import settings
 from app.core.rate_limit import rate_limit_dependency
@@ -84,25 +95,61 @@ def login_access_token(
         **_session_metadata(request),
     )
 
+    access_token = security.create_access_token(
+        user_obj.id,
+        expires_delta=access_token_expires,
+    )
+    refresh_token = security.create_refresh_token(
+        user_obj.id,
+        expires_delta=refresh_token_expires,
+    )
+
     return {
+<<<<<<< HEAD
         "access_token": security.create_access_token(
             user_obj.id, expires_delta=access_token_expires, session_jti=access_jti
         ),
         "refresh_token": security.create_refresh_token(
             user_obj.id, expires_delta=refresh_token_expires, session_jti=refresh_jti
         ),
+=======
+
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+>>>>>>> refs/remotes/origin/main
         "token_type": "bearer",
     }
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+
 @router.post("/refresh", response_model=Token)
 async def refresh_access_token(
+<<<<<<< HEAD
     request: Request,
     body: Optional[RefreshTokenRequest] = None,
     refresh_token: Optional[str] = Query(None),
     db: Session = Depends(deps.get_db),
 ) -> Any:
     """Refresh using refresh token with enterprise rotation + replay protection.
+=======
+    req: RefreshRequest,
+    db: Session = Depends(deps.get_db),
+) -> Any:
+    """
+    Refresh an access token using a valid refresh token.
+
+    Note: `req` is explicit so the endpoint reliably accepts JSON body:
+    {"refresh_token": "..."}
+    """
+    refresh_token = req.refresh_token
+
+    if await security.is_token_blacklisted(refresh_token):
+        raise HTTPException(status_code=401, detail="Refresh token has been revoked")
+>>>>>>> refs/remotes/origin/main
 
     Accepts ``refresh_token`` from (in priority order):
     1. Request body as JSON (``{"refresh_token": "..."}``)
@@ -126,6 +173,7 @@ async def refresh_access_token(
 
     # 3) Verify JWT + expiration
     try:
+<<<<<<< HEAD
         payload = jwt.decode(
             token,
             settings.SECRET_KEY,
@@ -135,6 +183,14 @@ async def refresh_access_token(
         refresh_jti = payload.get("jti")
         if not refresh_jti:
             raise ValueError("Missing refresh token identifier")
+=======
+        payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[security.ALGORITHM])
+        sub = payload.get("sub")
+        if sub is None:
+            raise ValueError("Missing sub")
+        user_id = int(sub)
+
+>>>>>>> refs/remotes/origin/main
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
 
@@ -214,9 +270,15 @@ async def refresh_access_token(
 
     return {
         "access_token": security.create_access_token(
+<<<<<<< HEAD
             user_obj.id, expires_delta=access_token_expires, session_jti=new_access_jti
         ),
         "refresh_token": new_refresh_token,
+=======
+            user_obj.id, expires_delta=access_token_expires
+        ),
+        "refresh_token": refresh_token,
+>>>>>>> refs/remotes/origin/main
         "token_type": "bearer",
     }
 
@@ -290,5 +352,16 @@ def register_user(
             status_code=status.HTTP_409_CONFLICT,
             detail="Email already registered."
         )
-    new_user = crud_user.create(db, obj_in=user_in.model_dump())
+
+    # SECURITY FIX (P0): Public registration must not allow privilege escalation.
+    # Force the lowest-privilege role.
+    payload = user_in.model_dump()
+    payload["role"] = "Employee"
+
+    new_user = crud_user.create(db, obj_in=payload)
     return new_user
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> refs/remotes/origin/main

@@ -50,6 +50,7 @@ function clearAuthStorage(): void {
   localStorage.removeItem('refresh_token');
 }
 
+<<<<<<< HEAD
 // Intercept requests to add JWT token (only if not already explicitly provided)
 apiClient.interceptors.request.use((config) => {
   // Do NOT override an explicitly provided Authorization header
@@ -63,6 +64,29 @@ apiClient.interceptors.request.use((config) => {
   config.headers['X-Request-ID'] = Math.random().toString(36).substring(2, 10);
   return config;
 }, (error) => Promise.reject(error));
+=======
+// Intercept requests to add JWT token
+// apiClient.interceptors.request.use((config) => {
+//   const token = getAuthToken();
+//   if (token) {
+//     config.headers.Authorization = `Bearer ${token}`;
+//   }
+//   // Add request ID for tracing
+//   config.headers['X-Request-ID'] = Math.random().toString(36).substring(2, 10);
+//   return config;
+// }, (error) => Promise.reject(error));
+
+apiClient.interceptors.request.use((config) => {
+    const token = getAuthToken();
+
+    // Don't overwrite an explicitly supplied Authorization header
+    if (token && !config.headers?.Authorization) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    return config;
+});
+>>>>>>> refs/remotes/origin/main
 
 // Intercept responses for global error handling and token refresh
 apiClient.interceptors.response.use(
@@ -90,8 +114,8 @@ apiClient.interceptors.response.use(
           throw new Error('No refresh token');
         }
 
-        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, null, {
-          params: { refresh_token: refreshToken }
+        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+          refresh_token: refreshToken
         });
 
         const newAccessToken = response.data.access_token;

@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import uuid
+=======
+from datetime import datetime, timezone
+>>>>>>> refs/remotes/origin/main
 from typing import Optional
 from sqlalchemy.orm import Session
 from app.crud.base import CRUDBase
@@ -15,7 +19,9 @@ class CRUDAttendance(CRUDBase[AttendanceLog, CheckInRequest, CheckInUpdate]):
     def log_check_in(self, db: Session, *, obj_in: CheckInRequest, status: str) -> AttendanceLog:
         db_obj = AttendanceLog(
             user_id=obj_in.user_id,
-            check_in=obj_in.timestamp,
+            # Always use server-side UTC timestamp — never trust client-supplied time.
+            # BUG-10 fix: client previously controlled check_in via obj_in.timestamp.
+            check_in=datetime.now(timezone.utc),
             status=status,
             emotion=obj_in.emotion,
             emotion_score=obj_in.emotion_score,
@@ -23,7 +29,7 @@ class CRUDAttendance(CRUDBase[AttendanceLog, CheckInRequest, CheckInUpdate]):
             source=obj_in.source,
             geofence_pass=obj_in.geofence_pass,
             gps_lat=obj_in.gps_lat,
-            gps_lng=obj_in.gps_lng
+            gps_lng=obj_in.gps_lng,
         )
         db.add(db_obj)
         db.commit()

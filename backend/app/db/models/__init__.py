@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # =============================================================================
 #  db/models/__init__.py
 #  Re-exports all models and Base from all_models.py and base.py
@@ -364,4 +365,14 @@ __all__ = [
     "EmployeeDocument",
 ]
 
+=======
+from app.db.models.base import Base, NVARCHAR
+
+# Load all model definitions so Base.metadata is populated.
+# IMPORTANT: import must use a single, consistent module path
+# (app.*) to avoid SQLAlchemy MetaData re-definition errors.
+import app.db.models.all_models  # noqa: F401
+
+__all__ = ["Base", "NVARCHAR"]
+>>>>>>> refs/remotes/origin/main
 

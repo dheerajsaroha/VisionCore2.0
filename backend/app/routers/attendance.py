@@ -1,20 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Request
+
 from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Any, List
 import base64
 import logging
 
-from app.crud.crud_attendance import attendance as crud_attendance
 from app.schema.attendance import CheckInRequest, AttendanceLogResponse
 from app.db.database import get_db
 from app.api import deps
 from app.db.models.all_models import User, AttendanceLog
 from app.services.analytics import analytics_service
-from app.services.blockchain import background_blockchain_anchor
 from app.services.cache import cache_response
-from app.services.face_engine import face_engine
-from app.services.liveness import liveness_service
+from app.services.attendance_controller import attendance_controller
+from app.services.blockchain import background_blockchain_anchor
+from app.core.rate_limit import rate_limit_dependency
+
+
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -25,7 +27,7 @@ logger = logging.getLogger(__name__)
 async def get_wellness_heatmap(
     *,
     db: Session = Depends(get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(deps.require_permission("attendance.view")),
 ) -> Any:
     """
     STRICT MULTI-TENANCY: Uses org_id from authenticated user.
@@ -73,23 +75,41 @@ def get_logs(
 @router.post("/check-in", response_model=AttendanceLogResponse)
 async def check_in(
     *,
+    request: Request,
     db: Session = Depends(get_db),
     req: CheckInRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(deps.get_current_active_user),
+    _: bool = Depends(rate_limit_dependency(max_requests=10, window_seconds=60)),
 ) -> Any:
+
     """
     Refactored check-in with robust error handling and async anchoring.
     SECURE: Requires authenticated user. Users can only check in as themselves
     unless Admin/Manager.
     """
-    image_bytes = None
-    if req.image_base64:
-        try:
-            image_bytes = base64.b64decode(req.image_base64)
-        except Exception:
-            raise HTTPException(status_code=400, detail="Malformed base64 image data")
+    try:
+        log = attendance_controller.handle_check_in(
+            db,
+            req=req,
+            current_user=current_user,
+            background_tasks=background_tasks,
+        )
+        return log
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Preserve observability context (request_id is set by main.py middleware)
+        request_id = getattr(getattr(request, "state", None), "request_id", None)
+        logger.exception(f"Check-in failed [request_id={request_id}]: {e}")
 
+<<<<<<< HEAD
     # 1. Liveness & Face Identification / Verification
     if image_bytes:
         try:
@@ -158,6 +178,10 @@ async def check_in(
     background_tasks.add_task(background_blockchain_anchor, log.id, payload, "attendance")
 
     return log
+=======
+        raise HTTPException(status_code=500, detail="Biometric processing failed")
+
+>>>>>>> refs/remotes/origin/main
 
 
 @router.patch("/logs/{log_id}", response_model=AttendanceLogResponse)
@@ -166,11 +190,9 @@ def update_attendance_log(
     db: Session = Depends(get_db),
     log_id: int,
     status: str,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(deps.require_permission("attendance.override")),
     background_tasks: BackgroundTasks
 ) -> Any:
-    if current_user.role.name not in ["Admin", "Manager"]:
-        raise HTTPException(status_code=403, detail="Unauthorized")
 
     # SECURE: Ensure the log belongs to the admin's organization
     log = db.query(AttendanceLog).join(User).filter(
@@ -190,6 +212,7 @@ def update_attendance_log(
 
     return log
 
+<<<<<<< HEAD
 
 # ── ATTENDANCE CORRECTION & REGULARIZATION ──
 @router.post("/corrections", status_code=201)
@@ -332,3 +355,5 @@ def get_attendance_summary(
         "attendance_rate_pct": round((total_present / max(1, len(filtered_logs))) * 100, 1)
     }
 
+=======
+>>>>>>> refs/remotes/origin/main

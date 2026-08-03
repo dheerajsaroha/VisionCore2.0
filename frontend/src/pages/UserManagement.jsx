@@ -5,7 +5,12 @@ import Webcam from 'react-webcam';
 import { userService } from '../services/userService';
 import { departmentService } from '../services/departmentService';
 import { useAuthStore } from '../store/authStore';
+<<<<<<< HEAD
 import { Card, CardContent } from '../components/ui/Card';
+=======
+import { useToast } from '../components/ui/Toast';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
+>>>>>>> refs/remotes/origin/main
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
@@ -39,7 +44,10 @@ export default function UserManagement() {
   const webcamRef = useRef(null);
   const menuRef = useRef(null);
   const { user: currentUser } = useAuthStore();
-  const isAdmin = ['Admin', 'Manager'].includes(currentUser?.role?.name);
+  const toast = useToast();
+  const currentRole = currentUser?.role?.name;
+  const canManageUsers = ['Admin', 'SuperAdmin'].includes(currentRole);
+  const canAssignAdmin = currentRole === 'SuperAdmin';
 
   const [form, setForm] = useState({ full_name: '', email: '', password: '', role: 'Employee', organization: '' });
   const [editForm, setEditForm] = useState({ full_name: '', role: '', dept_id: '', shift_id: '', is_active: 1 });
@@ -81,7 +89,9 @@ export default function UserManagement() {
       await userService.createUser(form);
       setShowAdd(false);
       setForm({ full_name: '', email: '', password: '', role: 'Employee', organization: '' });
+      toast({ message: `Account provisioned for ${form.full_name}.`, type: 'success' });
       fetchUsers();
+<<<<<<< HEAD
     } catch (err) { alert(err.response?.data?.detail || 'Failed'); }
   };
 
@@ -127,6 +137,103 @@ export default function UserManagement() {
       await userService.enrollFace(enrollUser.id, mockEmbedding);
       setEnrollUser(null); fetchUsers();
     } catch (err) { alert(err.response?.data?.detail || 'Enrollment failed'); }
+=======
+    } catch (err) {
+      toast({ message: err.response?.data?.detail || 'Failed to create user.', type: 'error' });
+    }
+  };
+
+  // const handleEnroll = async () => {
+  //   if (!webcamRef.current || !enrollUser) return;
+  //   try {
+  //     // const mockEmbedding = Array.from({ length: 128 }, () => Math.random());
+  //     // await userService.enrollFace(enrollUser.id, mockEmbedding);
+  //     // setEnrollUser(null);
+  //     // toast({ message: `Biometric template saved for ${enrollUser.full_name}.`, type: 'success' });
+  //     // fetchUsers();
+  //     const dataURLtoFile = async (dataUrl, filename) => {
+  //       const response = await fetch(dataUrl);
+  //       const blob = await response.blob();
+
+  //       return new File(
+  //         [blob],
+  //         filename,
+  //         {
+  //           type: "image/jpeg",
+  //         }
+  //       );
+  //     };
+  //   } catch (err) {
+  //     toast({ message: err.response?.data?.detail || 'Enrollment failed.', type: 'error' });
+  //   }
+  // };
+
+
+const handleEnroll = async () => {
+  if (!webcamRef.current || !enrollUser) {
+    return;
+  }
+
+  try {
+    const imageSrc =
+      webcamRef.current.getScreenshot();
+
+    if (!imageSrc) {
+      throw new Error(
+        "Failed to capture image"
+      );
+    }
+
+    const imageFile =
+      dataURLtoFile(
+        imageSrc,
+        "face.jpg"
+      );
+
+    await userService.enrollFace(
+      enrollUser.id,
+      imageFile
+    );
+
+    toast({
+      message: `Biometric template saved for ${enrollUser.full_name}.`,
+      type: "success",
+    });
+
+    setEnrollUser(null);
+
+    fetchUsers();
+  } catch (err) {
+    console.error(err);
+
+    toast({
+      message:
+        err.response?.data?.detail ||
+        "Enrollment failed.",
+      type: "error",
+    });
+  }
+};
+  const dataURLtoFile = (dataurl, filename) => {
+    const arr = dataurl.split(",");
+    const mime = arr[0].match(/:(.*?);/)[1];
+
+    const bstr = atob(arr[1]);
+
+    let n = bstr.length;
+
+    const u8arr = new Uint8Array(n);
+
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+
+    return new File(
+      [u8arr],
+      filename,
+      { type: mime }
+    );
+>>>>>>> refs/remotes/origin/main
   };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -145,7 +252,7 @@ export default function UserManagement() {
           <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Employee Directory</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{total} employees in your organization</p>
         </div>
-        {isAdmin && (
+        {canManageUsers && (
           <Button onClick={() => setShowAdd(true)} className="shadow-lg shadow-primary-500/30 hover:scale-105 transition-transform">
             <UserPlus className="mr-2 h-5 w-5" /> Add Employee
           </Button>
@@ -184,6 +291,7 @@ export default function UserManagement() {
               <EmptyState icon={Shield} title="No employees found" description="Try adjusting your filters or add a new employee."
                 actionText="Add Employee" onAction={() => setShowAdd(true)} />
             ) : (
+<<<<<<< HEAD
               <>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
@@ -195,6 +303,72 @@ export default function UserManagement() {
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Joined</th>
                         {isAdmin && <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Actions</th>}
+=======
+              <div className="overflow-x-auto hide-scrollbar">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/80 dark:bg-slate-800/50 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800">
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Employee</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Role</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Organization</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 bg-white dark:bg-transparent">
+                    {filtered.map((u) => (
+                      <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-4">
+                            <Avatar name={u.full_name} size="md" className="shadow-sm border border-slate-100 dark:border-slate-800" />
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">{u.full_name}</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                                <Mail className="h-3 w-3" /> {u.email}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge
+                            variant={
+                              u.role?.name === 'Admin'
+                                ? 'danger'
+                                : u.role?.name === 'Manager'
+                                ? 'warning'
+                                : 'primary'
+                            }
+                            className="font-medium px-2.5 py-1"
+                          >
+                            {u.role?.name}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400">
+                            <Building className="h-4 w-4 opacity-70" />
+                            {u.organization?.name || '-'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className={cn(`h-2.5 w-2.5 rounded-full shadow-sm`, u.is_active ? 'bg-emerald-500 shadow-emerald-500/20' : 'bg-slate-300 dark:bg-slate-600')} />
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{u.is_active ? 'Active' : 'Inactive'}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          {canManageUsers && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-500/10"
+                              onClick={() => setEnrollUser(u)}
+                            >
+                              <Camera className="mr-2 h-4 w-4" />
+                              Enroll Face
+                            </Button>
+                          )}
+                        </td>
+>>>>>>> refs/remotes/origin/main
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 bg-white dark:bg-transparent">
@@ -315,9 +489,30 @@ export default function UserManagement() {
               <Input label="Email Address" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required className="bg-slate-50 dark:bg-slate-900/50" />
               <Input label="Temporary Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required className="bg-slate-50 dark:bg-slate-900/50" />
               <div className="grid grid-cols-2 gap-4">
+<<<<<<< HEAD
                 <Select label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
                   options={[{ value: 'Employee', label: 'Employee' }, { value: 'Manager', label: 'Manager' }, { value: 'Admin', label: 'Admin' }]} />
                 <Input label="Organization" value={form.organization} onChange={(e) => setForm({ ...form, organization: e.target.value })} required className="bg-slate-50 dark:bg-slate-900/50" />
+=======
+                <Select
+                  label="Role Assignment"
+                  value={form.role}
+                  onChange={(e) => setForm({ ...form, role: e.target.value })}
+                  options={[
+                    { value: 'Employee', label: 'Employee' },
+                    { value: 'Manager', label: 'Manager' },
+                    ...(canAssignAdmin ? [{ value: 'Admin', label: 'Admin' }] : []),
+                  ]}
+                  className="bg-slate-50 dark:bg-slate-900/50"
+                />
+                <Input
+                  label="Organization / Dept"
+                  value={form.organization}
+                  onChange={(e) => setForm({ ...form, organization: e.target.value })}
+                  required
+                  className="bg-slate-50 dark:bg-slate-900/50"
+                />
+>>>>>>> refs/remotes/origin/main
               </div>
               <div className="flex gap-3 pt-6 border-t border-slate-100 dark:border-slate-800 mt-6">
                 <Button type="button" variant="ghost" className="flex-1" onClick={() => setShowAdd(false)}>Cancel</Button>

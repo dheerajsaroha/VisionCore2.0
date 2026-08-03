@@ -32,7 +32,16 @@ login: async (email, password) => {
           });
           return true;
         } catch (error) {
+<<<<<<< HEAD
           set({ isLoading: false, token: null, refreshToken: null, isAuthenticated: false, user: null });
+=======
+          set({ isLoading: false });
+          // Surface real backend error (often /users/me fails after successful /auth/login)
+          const detail = error?.response?.data?.detail;
+          if (detail) {
+            error.response.data.detail = detail;
+          }
+>>>>>>> refs/remotes/origin/main
           throw error;
         }
       },
@@ -45,6 +54,7 @@ login: async (email, password) => {
           }
         } catch {
           // Ignore logout errors
+          void e;
         } finally {
           set({
             user: null,

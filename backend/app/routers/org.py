@@ -1,8 +1,47 @@
+<<<<<<< HEAD
 from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+=======
+# from fastapi import APIRouter, Depends, HTTPException
+# from sqlalchemy.orm import Session
+
+# from app.crud.crud_org import organization as crud_org
+# from app.schema.org import OrganizationResponse, OrganizationCreate
+# from app.db.database import get_db
+# from app.api import deps
+# from app.db.models.all_models import User
+
+# router = APIRouter()
+
+# @router.post("/", response_model=OrganizationResponse)
+# def create_organization(
+#     *,
+#     db: Session = Depends(get_db),
+#     org_in: OrganizationCreate,
+#     current_user: User = Depends(deps.get_current_active_user),
+# ):
+#     """
+#     Create a new organization (Tenant).
+#     """
+#     if current_user.role.name != "Admin":
+#          raise HTTPException(status_code=403, detail="Not enough permissions")
+         
+#     org = crud_org.get_by_legal_id(db, legal_id=org_in.legal_id)
+#     if org:
+#         raise HTTPException(
+#             status_code=400,
+#             detail="The organization with this legal ID already exists.",
+#         )
+#     org = crud_org.create(db, obj_in=org_in)
+#     return org
+
+from fastapi import APIRouter, Depends, HTTPException, status
+>>>>>>> refs/remotes/origin/main
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
+import logging
 
 import hashlib
 import secrets
@@ -21,9 +60,12 @@ from app.db.database import get_db
 from app.api import deps
 from app.db.models.all_models import User
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
+<<<<<<< HEAD
 def _require_organization_admin(current_user: User) -> None:
     if current_user.role.name not in {"Admin", "SuperAdmin"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization administration is required")
@@ -33,13 +75,18 @@ def _require_platform_admin(current_user: User) -> None:
     if current_user.role.name != "SuperAdmin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Platform administration is required")
 
+=======
+>>>>>>> refs/remotes/origin/main
 @router.post("/", response_model=OrganizationResponse)
 def create_organization(
     *,
     db: Session = Depends(get_db),
     org_in: OrganizationCreate,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(
+        deps.require_admin_or_super_admin
+    ),
 ):
+<<<<<<< HEAD
     """
     Create a new organization (Tenant).
     """
@@ -196,3 +243,20 @@ def read_organization(
     if not org:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
     return org
+=======
+    existing_org = crud_org.get_by_legal_id(
+        db,
+        legal_id=org_in.legal_id,
+    )
+
+    if existing_org:
+        raise HTTPException(
+            status_code=400,
+            detail="The organization with this legal ID already exists.",
+        )
+
+    return crud_org.create(
+        db,
+        obj_in=org_in,
+    )
+>>>>>>> refs/remotes/origin/main

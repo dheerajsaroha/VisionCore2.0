@@ -8,6 +8,7 @@ import { DashboardSkeleton } from './SkeletonLoader';
  * ProtectedRoute - Guards routes based on authentication, permissions, and features.
  *
  * @param {React.ReactNode} children - The component to render if authorized
+<<<<<<< HEAD
  * @param {string} requiredRole - (DEPRECATED) Legacy role-based check — use requiredPermission instead
  * @param {string} requiredPermission - Permission required to access this route
  * @param {string} requiredFeature - Feature flag required (e.g., 'payroll', 'recruitment')
@@ -35,6 +36,13 @@ export const ProtectedRoute = ({
 }) => {
   const { isAuthenticated, user, isHydrated: authHydrated } = useAuthStore();
   const { hasPermission, hasFeature, isHydrated: permHydrated, isLoading: permLoading } = usePermission();
+=======
+ * @param {string} requiredRole - Optional single role requirement
+ * @param {string[]} requiredRoles - Optional list of allowed roles
+ */
+export const ProtectedRoute = ({ children, requiredRole, requiredRoles }) => {
+  const { isAuthenticated, user, isHydrated } = useAuthStore();
+>>>>>>> refs/remotes/origin/main
   const location = useLocation();
 
   // Show loading while auth state is being restored
@@ -47,6 +55,7 @@ export const ProtectedRoute = ({
     return <Navigate to={redirectTo} state={{ from: location }} replace />;
   }
 
+<<<<<<< HEAD
   // ── NEW: Permission-based check ──────────────────────────────────────────
   if (requiredPermission) {
     if (!permHydrated) {
@@ -71,6 +80,13 @@ export const ProtectedRoute = ({
     const allowedRoles = requiredRole === 'Admin'
       ? ['Admin', 'Manager', 'SuperAdmin']
       : [requiredRole];
+=======
+  const allowedRoles = requiredRoles || (requiredRole ? [requiredRole] : null);
+
+  // Role-based access control
+  if (allowedRoles) {
+    const userRole = user?.role?.name;
+>>>>>>> refs/remotes/origin/main
 
     if (!allowedRoles.includes(userRole)) {
       return <Navigate to={fallbackPath} replace />;
@@ -79,6 +95,7 @@ export const ProtectedRoute = ({
 
   return children;
 };
+<<<<<<< HEAD
 
 /**
  * PermissionRoute — Alias for ProtectedRoute with permission-based access.
@@ -100,3 +117,5 @@ export const PermissionRoute = ({ permission, feature, children, ...props }) => 
 
 export default ProtectedRoute;
 
+=======
+>>>>>>> refs/remotes/origin/main

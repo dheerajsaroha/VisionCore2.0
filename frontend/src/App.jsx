@@ -104,12 +104,20 @@ const AppRoutes = () => {
         </ProtectedRoute>
       } />
       <Route path="/dashboard/users" element={
+<<<<<<< HEAD
         <ProtectedRoute requiredPermission="employee.read">
+=======
+        <ProtectedRoute requiredRoles={['SuperAdmin', 'Admin']}>
+>>>>>>> refs/remotes/origin/main
           <DashboardLayout><UserManagement /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/reports" element={
+<<<<<<< HEAD
         <ProtectedRoute requiredPermission="report.generate">
+=======
+        <ProtectedRoute requiredRoles={['SuperAdmin', 'Admin', 'Manager']}>
+>>>>>>> refs/remotes/origin/main
           <DashboardLayout><Reports /></DashboardLayout>
         </ProtectedRoute>
       } />
@@ -124,7 +132,11 @@ const AppRoutes = () => {
         </ProtectedRoute>
       } />
       <Route path="/dashboard/payroll" element={
+<<<<<<< HEAD
         <ProtectedRoute requiredPermission="payroll.read">
+=======
+        <ProtectedRoute requiredRoles={['SuperAdmin', 'Admin']}>
+>>>>>>> refs/remotes/origin/main
           <DashboardLayout><Payroll /></DashboardLayout>
         </ProtectedRoute>
       } />

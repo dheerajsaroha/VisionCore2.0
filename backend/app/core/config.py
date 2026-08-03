@@ -32,7 +32,11 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
 
     # Security
+<<<<<<< HEAD
     SECRET_KEY: str = ""
+=======
+    SECRET_KEY: str = Field(default="", min_length=0)
+>>>>>>> refs/remotes/origin/main
 
     @field_validator("SECRET_KEY", mode="after")
     @classmethod
@@ -55,7 +59,7 @@ class Settings(BaseSettings):
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str = "postgres"
-    POSTGRES_PASSWORD: str = Field(default="", min_length=1)
+    POSTGRES_PASSWORD: str = Field(default="", min_length=0)
     POSTGRES_DB: str = "attendance_db"
     DB_ECHO: bool = False
 
@@ -70,7 +74,7 @@ class Settings(BaseSettings):
     def ASYNC_DATABASE_URL(self) -> str:
         # Encode the password here too!
         password = quote_plus(self.POSTGRES_PASSWORD)
-        return (f"postgresql+asyncpg://{self.POSTGRES_USER}:{password}"
+        return (f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
                 f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}")
     # CORS
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
@@ -104,6 +108,16 @@ class Settings(BaseSettings):
     # Blockchain
     BLOCKCHAIN_URL: str = "http://127.0.0.1:8545"
     BLOCKCHAIN_ENABLED: bool = False
+    BLOCKCHAIN_PRIVATE_KEY: str = Field(default="", description="Private key for anchoring transactions")
+    BLOCKCHAIN_CONTRACT_ADDRESS: str = Field(default="", description="Deployed AttendanceAudit contract address")
+
+    @field_validator("BLOCKCHAIN_PRIVATE_KEY", "BLOCKCHAIN_CONTRACT_ADDRESS", mode="after")
+    @classmethod
+    def validate_blockchain_credentials(cls, v: str, info) -> str:
+        # Pydantic V2 passes ValidationInfo as second argument
+        if info.data.get("BLOCKCHAIN_ENABLED") and not v:
+            logger.warning(f"{info.field_name} is missing but BLOCKCHAIN_ENABLED is True.")
+        return v
 
     # Geofencing
     GEOFENCE_ENABLED: bool = False
@@ -119,9 +133,13 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     EMAIL_FROM: str = "noreply@attendance.local"
 
+    # Audit
+    AUDIT_ENABLED: bool = True
+
     # Cache & Rate Limiting
     CACHE_DIR: str = "/tmp/visioncore_cache"
     REDIS_URL: str = "redis://localhost:6379/0"
+
 
 
 @lru_cache

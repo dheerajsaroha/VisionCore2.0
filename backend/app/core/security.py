@@ -3,15 +3,29 @@ from typing import Any, Union
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from app.core.config import settings
+import logging
 import re
 import uuid
 
 
+logger = logging.getLogger(__name__)
+
 # Exported for any module that needs it directly
 ALGORITHM = settings.ALGORITHM
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated="auto")
 
+# Global Token Blacklist via Redis.
+# socket_connect_timeout / socket_timeout prevent the asyncio retry wrapper
+# from re-raising ConnectionError past our try/except in is_token_blacklisted.
+redis_client = redis_async.from_url(
+    settings.REDIS_URL,
+    decode_responses=True,
+    socket_connect_timeout=2,
+    socket_timeout=2,
+)
+
+<<<<<<< HEAD
 # ── Lazy Redis Client (optional) ───────────────────────────────────────────
 # Redis is instantiated lazily with timeouts so that an unavailable Redis
 # server does NOT block application startup or cause imports to hang.
@@ -46,17 +60,36 @@ async def blacklist_token(token: str, expires_in: int | None = None) -> None:
         # logout or authentication unavailable.
         import logging
         logging.getLogger(__name__).warning("Redis unavailable for token blacklist write: %s", exc)
+=======
+
+async def blacklist_token(token: str, expires_in: int = None) -> None:
+    """Add a token to the Redis blacklist. Best-effort — silently skips if Redis is down."""
+    if expires_in is None:
+        expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    try:
+        await redis_client.setex(f"blacklist:{token}", expires_in, "revoked")
+    except Exception as exc:
+        logger.warning("Redis unavailable — token blacklist write skipped: %s", exc)
+>>>>>>> refs/remotes/origin/main
 
 
 async def is_token_blacklisted(token: str) -> bool:
+    """Return True if the token has been revoked. Fails open when Redis is down."""
     try:
         client = _get_redis()
         return await client.exists(f"blacklist:{token}") > 0
     except Exception as exc:
+<<<<<<< HEAD
         # Redis is optional. If it's down/unreachable, don't fail authentication.
         import logging
         logging.getLogger(__name__).warning(
             f"Redis unavailable for token blacklist check: {exc}")
+=======
+        # Fail-open: Redis being down must NOT block all authenticated requests.
+        # A revoked token may briefly continue to work — acceptable in development.
+        # In production, ensure Redis is highly available.
+        logger.warning("Redis unavailable for token blacklist check (fail-open): %s", exc)
+>>>>>>> refs/remotes/origin/main
         return False
 
 

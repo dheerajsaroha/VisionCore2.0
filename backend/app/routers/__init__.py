@@ -1,6 +1,10 @@
 from fastapi import APIRouter
+<<<<<<< HEAD
 from app.routers import auth, users, attendance, org, ticketing, payroll, reimbursement, departments, sessions_router, rbac, subscription, scope, workflow, dynamic_roles, eaac_router, leave, recruitment, hr, performance, learning, succession, policy, asset, enterprise, operations, ai
 from app.routers import platform_services_router, org_identity_router, workforce_router, hcm_router
+=======
+from app.routers import auth, users, attendance, org, ticketing, payroll, reimbursement, admin, attendance_correction
+>>>>>>> refs/remotes/origin/main
 
 api_router = APIRouter()
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -11,6 +15,7 @@ api_router.include_router(departments.router, prefix="/org", tags=["departments"
 api_router.include_router(ticketing.router, prefix="/ticketing", tags=["ticketing"])
 api_router.include_router(payroll.router, prefix="/payroll", tags=["payroll"])
 api_router.include_router(reimbursement.router, prefix="/reimbursement", tags=["reimbursement"])
+<<<<<<< HEAD
 api_router.include_router(leave.router, prefix="/leave", tags=["leave"])
 api_router.include_router(recruitment.router, prefix="/recruitment", tags=["recruitment"])
 api_router.include_router(hr.router, prefix="/hr", tags=["hr"])
@@ -33,3 +38,8 @@ api_router.include_router(platform_services_router.router, prefix="/platform", t
 api_router.include_router(org_identity_router.router, tags=["organization-identity-domain"])
 api_router.include_router(workforce_router.router, prefix="/workforce", tags=["workforce"])
 api_router.include_router(hcm_router.router, prefix="/hcm", tags=["hcm"])
+=======
+api_router.include_router(admin.router, prefix="/admin", tags=["admin"])
+api_router.include_router(attendance_correction.router, prefix="/attendance-corrections", tags=["attendance-corrections"])
+
+>>>>>>> refs/remotes/origin/main

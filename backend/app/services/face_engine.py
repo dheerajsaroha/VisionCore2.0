@@ -20,6 +20,7 @@ try:
 except (ImportError, KeyError, RuntimeError, OSError) as _fr_err:
     logger.warning("face_recognition module unavailable: %s", _fr_err)
 
+
 class FaceEngine:
     @staticmethod
     def get_embedding(image_bytes: bytes) -> Optional[List[float]]:
@@ -28,7 +29,9 @@ class FaceEngine:
         If no face or multiple faces are detected, return None.
         """
         if not FACE_RECOGNITION_AVAILABLE:
-            raise RuntimeError("face_recognition module not available. Biometric service offline.")
+            raise RuntimeError(
+                "face_recognition module not available. Biometric service offline."
+            )
 
         import io
         from PIL import Image
@@ -44,17 +47,21 @@ class FaceEngine:
         if len(face_locations) != 1:
             return None
 
-        face_encodings = face_recognition.face_encodings(image_array, face_locations)
+        face_encodings = face_recognition.face_encodings(
+            image_array, face_locations
+        )
         if len(face_encodings) == 0:
             return None
 
         return face_encodings[0].tolist()
 
     @staticmethod
-    def compare_embeddings(embedding1: List[float], embedding2: List[float], tolerance: float = 0.5) -> bool:
-        """
-        Compare two 128-d face embeddings and return True if they match.
-        """
+    def compare_embeddings(
+        embedding1: List[float],
+        embedding2: List[float],
+        tolerance: float = 0.5,
+    ) -> bool:
+        """Compare two 128-d face embeddings and return True if they match."""
         enc1 = np.array(embedding1)
         enc2 = np.array(embedding2)
         distance = np.linalg.norm(enc1 - enc2)
@@ -62,9 +69,7 @@ class FaceEngine:
 
     @staticmethod
     def get_emotion(image_bytes: bytes) -> str:
-        """
-        Analyze the face in the image for emotional expression.
-        """
+        """Analyze the face in the image for emotional expression."""
         try:
             from deepface import DeepFace
             import io
@@ -75,16 +80,18 @@ class FaceEngine:
 
             objs = DeepFace.analyze(
                 img_path=image_array,
-                actions=['emotion'],
-                enforce_detection=False
+                actions=["emotion"],
+                enforce_detection=False,
             )
 
             if objs:
-                return objs[0]['dominant_emotion']
+                return objs[0]["dominant_emotion"]
             return "neutral"
         except Exception as e:
             logger.error("Emotion analysis failed: %s", e)
             return "neutral"
 
+
 face_engine = FaceEngine()
+
 

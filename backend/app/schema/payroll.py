@@ -1,11 +1,26 @@
+<<<<<<< HEAD
 from pydantic import BaseModel, ConfigDict
+=======
+from pydantic import BaseModel, Field
+>>>>>>> refs/remotes/origin/main
 from datetime import datetime
 from typing import Optional
 import uuid
 
+
 class PayrollBase(BaseModel):
     month: int
     year: int
+
+
+
+
+class PayrollGenerationRequest(BaseModel):
+    month: int = Field(..., ge=1, le=12)
+    year: int = Field(..., ge=2020)
+
+
+
 
 class PayrollCreate(PayrollBase):
     user_id: int
