@@ -68,9 +68,12 @@ export function usePaginatedApi() {
       const items = response.data?.items || response.data || [];
       const totalCount = response.data?.total || items.length;
 
-      setData((prev) => (append ? [...prev, ...items] : items));
+      setData((prev) => {
+        const newData = append ? [...prev, ...items] : items;
+        setHasMore(items.length === 20 && newData.length < totalCount);
+        return newData;
+      });
       setTotal(totalCount);
-      setHasMore(items.length === 20 && (append ? prev.length + items.length : items.length) < totalCount);
       setPage(currentPage);
       return { success: true, data: items };
     } catch (err) {

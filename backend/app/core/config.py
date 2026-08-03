@@ -1,4 +1,3 @@
-# =============================================================================
 #  core/config.py
 # =============================================================================
 from __future__ import annotations
@@ -33,23 +32,22 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
 
     # Security
-    SECRET_KEY: str = Field(default="", min_length=32)
+    SECRET_KEY: str = ""
 
     @field_validator("SECRET_KEY", mode="after")
     @classmethod
     def validate_secret_key(cls, v: str) -> str:
         if not v or len(v) < 32:
-            # Auto-generate a secure key for development only
-            generated = secrets.token_urlsafe(48)
-            logger.critical(
-                "SECRET_KEY was not provided or too short. A temporary key has been generated. "
-                "Set a strong SECRET_KEY in your .env file for production!"
+            raise ValueError(
+                "SECRET_KEY is required and must be at least 32 characters long. "
+                "Set a strong SECRET_KEY in your .env file:\n"
+                "  SECRET_KEY=your-64-char-random-string-here"
             )
-            return generated
         return v
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    SESSION_IDLE_TIMEOUT_MINUTES: int = 60
     ALGORITHM: str = "HS256"
     BCRYPT_ROUNDS: int = 12
 
@@ -132,4 +130,3 @@ def get_settings() -> Settings:
 
 
 settings: Settings = get_settings()
-

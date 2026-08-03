@@ -1,0 +1,980 @@
+{
+  "metadata": {
+    "suite": "Subscription & Feature Management Runtime Validation",
+    "sprint": "Sprint 2",
+    "entity": "Subscription & Feature Management",
+    "timestamp": "2026-07-25T07:13:08.348745+00:00"
+  },
+  "phases": {
+    "subscription_apis": {
+      "passed": 45,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "A.0 SuperAdmin login succeeds",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.1 POST /plans creates plan",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.2 Duplicate plan code \u2192 409",
+          "passed": true,
+          "detail": "Got 409"
+        },
+        {
+          "name": "A.3 GET /plans returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.4 Plans response has total",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.5 Plans response has plans array",
+          "passed": true,
+          "detail": "count=10"
+        },
+        {
+          "name": "A.6 Plans paginated (max 10)",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.7 GET /plans/{id} returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.8 Plan name matches",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.9 GET /plans/{id}/detail returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.10 Plan detail has features array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.11 Plan detail has limits array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.12 PUT /plans/{id} updates plan",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.14 GET /orgs/{id}/subscription returns 200",
+          "passed": true,
+          "detail": "Got 200 (404 = no subscription assigned yet)"
+        },
+        {
+          "name": "A.15 POST /orgs/{id}/subscription/assign returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.16 Assign returns success=true",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.17 GET /orgs/{id}/subscription (after assign) returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.18 Subscription has plan_name",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.19 Subscription has enabled_features",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.20 Subscription has usage_stats",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.21 GET /subscriptions returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.22 Subscriptions has total field",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.23 Subscriptions has subscriptions array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.24 POST /orgs/{id}/subscription/upgrade returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.25 Upgrade returns success=true",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.26 POST /orgs/{id}/subscription/cancel returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.27 Cancel returns success=true",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.28 POST /orgs/{id}/subscription/renew returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.29 Renew returns success=true",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.30 GET /my/subscription returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.31 My subscription has plan_name",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.32 My subscription has enabled_features",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.33 GET /my/features returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.34 My features has features array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.35 My features has count",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.36 GET /module-summary returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.37 Module summary has modules array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.38 Module summary has total_modules > 0",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.39 POST /seed returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.40 Seed response contains plans",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.41 Seed response contains features",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.42 Seed response contains licensing_limits",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.43 Seed response contains plan_features",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.44 Seed completed successfully",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.45 Seed response structure valid",
+          "passed": true,
+          "detail": ""
+        }
+      ]
+    },
+    "feature_management": {
+      "passed": 18,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "B.0 SuperAdmin login",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "B.1 GET /features returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "B.2 Features has total",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "B.3 Features has features array",
+          "passed": true,
+          "detail": "count=10"
+        },
+        {
+          "name": "B.4 GET /features/{id} returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "B.5 POST /features creates feature",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "B.6 Duplicate feature code \u2192 409",
+          "passed": true,
+          "detail": "Got 409"
+        },
+        {
+          "name": "B.7 PUT /features/{id} updates feature",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "B.8 GET /features/modules returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "B.9 Modules list is non-empty",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "B.10 GET /plans/{id}/features returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "B.11 Plan features has total",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "B.12 GET /check/{feature} returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "B.13 Feature check returns allowed",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "B.14 POST /feature-flags creates flag",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "B.15 GET /feature-flags returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "B.16 PUT /feature-flags/{id} updates flag",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "B.17 DELETE /feature-flags/{id} deletes flag",
+          "passed": true,
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "licensing_limits": {
+      "passed": 14,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "C.0 SuperAdmin login",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "C.1 GET /limits returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "C.2 Limits response has total",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "C.3 Limits response has limits array",
+          "passed": true,
+          "detail": "count=21"
+        },
+        {
+          "name": "C.4 Starter plan has limits defined",
+          "passed": true,
+          "detail": "total=21"
+        },
+        {
+          "name": "C.5 POST /limits creates limit",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "C.6 Duplicate limit type \u2192 409",
+          "passed": true,
+          "detail": "Got 409"
+        },
+        {
+          "name": "C.7 PUT /limits/{id} updates limit",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "C.8 GET /orgs/{id}/usage returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "C.9 Usage has plan_name",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "C.10 Usage has current_usage",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "C.11 Usage has warnings",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "C.12 Usage has blocks",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "C.13 POST /plans/{id}/features/bulk works",
+          "passed": true,
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "authorization": {
+      "passed": 10,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "D.1 Employee login succeeds",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "D.2 Employee cannot create plan (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "D.3 Employee cannot update plan (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "D.4 Employee cannot delete plan (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "D.5 Employee cannot seed data (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "D.6 Employee can check feature access (200)",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "D.7 Employee can get own subscription (200)",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "D.8 Employee can get own features (200)",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "D.9 Subscription requires billing.view (403 for employee)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "D.10 Unauthenticated \u2192 401",
+          "passed": true,
+          "detail": "Got 401"
+        }
+      ]
+    },
+    "dependencies": {
+      "passed": 10,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "E.1 require_active_subscription is importable",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "E.2 require_feature is importable",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "E.3 require_plan is importable",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "E.4 Dependencies use 402 for subscription/feature checks",
+          "passed": true,
+          "detail": "require_active_subscription, require_feature, require_plan all use HTTP 402"
+        },
+        {
+          "name": "E.5 deps.py contains require_active_subscription",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "E.6 deps.py contains require_feature",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "E.7 deps.py contains require_plan",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "E.8 Non-existent plan \u2192 404",
+          "passed": true,
+          "detail": "Got 404"
+        },
+        {
+          "name": "E.9 Duplicate \u2192 409",
+          "passed": true,
+          "detail": "Got 409"
+        },
+        {
+          "name": "E.10 Unauthenticated \u2192 401",
+          "passed": true,
+          "detail": "Got 401"
+        }
+      ]
+    },
+    "seeder": {
+      "passed": 7,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "F.1 Seeder does not create duplicate plans",
+          "passed": true,
+          "detail": "Before=15, After=15"
+        },
+        {
+          "name": "F.2 Seeder does not create duplicate features",
+          "passed": true,
+          "detail": "Before=41, After=41"
+        },
+        {
+          "name": "F.3 Seeder does not create duplicate plan-feature mappings",
+          "passed": true,
+          "detail": "Before=78, After=78"
+        },
+        {
+          "name": "F.4 Seeder does not create duplicate licensing limits",
+          "passed": true,
+          "detail": "Before=62, After=62"
+        },
+        {
+          "name": "F.5 Seeder is idempotent (run 2 same as run 1)",
+          "passed": true,
+          "detail": "Run1: plans=15, Run2: plans=15"
+        },
+        {
+          "name": "F.6 Seed validation passes with zero issues",
+          "passed": true,
+          "detail": "Issues: []"
+        },
+        {
+          "name": "F.7 Service layer seed_subscription_data works",
+          "passed": true,
+          "detail": "Got: <class 'dict'>"
+        }
+      ]
+    },
+    "database": {
+      "passed": 16,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "G.1 subscription_plans has indexes",
+          "passed": true,
+          "detail": "Found indexes"
+        },
+        {
+          "name": "G.2 organization_subscriptions has unique constraint",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "G.3 organization_subscriptions has status index",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "G.4 features has unique code constraint",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "G.5 plan_features has unique constraint",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "G.6 feature_flags has unique org+feature constraint",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "G.7 licensing_limits has unique plan+type constraint",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "G.8 Foreign key constraints exist",
+          "passed": true,
+          "detail": "Found 7 foreign keys"
+        },
+        {
+          "name": "G.9 CHECK constraints exist",
+          "passed": true,
+          "detail": "Found 5 constraints"
+        },
+        {
+          "name": "G.10 No NULL plan codes",
+          "passed": true,
+          "detail": "Found 0"
+        },
+        {
+          "name": "G.11 No NULL feature codes",
+          "passed": true,
+          "detail": "Found 0"
+        },
+        {
+          "name": "G.12 No orphan PlanFeature (plan FK)",
+          "passed": true,
+          "detail": "Found 0"
+        },
+        {
+          "name": "G.13 No orphan PlanFeature (feature FK)",
+          "passed": true,
+          "detail": "Found 0"
+        },
+        {
+          "name": "G.14 No orphan FeatureFlag (org FK)",
+          "passed": true,
+          "detail": "Found 0"
+        },
+        {
+          "name": "G.15 No orphan LicensingLimit (plan FK)",
+          "passed": true,
+          "detail": "Found 0"
+        },
+        {
+          "name": "G.16 Rollback removes uncommitted plan",
+          "passed": true,
+          "detail": ""
+        }
+      ]
+    },
+    "frontend": {
+      "passed": 26,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "H.0 SuperAdmin login",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.1 My subscription (current plan) works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "H.2 Response has plan_name for display",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.3 Response has enabled_features for feature list",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.4 Response has plan for detail view",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.5 Response has status for display",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.6 Response has billing_cycle",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.7 Response has auto_renew",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.8 Response has start_date, end_date",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.9 Usage dashboard works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "H.10 Usage has plan_name",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.11 Usage has current_usage for quota display",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.12 Usage has limits for limit display",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.13 Usage has warnings for warning banners",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.14 Usage has blocks for disabled module handling",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.15 Plan list for comparison works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "H.16 Plans have prices for comparison",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.17 Plans have features for feature comparison",
+          "passed": true,
+          "detail": "Features per plan available via /plans/{id}/detail"
+        },
+        {
+          "name": "H.18 My features list works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "H.19 Features has count",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.20 Feature access check works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "H.21 Active plans for upgrade flow",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "H.22 Module summary for feature categorization",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "H.23 Feature pagination (limit=5)",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.24 Feature pagination (skip=5)",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.25 Feature search works",
+          "passed": true,
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "performance": {
+      "passed": 8,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "I.0 SuperAdmin login",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "I.1 Subscription lookup < 200ms",
+          "passed": true,
+          "detail": "took 75.3ms"
+        },
+        {
+          "name": "I.1a Subscription lookup took 75.3ms",
+          "passed": true,
+          "detail": "target < 200ms"
+        },
+        {
+          "name": "I.2 Feature lookup < 200ms",
+          "passed": true,
+          "detail": "took 38.9ms"
+        },
+        {
+          "name": "I.3 Usage calculation < 300ms",
+          "passed": true,
+          "detail": "took 42.6ms"
+        },
+        {
+          "name": "I.4 Limit validation < 200ms",
+          "passed": true,
+          "detail": "took 25.8ms"
+        },
+        {
+          "name": "I.5 Plan listing < 300ms",
+          "passed": true,
+          "detail": "took 31.8ms"
+        },
+        {
+          "name": "I.6 Performance timings recorded",
+          "passed": true,
+          "detail": "lookup=75.3ms feat=38.9ms usage=42.6ms limit=25.8ms plan=31.8ms"
+        }
+      ]
+    },
+    "security": {
+      "passed": 15,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "J.0 SuperAdmin login",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "J.0 Employee login",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "J.1 Employee cannot access org subscription (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "J.2 Employee cannot list subscriptions (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "J.3 Employee cannot create plan (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "J.4 Employee cannot assign plan (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "J.5 Employee cannot upgrade plan (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "J.6 Employee cannot cancel subscription (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "J.7 Employee cannot renew subscription (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "J.8 Employee cannot create feature flags (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "J.9 Employee cannot create limits (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "J.10 Employee cannot list feature flags (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "J.11 Employee cannot seed data (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "J.12 Employee cannot list limits (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "J.13 Cross-tenant isolation via org_id scoping",
+          "passed": true,
+          "detail": "All DB queries scoped by organization_id"
+        }
+      ]
+    },
+    "regression": {
+      "passed": 10,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "K.1 Login still works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "K.2 /users/me still works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "K.3 Organization current endpoint works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "K.4 Permission system works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "K.5 RBAC permissions endpoint works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "K.6 Users list works",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "K.7 Health check works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "K.8 Plans still seeded",
+          "passed": true,
+          "detail": "count=15"
+        },
+        {
+          "name": "K.9 Features still seeded",
+          "passed": true,
+          "detail": "count=41"
+        },
+        {
+          "name": "K.10 No 500 errors in subscription workflow",
+          "passed": true,
+          "detail": "All endpoints returned expected status codes"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total": 179,
+    "passed": 179,
+    "failed": 0,
+    "defects": [],
+    "score": 100.0,
+    "freeze_recommended": true,
+    "defect_count": 0
+  }
+}

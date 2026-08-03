@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 from typing import Optional
 import uuid
@@ -24,5 +24,4 @@ class ReimbursementResponse(ReimbursementBase):
     processed_at: Optional[datetime]
     approved_by: Optional[int]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

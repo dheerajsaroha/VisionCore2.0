@@ -1,10 +1,14 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
+let selectCounter = 0;
+const fallbackSelectId = () => `select-${++selectCounter}`;
+
 export const Select = React.forwardRef(
   ({ label, error, className, options = [], placeholder, ...props }, ref) => {
-    const id = props.id || props.name || Math.random().toString(36).slice(2);
+    const autoId = useId() ?? fallbackSelectId();
+    const id = props.id || props.name || autoId;
 
     return (
       <div className="w-full">

@@ -50,11 +50,14 @@ function clearAuthStorage(): void {
   localStorage.removeItem('refresh_token');
 }
 
-// Intercept requests to add JWT token
+// Intercept requests to add JWT token (only if not already explicitly provided)
 apiClient.interceptors.request.use((config) => {
-  const token = getAuthToken();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  // Do NOT override an explicitly provided Authorization header
+  if (!config.headers.Authorization) {
+    const token = getAuthToken();
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
   // Add request ID for tracing
   config.headers['X-Request-ID'] = Math.random().toString(36).substring(2, 10);
@@ -92,14 +95,21 @@ apiClient.interceptors.response.use(
         });
 
         const newAccessToken = response.data.access_token;
+        const newRefreshToken = response.data.refresh_token;
         // Sync back to Zustand store shape to avoid mismatch on next request
         const raw = localStorage.getItem('auth-storage');
         if (raw) {
           const parsed = JSON.parse(raw);
           parsed.state.token = newAccessToken;
+          if (newRefreshToken) {
+            parsed.state.refreshToken = newRefreshToken;
+          }
           localStorage.setItem('auth-storage', JSON.stringify(parsed));
         }
         localStorage.setItem('access_token', newAccessToken);
+        if (newRefreshToken) {
+          localStorage.setItem('refresh_token', newRefreshToken);
+        }
         apiClient.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
         onTokenRefreshed(newAccessToken);
 
@@ -125,4 +135,3 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
-

@@ -1,0 +1,212 @@
+{
+  "entity": "Entity 5: Enterprise Dynamic Roles & Role Template Engine",
+  "timestamp": "2026-07-25T08:09:35.665314+00:00",
+  "phases": {
+    "templates": {
+      "passed": 3,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "A.1 POST /dynamic-roles/seed returns 200",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.2 GET /dynamic-roles/templates returns 200",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.3 Blueprint templates seeded (>0)",
+          "status": "PASS",
+          "detail": "count=12"
+        }
+      ]
+    },
+    "role_crud": {
+      "passed": 3,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "B.1 Create custom role from template",
+          "status": "PASS",
+          "detail": "Got 201"
+        },
+        {
+          "name": "B.2 POST /dynamic-roles/roles creates custom role",
+          "status": "PASS",
+          "detail": "Got 201"
+        },
+        {
+          "name": "B.3 GET /dynamic-roles/roles lists active roles",
+          "status": "PASS",
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "cloning": {
+      "passed": 1,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "C.1 POST /roles/{id}/clone clones role",
+          "status": "PASS",
+          "detail": "Got 201"
+        }
+      ]
+    },
+    "inheritance": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "C.2 Establish parent-child inheritance (HR -> LeadDev)",
+          "status": "PASS",
+          "detail": "Got 201"
+        },
+        {
+          "name": "C.3 Cycle detection prevents circular inheritance (400)",
+          "status": "PASS",
+          "detail": "Got 400"
+        }
+      ]
+    },
+    "versioning": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "D.1 Update role increments version to v2",
+          "status": "PASS",
+          "detail": "version=2"
+        },
+        {
+          "name": "D.2 GET /roles/{id}/versions returns version history",
+          "status": "PASS",
+          "detail": "count=2"
+        }
+      ]
+    },
+    "diff": {
+      "passed": 1,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "D.3 Role diff shows added permissions",
+          "status": "PASS",
+          "detail": "diff={'role_id': 6, 'v1': 1, 'v2': 2, 'added_permissions': ['server.reboot'], 'removed_permissions': [], 'added_approval_rights': [], 'removed_approval_rights': [], 'scope_changes': {'v1_scope': {}, 'v2_scope': {}}}"
+        }
+      ]
+    },
+    "rollback": {
+      "passed": 1,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "D.4 Rollback restores version 1 state",
+          "status": "PASS",
+          "detail": "permissions=['code.review', 'deployment.trigger']"
+        }
+      ]
+    },
+    "assignments": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "E.1 Assign primary dynamic role to user",
+          "status": "PASS",
+          "detail": "Got 201"
+        },
+        {
+          "name": "E.2 Assign secondary dynamic role to user",
+          "status": "PASS",
+          "detail": "Got 201"
+        }
+      ]
+    },
+    "effective_auth": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "F.1 GET /effective-authorization returns 200",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "F.2 Effective permissions include inherited role permissions",
+          "status": "PASS",
+          "detail": "perms=['attendance.override', 'attendance.read', 'code.review', 'deployment.trigger', 'employee.read', 'employee.write', 'leave.approve', 'recruitment.manage']"
+        }
+      ]
+    },
+    "security": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "G.1 Non-admin user cannot create role (403)",
+          "status": "PASS",
+          "detail": "Got 403"
+        },
+        {
+          "name": "G.2 Unauthenticated call returns 401",
+          "status": "PASS",
+          "detail": "Got 401"
+        }
+      ]
+    },
+    "performance": {
+      "passed": 1,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "H.1 Effective authorization benchmark < 200ms",
+          "status": "PASS",
+          "detail": "took 27.1ms"
+        }
+      ]
+    },
+    "regression": {
+      "passed": 6,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "I.1 /users/me works (Auth/User frozen)",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "I.2 /org/current works (Organization frozen)",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "I.3 RBAC permissions works (RBAC frozen)",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "I.4 Subscription plans works (Subscription frozen)",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "I.5 Data scope works (Data Scope frozen)",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "I.6 Workflow Engine works (Workflow frozen)",
+          "status": "PASS",
+          "detail": "Got 200"
+        }
+      ]
+    }
+  },
+  "passed": 26,
+  "failed": 0,
+  "total": 26,
+  "score": 100.0
+}

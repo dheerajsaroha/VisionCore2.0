@@ -12,25 +12,27 @@ export const useAuthStore = create(
       isLoading: false,
       isHydrated: false,
 
-      login: async (email, password) => {
+login: async (email, password) => {
         set({ isLoading: true });
         try {
           const response = await authService.login(email, password);
           const { access_token, refresh_token } = response.data;
+          
+          // 🐛 FIX: Save token to store FIRST so apiClient interceptor picks it up
+          // from localStorage (via Zustand persist middleware) before getMe call
+          set({ token: access_token, refreshToken: refresh_token });
           
           // Fetch user profile immediately after login
           const meResponse = await authService.getMe(access_token);
           
           set({
             user: meResponse.data,
-            token: access_token,
-            refreshToken: refresh_token,
             isAuthenticated: true,
             isLoading: false,
           });
           return true;
         } catch (error) {
-          set({ isLoading: false });
+          set({ isLoading: false, token: null, refreshToken: null, isAuthenticated: false, user: null });
           throw error;
         }
       },
@@ -41,7 +43,7 @@ export const useAuthStore = create(
           if (token) {
             await authService.logout(token);
           }
-        } catch (e) {
+        } catch {
           // Ignore logout errors
         } finally {
           set({
@@ -74,19 +76,41 @@ export const useAuthStore = create(
         }
       },
 
+      refreshProfile: async () => {
+        const { token } = get();
+        if (!token) return null;
+        try {
+          const res = await authService.getMe(token);
+          set({ user: res.data });
+          return res.data;
+        } catch (error) {
+          console.error("Failed reactive profile refresh:", error);
+          return null;
+        }
+      },
+
       hydrate: () => {
         const state = get();
-        set({ isHydrated: true });
         if (state.token && !state.user) {
           // Try to restore user from token
           authService
             .getMe(state.token)
             .then((res) => {
-              set({ user: res.data, isAuthenticated: true });
+              set({ user: res.data, isAuthenticated: true, isHydrated: true });
             })
             .catch(() => {
-              get().logout();
+              // Token invalid or expired — clear auth state completely
+              set({
+                user: null,
+                token: null,
+                refreshToken: null,
+                isAuthenticated: false,
+                isHydrated: true,
+              });
+              localStorage.removeItem('auth-storage');
             });
+        } else {
+          set({ isHydrated: true });
         }
       },
     }),

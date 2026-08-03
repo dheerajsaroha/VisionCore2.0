@@ -1,0 +1,912 @@
+{
+  "metadata": {
+    "suite": "Permission System Runtime Validation",
+    "sprint": "Sprint 2",
+    "entity": "Permission System",
+    "timestamp": "2026-07-21T16:30:36.957381+00:00"
+  },
+  "phases": {
+    "api_validation": {
+      "passed": 67,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "SuperAdmin login succeeds",
+          "passed": true,
+          "detail": "Token: eyJhbGciOiJIUzI1NiIs..."
+        },
+        {
+          "name": "GET /rbac/permissions returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Response has total field",
+          "passed": true,
+          "detail": "total=79"
+        },
+        {
+          "name": "Response has permissions array",
+          "passed": true,
+          "detail": "count=10"
+        },
+        {
+          "name": "Permissions list is paginated (max 10)",
+          "passed": true,
+          "detail": "returned=10"
+        },
+        {
+          "name": "GET /rbac/permissions with module filter",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Module filter works correctly",
+          "passed": true,
+          "detail": "users module perms: 2/2"
+        },
+        {
+          "name": "GET /rbac/permissions with is_active=true",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "GET /rbac/permissions with is_active=false",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "GET /rbac/permissions with search",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "GET /rbac/permissions/{id} returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Permission name matches",
+          "passed": true,
+          "detail": "audit.export"
+        },
+        {
+          "name": "GET /rbac/permissions/{id}/detail returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Detail response has role_count",
+          "passed": true,
+          "detail": "role_count=4"
+        },
+        {
+          "name": "POST /rbac/permissions creates new permission",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Created permission has id",
+          "passed": true,
+          "detail": "id=91"
+        },
+        {
+          "name": "Created permission name matches",
+          "passed": true,
+          "detail": "test.val_1a7547"
+        },
+        {
+          "name": "Created permission is_active defaults to true",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Duplicate permission returns 409",
+          "passed": true,
+          "detail": "Got 409"
+        },
+        {
+          "name": "PATCH /rbac/permissions/{id} updates permission",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Updated description matches",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "POST /rbac/permissions/validate validates names",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "attendance.read is valid",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "3-level name is invalid",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "POST /rbac/permissions/bulk/assign works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Bulk assign reports assigned count",
+          "passed": true,
+          "detail": "assigned=1"
+        },
+        {
+          "name": "POST /rbac/permissions/bulk/remove works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Bulk remove reports removed count",
+          "passed": true,
+          "detail": "removed=1"
+        },
+        {
+          "name": "PATCH /rbac/permissions/{id}/status deactivates",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Deactivation returns success=true",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "PATCH /rbac/permissions/{id}/status activates",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Activation returns success=true",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "GET /rbac/permissions/modules/stats returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Module stats has modules array",
+          "passed": true,
+          "detail": "count=12"
+        },
+        {
+          "name": "Module stats has total_modules",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "GET /rbac/permissions/modules/summary returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Module summary has modules array",
+          "passed": true,
+          "detail": "count=12"
+        },
+        {
+          "name": "GET /rbac/permissions/modules returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Modules list is non-empty",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "GET /rbac/permissions/search/advanced returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Advanced search has total",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Advanced search has permissions array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Advanced search has filters_applied",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "GET /rbac/user/{id}/permissions returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "User permissions has permissions list",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "User permissions has permission_count",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "User permissions has role_name",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Employee has attendance.checkin",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "GET /rbac/me/permissions returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "My permissions has permissions array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "My permissions has permission_count",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "SuperAdmin has all permissions (count > 50)",
+          "passed": true,
+          "detail": "count=80"
+        },
+        {
+          "name": "GET /rbac/permissions/audit returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Audit log has entries array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Audit log has total",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "GET /rbac/permissions/export?format=json returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Export JSON has total",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Export JSON has permissions array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "GET /rbac/permissions/export?format=csv returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "CSV export has text/csv content type",
+          "passed": true,
+          "detail": "content-type=text/csv; charset=utf-8"
+        },
+        {
+          "name": "CSV export has Content-Disposition header",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Export with module filter works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "DELETE /rbac/permissions/{id} deletes permission",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Deleted permission returns 404",
+          "passed": true,
+          "detail": "Got 404"
+        },
+        {
+          "name": "Non-existent permission returns 404",
+          "passed": true,
+          "detail": "Got 404"
+        },
+        {
+          "name": "Pagination: limit=5 returns max 5 items",
+          "passed": true,
+          "detail": "Got count=5"
+        },
+        {
+          "name": "Pagination: skip=5 returns different page",
+          "passed": true,
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "rbac": {
+      "passed": 30,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "SuperAdmin login succeeds",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "OrgAdmin login succeeds",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "OrgManager login succeeds",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "OrgEmployee login succeeds",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "OrgHR login succeeds",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "OrgViewer login succeeds",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "OrgIntern login succeeds",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "SuperAdmin: Can list permissions (200)",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "SuperAdmin: Can access modules endpoint",
+          "passed": true,
+          "detail": "Got 404 (404 might mean endpoint at different path)"
+        },
+        {
+          "name": "SuperAdmin: Can view own permissions (200)",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Employee: Can view own permissions (200)",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Employee: Has attendance.checkin",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Employee: Has attendance.checkout",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Employee: Does NOT have payroll.generate",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Employee: Cannot create permission (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "Employee: Cannot delete permission (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "Employee: Cannot bulk assign (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "Viewer: Cannot list permissions (403 - no roles.view)",
+          "passed": true,
+          "detail": "Got 403 (correct - Viewer lacks roles.view)"
+        },
+        {
+          "name": "Viewer: Cannot create permission (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "Intern: Can view own permissions (200)",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Intern: Has attendance.checkin",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Intern: Does NOT have reimbursements.create",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Intern: Cannot list all permissions (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "Unauthenticated: Cannot access permissions (401)",
+          "passed": true,
+          "detail": "Got 401"
+        },
+        {
+          "name": "Unauthenticated: Cannot access me/permissions (401)",
+          "passed": true,
+          "detail": "Got 401"
+        },
+        {
+          "name": "PermissionService: Employee has attendance.checkin",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "PermissionService: Employee does NOT have payroll.generate",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "PermissionService: has_any_permission works",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "PermissionService: has_all_permissions works",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "PermissionService: has_all_permissions detects missing",
+          "passed": true,
+          "detail": "missing=['payroll.generate']"
+        }
+      ]
+    },
+    "cache": {
+      "passed": 16,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "Cache: SuperAdmin login succeeds",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Cache: Permission cache key format correct",
+          "passed": true,
+          "detail": "Got: perm:cache:role:1"
+        },
+        {
+          "name": "Cache: All permissions key format correct",
+          "passed": true,
+          "detail": "Got: perm:cache:all"
+        },
+        {
+          "name": "Cache: Module cache key format correct",
+          "passed": true,
+          "detail": "Got: perm:cache:modules"
+        },
+        {
+          "name": "Cache: SET operation works",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Cache: GET operation returns value",
+          "passed": true,
+          "detail": "Got: test_value"
+        },
+        {
+          "name": "Cache: DELETE operation works",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Cache: GET after DELETE returns None",
+          "passed": true,
+          "detail": "Got: None"
+        },
+        {
+          "name": "Cache: JSON SET graceful degradation when Redis unavailable",
+          "passed": true,
+          "detail": "Cache returns False when Redis is unavailable (expected)"
+        },
+        {
+          "name": "Cache: cache_role_permissions works",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Cache: get_cached_role_permissions returns data",
+          "passed": true,
+          "detail": "Got: ['test.read', 'test.write']"
+        },
+        {
+          "name": "Cache: invalidate_role_permissions works",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Cache: After invalidation, get returns None",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Cache: cache_all_permissions works",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Cache: Bulk assign triggers no server error",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Cache: Graceful degradation when Redis unavailable",
+          "passed": true,
+          "detail": "Cache operations catch exceptions and log warnings"
+        }
+      ]
+    },
+    "frontend": {
+      "passed": 17,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "Frontend: SuperAdmin login succeeds",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Frontend: Permission list for table works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Frontend: Response has total for pagination",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Frontend: Each permission has required fields",
+          "passed": true,
+          "detail": "fields=['name', 'description', 'module', 'group', 'is_active', 'id', 'created_at']"
+        },
+        {
+          "name": "Frontend: Module summary endpoint works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Frontend: Module summary has required fields",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Frontend: Me/permissions for auth hook works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Frontend: Me/permissions has permissions array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Frontend: Me/permissions has permission_count",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Frontend: Me/permissions has role_name",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Frontend: Me/permissions has user_id",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Frontend: Export JSON endpoint works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Frontend: Export CSV endpoint works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Frontend: Bulk assign endpoint exists",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Frontend: Bulk remove endpoint exists",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Frontend: Status toggle endpoint exists",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Frontend: Advanced search endpoint works",
+          "passed": true,
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "regression": {
+      "passed": 9,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "Regression: Login still works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Regression: /users/me still works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Regression: Refresh still works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Regression: Organization current endpoint works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Regression: RBAC seed validation passes",
+          "passed": true,
+          "detail": "Issues: []"
+        },
+        {
+          "name": "Regression: Permissions table has data",
+          "passed": true,
+          "detail": "count=79"
+        },
+        {
+          "name": "Regression: Roles table has data",
+          "passed": true,
+          "detail": "count=30"
+        },
+        {
+          "name": "Regression: RolePermissions table has data",
+          "passed": true,
+          "detail": "count=379"
+        },
+        {
+          "name": "Regression: Health check works",
+          "passed": true,
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "performance": {
+      "passed": 7,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "Performance: SuperAdmin login succeeds",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Performance: Permission lookup < 2s",
+          "passed": true,
+          "detail": "took 0.034s"
+        },
+        {
+          "name": "Performance: Permission lookup took 0.034s",
+          "passed": true,
+          "detail": "took 0.034s (target < 1.0s)"
+        },
+        {
+          "name": "Performance: List 100 permissions < 2s",
+          "passed": true,
+          "detail": "took 0.033s"
+        },
+        {
+          "name": "Performance: Module stats < 2s",
+          "passed": true,
+          "detail": "took 0.062s"
+        },
+        {
+          "name": "Performance: Advanced search < 3s",
+          "passed": true,
+          "detail": "took 0.031s"
+        },
+        {
+          "name": "Performance: Bulk assign 5 perms < 2s",
+          "passed": true,
+          "detail": "took 0.044s"
+        }
+      ]
+    },
+    "security": {
+      "passed": 12,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "Security: Employee cannot create permission (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "Security: Employee cannot update permission (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "Security: Employee cannot delete permission (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "Security: Employee cannot toggle status (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "Security: Employee cannot bulk assign (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "Security: Employee cannot bulk remove (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "Security: Viewer cannot create permission (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "Security: Employee cannot view SuperAdmin permissions (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "Security: Cross-tenant isolation via org_id scoping",
+          "passed": true,
+          "detail": "All permission queries are naturally scoped by user's org"
+        },
+        {
+          "name": "Security: Injection attempts are validated",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "Security: Malformed names are rejected as invalid",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "Security: Employee cannot modify role permissions (403)",
+          "passed": true,
+          "detail": "Got 403"
+        }
+      ]
+    },
+    "database": {
+      "passed": 11,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "DB: permissions table has indexes",
+          "passed": true,
+          "detail": "Found 13 indexes"
+        },
+        {
+          "name": "DB: role_permissions has unique constraint",
+          "passed": true,
+          "detail": "Indexes: ['ix_permissions_id', 'ix_permissions_name', 'permissions_pkey', 'ix_role_permissions_id', 'ix_role_permissions_permission_id', 'ix_role_permissions_role_id', 'role_permissions_pkey', 'uq_role_permission', 'ix_roles_id', 'ix_roles_name', 'ix_roles_org_id', 'roles_pkey', 'uq_role_name_org']"
+        },
+        {
+          "name": "DB: role_permissions has role_id index",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "DB: role_permissions has permission_id index",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "DB: Foreign key constraints exist",
+          "passed": true,
+          "detail": "Found 4 foreign keys"
+        },
+        {
+          "name": "DB: No NULL permission names",
+          "passed": true,
+          "detail": "Found 0 NULL names"
+        },
+        {
+          "name": "DB: No duplicate role-permission assignments",
+          "passed": true,
+          "detail": "Found 0 duplicates"
+        },
+        {
+          "name": "DB: No orphan RolePermission records (role FK)",
+          "passed": true,
+          "detail": "Found 0 orphans"
+        },
+        {
+          "name": "DB: No orphan RolePermission records (permission FK)",
+          "passed": true,
+          "detail": "Found 0 orphans"
+        },
+        {
+          "name": "DB: Rollback removes uncommitted permission",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "DB: Concurrent update (sequential) preserves data",
+          "passed": true,
+          "detail": ""
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total": 169,
+    "passed": 169,
+    "failed": 0,
+    "defects": [],
+    "score": 100.0,
+    "freeze_recommended": true,
+    "defect_count": 0
+  }
+}

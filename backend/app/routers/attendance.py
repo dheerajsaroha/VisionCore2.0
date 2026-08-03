@@ -90,22 +90,35 @@ async def check_in(
         except Exception:
             raise HTTPException(status_code=400, detail="Malformed base64 image data")
 
-    # 1. Liveness & Face Identification
+    # 1. Liveness & Face Identification / Verification
     if image_bytes:
         try:
             is_live, _ = liveness_service.detect_liveness(image_bytes)
             req.is_live = 1 if is_live else 0
+            req.emotion = face_engine.get_emotion(image_bytes)
 
-            if not req.user_id:
-                embedding = face_engine.get_embedding(image_bytes)
-                if not embedding:
-                    raise HTTPException(status_code=400, detail="No face detected")
+            embedding = face_engine.get_embedding(image_bytes)
+            if not embedding:
+                raise HTTPException(status_code=400, detail="No face detected in submitted image")
 
-                user_id = crud_attendance.find_user_by_face(db, embedding=embedding)
+            if req.user_id:
+                # 1:1 Verification against target user's enrolled template
+                is_match, distance = crud_attendance.verify_user_face(
+                    db, user_id=req.user_id, embedding=embedding, threshold=settings.FACE_DISTANCE_THRESHOLD
+                )
+                if not is_match:
+                    raise HTTPException(
+                        status_code=401,
+                        detail=f"Biometric verification failed. Match distance ({distance:.3f}) exceeds threshold."
+                    )
+            else:
+                # 1:N Kiosk Search within org
+                user_id = crud_attendance.find_user_by_face(
+                    db, embedding=embedding, threshold=settings.FACE_DISTANCE_THRESHOLD, org_id=current_user.org_id
+                )
                 if not user_id:
-                    raise HTTPException(status_code=404, detail="Identity not found")
+                    raise HTTPException(status_code=404, detail="Biometric identity not found")
                 req.user_id = user_id
-                req.emotion = face_engine.get_emotion(image_bytes)
         except HTTPException:
             raise
         except Exception as e:
@@ -176,3 +189,146 @@ def update_attendance_log(
     background_tasks.add_task(background_blockchain_anchor, log.id, payload, "manual_override")
 
     return log
+
+
+# ── ATTENDANCE CORRECTION & REGULARIZATION ──
+@router.post("/corrections", status_code=201)
+def submit_attendance_correction(
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_active_user)
+):
+    """Submit an attendance regularization/correction request."""
+    from app.db.models.all_models import AttendanceCorrection
+
+    correction = AttendanceCorrection(
+        organization_id=current_user.org_id,
+        user_id=current_user.id,
+        attendance_log_id=payload.get("attendance_log_id"),
+        requested_clock_in=datetime.fromisoformat(payload["requested_clock_in"]) if payload.get("requested_clock_in") else None,
+        requested_clock_out=datetime.fromisoformat(payload["requested_clock_out"]) if payload.get("requested_clock_out") else None,
+        reason=payload["reason"],
+        status="pending"
+    )
+    db.add(correction)
+    db.commit()
+    db.refresh(correction)
+    return {
+        "id": correction.id,
+        "status": correction.status,
+        "reason": correction.reason,
+        "created_at": correction.created_at
+    }
+
+
+@router.get("/corrections")
+def list_attendance_corrections(
+    status: str = Query(None),
+    user_id: int = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_active_user)
+):
+    """List regularization requests for current organization."""
+    from app.db.models.all_models import AttendanceCorrection
+
+    q = db.query(AttendanceCorrection).filter(AttendanceCorrection.organization_id == current_user.org_id)
+    if current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "Manager"]:
+        q = q.filter(AttendanceCorrection.user_id == current_user.id)
+    elif user_id:
+        q = q.filter(AttendanceCorrection.user_id == user_id)
+
+    if status:
+        q = q.filter(AttendanceCorrection.status == status)
+
+    results = q.order_by(AttendanceCorrection.created_at.desc()).all()
+    out = []
+    for r in results:
+        out.append({
+            "id": r.id,
+            "user_id": r.user_id,
+            "user_name": r.user.full_name if r.user else f"User #{r.user_id}",
+            "requested_clock_in": r.requested_clock_in,
+            "requested_clock_out": r.requested_clock_out,
+            "reason": r.reason,
+            "status": r.status,
+            "reviewer_note": r.reviewer_note,
+            "created_at": r.created_at
+        })
+    return out
+
+
+@router.post("/corrections/{correction_id}/approve")
+def approve_attendance_correction(
+    correction_id: int,
+    payload: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_active_user)
+):
+    """Approve or reject an attendance correction request."""
+    if current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "Manager"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    from app.db.models.all_models import AttendanceCorrection
+
+    corr = db.query(AttendanceCorrection).filter(
+        AttendanceCorrection.id == correction_id,
+        AttendanceCorrection.organization_id == current_user.org_id
+    ).first()
+
+    if not corr:
+        raise HTTPException(status_code=404, detail="Correction request not found")
+
+    status_action = payload.get("status", "approved")
+    corr.status = status_action
+    corr.reviewer_user_id = current_user.id
+    corr.reviewer_note = payload.get("note")
+    corr.reviewed_at = datetime.now()
+
+    # If approved and log exists, update log
+    if status_action == "approved" and corr.attendance_log:
+        if corr.requested_clock_in:
+            corr.attendance_log.check_in = corr.requested_clock_in
+        if corr.requested_clock_out:
+            corr.attendance_log.check_out = corr.requested_clock_out
+        corr.attendance_log.status = "on_time"
+        db.add(corr.attendance_log)
+
+    db.commit()
+    db.refresh(corr)
+    return {"id": corr.id, "status": corr.status, "reviewed_at": corr.reviewed_at}
+
+
+@router.get("/summary")
+def get_attendance_summary(
+    month: int = Query(datetime.now().month),
+    year: int = Query(datetime.now().year),
+    user_id: int = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(deps.get_current_active_user)
+):
+    """Get aggregated monthly attendance statistics."""
+    target_user_id = user_id or current_user.id
+    if target_user_id != current_user.id and current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "Manager"]:
+        raise HTTPException(status_code=403, detail="Unauthorized to view summary of other users")
+
+    logs = db.query(AttendanceLog).filter(
+        AttendanceLog.user_id == target_user_id,
+        AttendanceLog.is_deleted == 0
+    ).all()
+
+    filtered_logs = [l for l in logs if l.check_in and l.check_in.month == month and l.check_in.year == year]
+
+    total_present = len([l for l in filtered_logs if l.status in ["on_time", "early"]])
+    total_late = len([l for l in filtered_logs if l.status == "late"])
+    total_absent = 0  # Can be calculated against working days
+
+    return {
+        "user_id": target_user_id,
+        "month": month,
+        "year": year,
+        "total_days_logged": len(filtered_logs),
+        "present_count": total_present,
+        "late_count": total_late,
+        "attendance_rate_pct": round((total_present / max(1, len(filtered_logs))) * 100, 1)
+    }
+

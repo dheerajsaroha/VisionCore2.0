@@ -9,26 +9,99 @@ import {
   Ticket,
   CreditCard,
   Receipt,
+  Shield,
   Menu,
   LogOut,
   Bell,
   Search,
   ChevronDown,
   ShieldCheck,
+  Package,
+  Calendar,
+  Trophy,
+  Target,
+  Briefcase,
+  BookOpen,
+  TrendingUp,
+  BrainCircuit,
+  Database,
+  Bot,
+  Sparkles,
+  FileText,
+  Cpu,
+  Gauge,
+  ShieldAlert,
+  UserCheck,
+  GitBranch,
+  CheckSquare,
+  Map,
+  Globe,
+  Activity,
+  Building2,
+  FileSpreadsheet,
+  Layers,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { usePermission } from '../hooks/usePermission';
 import { Avatar } from '../components/ui/Avatar';
 import { cn } from '../lib/utils';
 
 const navItems = [
-  { label: 'Overview', icon: LayoutDashboard, path: '/dashboard', roles: ['Admin', 'Manager', 'Employee'] },
-  { label: 'Attendance', icon: Clock, path: '/dashboard/attendance', roles: ['Admin', 'Manager', 'Employee'] },
-  { label: 'Users', icon: Users, path: '/dashboard/users', roles: ['Admin', 'Manager'] },
-  { label: 'Reports', icon: BarChart3, path: '/dashboard/reports', roles: ['Admin', 'Manager'] },
-  { label: 'Support', icon: Ticket, path: '/dashboard/ticketing', roles: ['Admin', 'Manager', 'Employee'] },
-  { label: 'Payroll', icon: CreditCard, path: '/dashboard/payroll', roles: ['Admin', 'Manager'] },
-  { label: 'Reimbursements', icon: Receipt, path: '/dashboard/reimbursements', roles: ['Admin', 'Manager', 'Employee'] },
-  { label: 'Settings', icon: Settings, path: '/dashboard/settings', roles: ['Admin', 'Manager', 'Employee'] },
+  // Overview & Core
+  { label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', permission: '' },
+  { label: 'Organization', icon: Building2, path: '/dashboard/organization', permission: '' },
+  { label: 'Org Hierarchy', icon: GitBranch, path: '/dashboard/org-hierarchy', permission: '' },
+  { label: 'Business Units', icon: Layers, path: '/dashboard/business-units', permission: '' },
+  { label: 'Branches', icon: Map, path: '/dashboard/branches', permission: '' },
+  { label: 'Job Positions', icon: Briefcase, path: '/dashboard/positions', permission: '' },
+  { label: 'Identity Directory', icon: Users, path: '/dashboard/identity-directory', permission: '' },
+  { label: 'Attendance', icon: Clock, path: '/dashboard/attendance', permission: 'attendance.history' },
+  { label: 'Leave', icon: Calendar, path: '/dashboard/leave', permission: '' },
+  { label: 'Workforce', icon: Activity, path: '/dashboard/workforce/attendance', permission: '' },
+  { label: 'Shift Calendar', icon: Calendar, path: '/dashboard/workforce/shifts', permission: '' },
+  { label: 'Roster Planner', icon: FileSpreadsheet, path: '/dashboard/workforce/rosters', permission: '' },
+  { label: 'Workforce Planning', icon: Users, path: '/dashboard/workforce/planning', permission: '' },
+  { label: 'Attendance Analytics', icon: BarChart3, path: '/dashboard/workforce/analytics', permission: '' },
+  { label: 'Users', icon: Users, path: '/dashboard/users', permission: 'employee.read' },
+  { label: 'HR Center', icon: UserCheck, path: '/dashboard/hr', permission: 'users.read' },
+
+  // Operations
+  { label: 'Ticketing', icon: Ticket, path: '/dashboard/ticketing', permission: 'support.ticket.read' },
+  { label: 'Payroll', icon: CreditCard, path: '/dashboard/payroll', permission: 'payroll.read' },
+  { label: 'Reimbursements', icon: Receipt, path: '/dashboard/reimbursements', permission: 'expense.submit' },
+
+  // HR Modules
+  { label: 'Performance', icon: Trophy, path: '/dashboard/performance', permission: 'performance.cycle.read' },
+  { label: 'L&D', icon: BookOpen, path: '/dashboard/learning', permission: 'learning.course.read' },
+  { label: 'Succession', icon: TrendingUp, path: '/dashboard/succession', permission: 'succession.plan.read' },
+  { label: 'Recruitment', icon: Briefcase, path: '/dashboard/open-positions', permission: '' },
+
+  // Governance & Policies
+  { label: 'Policies', icon: Shield, path: '/dashboard/policies', permission: 'policy.read' },
+  { label: 'Permissions', icon: ShieldCheck, path: '/dashboard/permissions', permission: 'roles.view' },
+  { label: 'Dynamic Roles', icon: GitBranch, path: '/dashboard/dynamic-roles', permission: '' },
+  { label: 'Approval Workflows', icon: CheckSquare, path: '/dashboard/approval-workflows', permission: '' },
+  { label: 'Scope & Ownership', icon: Map, path: '/dashboard/scope-ownership', permission: '' },
+
+  // Assets & Enterprise
+  { label: 'Assets', icon: Package, path: '/dashboard/assets', permission: 'asset.read' },
+  { label: 'Enterprise', icon: Globe, path: '/dashboard/enterprise', permission: '' },
+  { label: 'Operations', icon: Activity, path: '/dashboard/operations', permission: '' },
+  { label: 'Reports', icon: BarChart3, path: '/dashboard/reports', permission: 'report.generate' },
+
+  // AI Platform
+  { label: 'AI Studio', icon: BrainCircuit, path: '/dashboard/ai-studio', permission: '' },
+  { label: 'Knowledge Center', icon: Database, path: '/dashboard/knowledge-center', permission: '' },
+  { label: 'AI Copilot Hub', icon: Bot, path: '/dashboard/ai-copilot-hub', permission: '' },
+  { label: 'AI Analytics', icon: Sparkles, path: '/dashboard/ai-analytics', permission: '' },
+  { label: 'Prompt Manager', icon: FileText, path: '/dashboard/prompt-manager', permission: '' },
+  { label: 'Model Manager', icon: Cpu, path: '/dashboard/model-manager', permission: '' },
+  { label: 'AI Usage', icon: Gauge, path: '/dashboard/ai-usage', permission: '' },
+  { label: 'AI Governance', icon: ShieldAlert, path: '/dashboard/ai-governance', permission: '' },
+
+  // Admin
+  { label: 'Tenant Admin', icon: Building2, path: '/dashboard/tenant-admin', permission: 'admin.tenant.manage' },
+  { label: 'Settings', icon: Settings, path: '/dashboard/settings', permission: 'settings.read' },
 ];
 
 export default function DashboardLayout({ children }) {
@@ -38,12 +111,23 @@ export default function DashboardLayout({ children }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
+  const { hasPermission } = usePermission();
   const userRole = user?.role?.name || 'Employee';
 
-  const filteredNav = navItems.filter((item) => item.roles.includes(userRole));
+  // Permission-based filtering: show nav items based on permission (not hardcoded role)
+  const filteredNav = navItems.filter((item) => {
+    if (!item.permission) return true; // Items without specific permission requirement are accessible to all authenticated users
+    return hasPermission(item.permission);
+  });
 
+  // Close mobile sidebar on route change — use useCallback ref to avoid state-in-effect lint
+  const prevPathRef = React.useRef(location.pathname);
   useEffect(() => {
-    setMobileOpen(false);
+    if (prevPathRef.current !== location.pathname) {
+      prevPathRef.current = location.pathname;
+      // Defer state update to avoid cascading render warning
+      window.requestAnimationFrame(() => setMobileOpen(false));
+    }
   }, [location.pathname]);
 
   useEffect(() => {
@@ -248,4 +332,3 @@ export default function DashboardLayout({ children }) {
     </div>
   );
 }
-

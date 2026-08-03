@@ -1,27 +1,56 @@
-from pydantic import BaseModel, Field, UUID4
+from pydantic import BaseModel, Field, ConfigDict, field_validator
+from uuid import UUID
 from typing import Optional, List
 from datetime import datetime, time
 
 class OrganizationBase(BaseModel):
-    name: str = Field(..., max_length=200)
-    legal_id: str = Field(..., max_length=100)
+    name: str = Field(..., min_length=1, max_length=200)
+    legal_id: str = Field(..., min_length=1, max_length=100)
     zkp_threshold: float = Field(0.98, ge=0.0, le=1.0)
-    is_active: int = 1
+    is_active: bool = True
+    status: str = Field("ACTIVE", pattern=r"^(ACTIVE|SUSPENDED|ARCHIVED|PENDING_ONBOARDING)$")
+    logo_url: Optional[str] = Field(None, max_length=512, pattern=r"^https?://")
+    primary_color: str = Field("#4F46E5", pattern=r"^#[0-9A-Fa-f]{6}$")
+
+    @field_validator("name", "legal_id", mode="before")
+    @classmethod
+    def normalize_required_text(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Value cannot be blank")
+        return value
+
+    @field_validator("legal_id")
+    @classmethod
+    def normalize_legal_id(cls, value: str) -> str:
+        return value.upper()
 
 class OrganizationCreate(OrganizationBase):
     pass
 
 class OrganizationUpdate(BaseModel):
-    name: Optional[str] = None
-    zkp_threshold: Optional[float] = None
-    is_active: Optional[int] = None
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    zkp_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
+    logo_url: Optional[str] = Field(None, max_length=512, pattern=r"^https?://")
+    primary_color: Optional[str] = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    is_active: Optional[bool] = None
+    status: Optional[str] = Field(None, pattern=r"^(ACTIVE|SUSPENDED|ARCHIVED|PENDING_ONBOARDING)$")
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("Name cannot be blank")
+        return value
 
 class OrganizationResponse(OrganizationBase):
-    id: UUID4
+    id: UUID
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class DepartmentBase(BaseModel):
     name: str = Field(..., max_length=100)
@@ -29,7 +58,7 @@ class DepartmentBase(BaseModel):
     is_deleted: int = 0
 
 class DepartmentCreate(DepartmentBase):
-    org_id: UUID4
+    org_id: UUID
 
 class DepartmentUpdate(BaseModel):
     name: Optional[str] = None
@@ -38,11 +67,10 @@ class DepartmentUpdate(BaseModel):
 
 class DepartmentResponse(DepartmentBase):
     id: int
-    org_id: UUID4
+    org_id: UUID
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class ShiftBase(BaseModel):
     shift_name: str = Field(..., max_length=100)
@@ -54,7 +82,7 @@ class ShiftBase(BaseModel):
     is_deleted: int = 0
 
 class ShiftCreate(ShiftBase):
-    org_id: UUID4
+    org_id: UUID
 
 class ShiftUpdate(BaseModel):
     shift_name: Optional[str] = None
@@ -67,8 +95,20 @@ class ShiftUpdate(BaseModel):
 
 class ShiftResponse(ShiftBase):
     id: int
-    org_id: UUID4
+    org_id: UUID
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+
+class ApiKeyCreate(BaseModel):
+    scope: str = Field("camera_edge", min_length=1, max_length=50, pattern=r"^[a-z_]+$")
+    rate_limit: int = Field(60, ge=1, le=10_000)
+
+class ApiKeyResponse(BaseModel):
+    id: int
+    org_id: UUID
+    scope: str
+    rate_limit: int
+    is_revoked: bool
+
+    model_config = ConfigDict(from_attributes=True)

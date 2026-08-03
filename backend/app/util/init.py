@@ -1,7 +1,7 @@
 from sqlalchemy import text
 from app.db.database import engine
-from app.db.models import Base
-import app.db.models # Ensure all are loaded
+from app.db.models.base import Base
+import app.db.models.all_models  # Ensure all models (including subscription) are loaded
 
 def create_tables():
     # Attempt to enable necessary Postgres extensions
@@ -23,3 +23,4 @@ def create_tables():
         print(f"Warning: Could not enable extensions automatically (probably permissions). Ensure they are enabled manually. {e}")
         
     Base.metadata.create_all(bind=engine)
+

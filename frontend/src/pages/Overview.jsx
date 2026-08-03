@@ -1,401 +1,3 @@
-// import React, { useEffect, useState } from 'react';
-// import { useNavigate } from 'react-router-dom';
-// import {
-//   Users,
-//   Clock,
-//   TrendingUp,
-//   AlertTriangle,
-//   ArrowRight,
-//   Camera,
-//   Ticket,
-//   Receipt,
-// } from 'lucide-react';
-// import {
-//   AreaChart,
-//   Area,
-//   XAxis,
-//   YAxis,
-//   CartesianGrid,
-//   Tooltip,
-//   ResponsiveContainer,
-// } from 'recharts';
-// import { attendanceService } from '../services/attendanceService';
-// import { userService } from '../services/userService';
-// import { ticketService } from '../services/ticketService';
-// import { useAuthStore } from '../store/authStore';
-// import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
-// import { Button } from '../components/ui/Button';
-// import { Badge } from '../components/ui/Badge';
-// import { Spinner } from '../components/ui/Spinner';
-// import { formatTime, formatDate, titleCase } from '../lib/utils';
-
-// export default function Overview() {
-//   const { user } = useAuthStore();
-//   const navigate = useNavigate();
-//   const [stats, setStats] = useState(null);
-//   const [logs, setLogs] = useState([]);
-//   const [tickets, setTickets] = useState([]);
-//   const [chartData, setChartData] = useState([]);
-//   const [loading, setLoading] = useState(true);
-
-//   useEffect(() => {
-//     fetchDashboardData();
-//   }, []);
-
-//   const fetchDashboardData = async () => {
-//     setLoading(true);
-//     try {
-//       const [logsRes, usersRes, ticketsRes] = await Promise.all([
-//         attendanceService.getLogs({ limit: 100 }),
-//         userService.getUsers(),
-//         ticketService.getTickets({ limit: 10 }),
-//       ]);
-
-//       const allLogs = logsRes.data || [];
-//       const allUsers = usersRes.data || [];
-//       const allTickets = ticketsRes.data || [];
-
-//       // Compute stats
-//       const today = new Date().toDateString();
-//       const todayLogs = allLogs.filter((l) => new Date(l.check_in).toDateString() === today);
-
-//       setStats({
-//         totalEmployees: allUsers.length,
-//         todayCheckins: todayLogs.length,
-//         onTime: todayLogs.filter((l) => l.status === 'on_time').length,
-//         late: todayLogs.filter((l) => l.status === 'late').length,
-//         openTickets: allTickets.filter((t) => t.status === 'open').length,
-//       });
-
-//       setLogs(allLogs.slice(0, 10));
-//       setTickets(allTickets.slice(0, 5));
-
-//       // Build chart data for last 7 days
-//       const days = [];
-//       for (let i = 6; i >= 0; i--) {
-//         const d = new Date();
-//         d.setDate(d.getDate() - i);
-//         const dayStr = d.toDateString();
-//         const count = allLogs.filter((l) => new Date(l.check_in).toDateString() === dayStr).length;
-//         days.push({
-//           name: d.toLocaleDateString('en', { weekday: 'short' }),
-//           checkins: count,
-//         });
-//       }
-//       setChartData(days);
-//     } catch {
-//       // silent fail
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   const StatCard = ({ icon: Icon, label, value, trend, trendLabel, color }) => (
-//     <Card>
-//       <CardContent className="p-6">
-//         <div className="flex items-center justify-between">
-//           <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${color}`}>
-//             <Icon className="h-5 w-5 text-white" />
-//           </div>
-//           {trend !== undefined && (
-//             <span className={`text-xs font-medium ${trend >= 0 ? 'text-success-600' : 'text-danger-600'}`}>
-//               {trend >= 0 ? '+' : ''}{trend}%
-//             </span>
-//           )}
-//         </div>
-//         <div className="mt-4">
-//           <p className="text-2xl font-bold text-slate-900">{value}</p>
-//           <p className="text-sm text-slate-500">{label}</p>
-//         </div>
-//       </CardContent>
-//     </Card>
-//   );
-
-//   if (loading) {
-//     return (
-//       <div className="flex items-center justify-center h-96">
-//         <Spinner size="lg" />
-//       </div>
-//     );
-//   }
-
-//   return (
-//     <div className="space-y-8">
-//       {/* Header */}
-//       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-//         <div>
-//           <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-//           <p className="text-sm text-slate-500 mt-1">
-//             Welcome back, {user?.full_name || 'User'}
-//           </p>
-//         </div>
-//         <div className="flex gap-3">
-//           <Button onClick={() => navigate('/dashboard/attendance')}>
-//             <Camera className="mr-2 h-4 w-4" />
-//             Check in
-//           </Button>
-//         </div>
-//         </div>
-        
-
-//       {/* Stats grid */}
-//       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-//         <StatCard
-//           icon={Users}
-//           label="Total Employees"
-//           value={stats?.totalEmployees || 0}
-//           color="bg-primary-600"
-//         />
-//         <StatCard
-//           icon={Clock}
-//           label="Today's Check-ins"
-//           value={stats?.todayCheckins || 0}
-//           color="bg-success-600"
-//         />
-//         <StatCard
-//           icon={TrendingUp}
-//           label="On Time"
-//           value={stats?.onTime || 0}
-//           color="bg-info-600"
-//         />
-//         <StatCard
-//           icon={AlertTriangle}
-//           label="Late Arrivals"
-//           value={stats?.late || 0}
-//           color="bg-warning-600"
-//         />
-//       </div>
-
-//       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-//         {/* Chart */}
-//         <Card className="lg:col-span-2">
-//           <CardHeader>
-//             <CardTitle>Attendance Trend</CardTitle>
-//             <CardDescription>Check-ins over the last 7 days</CardDescription>
-//           </CardHeader>
-//           <CardContent>
-//             <div className="h-72">
-//               <ResponsiveContainer width="100%" height="100%">
-//                 <AreaChart data={chartData}>
-//                   <defs>
-//                     <linearGradient id="colorCheckins" x1="0" y1="0" x2="0" y2="1">
-//                       <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
-//                       <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-//                     </linearGradient>
-//                   </defs>
-//                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-//                   <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} />
-//                   <YAxis stroke="#94a3b8" fontSize={12} />
-//                   <Tooltip
-//                     contentStyle={{
-//                       borderRadius: '8px',
-//                       border: '1px solid #e2e8f0',
-//                       boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-//                     }}
-//                   />
-//                   <Area
-//                     type="monotone"
-//                     dataKey="checkins"
-//                     stroke="#6366f1"
-//                     strokeWidth={2}
-//                     fillOpacity={1}
-//                     fill="url(#colorCheckins)"
-//                   />
-//                 </AreaChart>
-//               </ResponsiveContainer>
-//             </div>
-//           </CardContent>
-//         </Card>
-
-//         {/* Quick links */}
-//         <Card>
-//           <CardHeader>
-//             <CardTitle>Quick Actions</CardTitle>
-//           </CardHeader>
-//           <CardContent className="space-y-3">
-//             <Button
-//               variant="secondary"
-//               className="w-full justify-between"
-//               onClick={() => navigate('/dashboard/ticketing')}
-//             >
-//               <span className="flex items-center">
-//                 <Ticket className="mr-2 h-4 w-4" />
-//                 Open a ticket
-//               </span>
-//               {stats?.openTickets > 0 && <Badge variant="warning">{stats.openTickets}</Badge>}
-//             </Button>
-//             <Button
-//               variant="secondary"
-//               className="w-full justify-between"
-//               onClick={() => navigate('/dashboard/reimbursements')}
-//             >
-//               <span className="flex items-center">
-//                 <Receipt className="mr-2 h-4 w-4" />
-//                 Submit expense
-//               </span>
-//               <ArrowRight className="h-4 w-4 text-slate-400" />
-//             </Button>
-//             <Button
-//               variant="secondary"
-//               className="w-full justify-between"
-//               onClick={() => navigate('/dashboard/users')}
-//             >
-//               <span className="flex items-center">
-//                 <Users className="mr-2 h-4 w-4" />
-//                 Manage users
-//               </span>
-//               <ArrowRight className="h-4 w-4 text-slate-400" />
-//             </Button>
-//           </CardContent>
-//         </Card>
-//       </div>
-
-//       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-//         {/* Recent activity */}
-//         <Card>
-//           <CardHeader className="flex flex-row items-center justify-between">
-//             <div>
-//               <CardTitle>Recent Activity</CardTitle>
-//               <CardDescription>Latest check-ins across the organization</CardDescription>
-//             </div>
-//             <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/attendance')}>
-//               View all
-//             </Button>
-//           </CardHeader>
-        
-//           {/* <CardContent>
-//             <div className="space-y-3">
-//               {logs.length === 0 ? (
-//                 <p className="text-sm text-slate-500 text-center py-8">No recent activity</p>
-//               ) : (
-//                 logs.map((log) => (
-//                   <div key={log.id} className="flex items-center justify-between py-2">
-//                     <div className="flex items-center gap-3">
-//                       <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-medium text-slate-600">
-//                         {(log.user_name || '?')[0]}
-//                       </div>
-//                       <div>
-//                         <p className="text-sm font-medium text-slate-900">{log.user_name || `User #${log.user_id}`}</p>
-//                         <p className="text-xs text-slate-500">{formatDate(log.check_in)}</p>
-//                       </div>
-//                     <div className="text-right">
-//                       <Badge
-//                         variant={
-//                           log.status === 'on_time'
-//                             ? 'success'
-//                             : log.status === 'late'
-//                             ? 'warning'
-//                             : 'default'
-//                         }
-//                       >
-//                         {titleCase(log.status)}
-//                       </Badge>
-//                       <p className="text-xs text-slate-500 mt-1">{formatTime(log.check_in)}</p>
-//                     </div>
-//                 ))
-//               )}
-//             </div>
-//           </CardContent>
-//         </Card> */}
-//         <CardContent>
-//             <div className="space-y-3">
-//                 {logs.length === 0 ? (
-//                 <p className="text-sm text-slate-500 text-center py-8">
-//                     No recent activity
-//                 </p>
-//                 ) : (
-//                 logs.map((log) => (
-//                     <div
-//                     key={log.id}
-//                     className="flex items-center justify-between py-2"
-//                     >
-//                     {/* Left */}
-//                     <div className="flex items-center gap-3">
-//                         <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-medium text-slate-600">
-//                         {(log.user_name || '?')[0]}
-//                         </div>
-//                         <div>
-//                         <p className="text-sm font-medium text-slate-900">
-//                             {log.user_name || `User #${log.user_id}`}
-//                         </p>
-//                         <p className="text-xs text-slate-500">
-//                             {formatDate(log.check_in)}
-//                         </p>
-//                         </div>
-//                     </div>
-
-//                     {/* Right */}
-//                     <div className="text-right">
-//                         <Badge
-//                         variant={
-//                             log.status === 'on_time'
-//                             ? 'success'
-//                             : log.status === 'late'
-//                             ? 'warning'
-//                             : 'default'
-//                         }
-//                         >
-//                         {titleCase(log.status)}
-//                         </Badge>
-//                         <p className="text-xs text-slate-500 mt-1">
-//                         {formatTime(log.check_in)}
-//                         </p>
-//                     </div>
-//                     </div>
-//                 ))
-//                 )}
-//             </div>
-//             </CardContent>
-//         </Card>
-        
-
-//         {/* Recent tickets */}
-//         <Card>
-//           <CardHeader className="flex flex-row items-center justify-between">
-//             <div>
-//               <CardTitle>Recent Tickets</CardTitle>
-//               <CardDescription>Latest support requests</CardDescription>
-//             </div>
-//             <Button variant="ghost" size="sm" onClick={() => navigate('/dashboard/ticketing')}>
-//               View all
-//             </Button>
-//           </CardHeader>
-//           <CardContent>
-//             <div className="space-y-3">
-//               {tickets.length === 0 ? (
-//                 <p className="text-sm text-slate-500 text-center py-8">No tickets yet</p>
-//               ) : (
-//                 tickets.map((ticket) => (
-//                   <div key={ticket.id} className="flex items-center justify-between py-2">
-//                     <div>
-//                       <p className="text-sm font-medium text-slate-900">{ticket.title}</p>
-//                       <p className="text-xs text-slate-500">
-//                         {ticket.created_at ? formatDate(ticket.created_at) : 'N/A'}
-//                       </p>
-//                     </div>
-//                     <Badge
-//                       variant={
-//                         ticket.status === 'resolved'
-//                           ? 'success'
-//                           : ticket.status === 'open'
-//                           ? 'primary'
-//                           : ticket.status === 'escalated'
-//                           ? 'danger'
-//                           : 'default'
-//                       }
-//                     >
-//                       {titleCase(ticket.status)}
-//                     </Badge>
-//                   </div>
-//                 ))
-//               )}
-//             </div>
-//           </CardContent>
-//         </Card>
-//       </div>
-//   );
-// }
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -407,7 +9,16 @@ import {
   Camera,
   Ticket,
   Receipt,
-  ArrowRight
+  ArrowRight,
+  ShieldCheck,
+  Building2,
+  Briefcase,
+  CheckCircle2,
+  Calendar,
+  Award,
+  Activity,
+  FileText,
+  UserCheck
 } from 'lucide-react';
 import {
   AreaChart,
@@ -450,6 +61,8 @@ export default function Overview() {
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const roleName = (user?.role?.name || '').toLowerCase();
+
   useEffect(() => {
     fetchDashboardData();
   }, []);
@@ -458,9 +71,9 @@ export default function Overview() {
     setLoading(true);
     try {
       const [logsRes, usersRes, ticketsRes] = await Promise.all([
-        attendanceService.getLogs({ limit: 100 }),
-        userService.getUsers(),
-        ticketService.getTickets({ limit: 10 }),
+        attendanceService.getLogs({ limit: 100 }).catch(() => ({ data: [] })),
+        userService.getUsers().catch(() => ({ data: [] })),
+        ticketService.getTickets({ limit: 10 }).catch(() => ({ data: [] })),
       ]);
 
       const allLogs = logsRes.data || [];
@@ -506,7 +119,7 @@ export default function Overview() {
     }
   };
 
-  const StatCard = ({ icon: Icon, label, value, trend, color, bgClass }) => (
+  const StatCard = ({ icon: Icon, label, value, trend, bgClass }) => (
     <motion.div variants={itemVariants}>
       <Card className="h-full border-0 relative overflow-hidden group">
         <div className={cn("absolute top-0 left-0 w-1 h-full", bgClass)} />
@@ -538,6 +151,223 @@ export default function Overview() {
     );
   }
 
+  // ── Render 1: SuperAdmin Dashboard ─────────────────────────────────────────
+  if (roleName.includes('super')) {
+    return (
+      <motion.div className="space-y-8" variants={containerVariants} initial="hidden" animate="visible">
+        <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <Badge className="bg-purple-600 text-white border-0 px-3 py-1 font-semibold">SuperAdmin</Badge>
+              <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Platform Command Center</h1>
+            </div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Multi-tenant management & platform governance</p>
+          </div>
+          <div className="flex gap-3">
+            <Button onClick={() => navigate('/dashboard/tenant-admin')} className="bg-purple-600 hover:bg-purple-700 text-white">
+              <Building2 className="mr-2 h-4 w-4" /> Tenant Admin
+            </Button>
+            <Button onClick={() => navigate('/dashboard/ai-governance')} variant="secondary">
+              <ShieldCheck className="mr-2 h-4 w-4" /> System Governance
+            </Button>
+          </div>
+        </motion.div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard icon={Building2} label="Active Organizations" value={12} bgClass="bg-purple-600" />
+          <StatCard icon={Users} label="Total Managed Users" value={stats?.totalEmployees || 0} bgClass="bg-blue-600" />
+          <StatCard icon={Activity} label="AI Biometric Engine" value="99.98%" bgClass="bg-emerald-500" />
+          <StatCard icon={ShieldCheck} label="Active Security Policies" value={8} bgClass="bg-amber-500" />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Platform Biometric Activity</CardTitle>
+              <CardDescription>7-day cross-tenant check-in volume</CardDescription>
+            </CardHeader>
+            <CardContent className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Area type="monotone" dataKey="checkins" stroke="#9333ea" fill="#f3e8ff" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Platform Control Actions</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <Button variant="secondary" className="w-full justify-between" onClick={() => navigate('/dashboard/tenant-admin')}>
+                <span>Manage Multi-Tenant Accounts</span> <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button variant="secondary" className="w-full justify-between" onClick={() => navigate('/dashboard/permissions')}>
+                <span>Dynamic RBAC & EAAC Policies</span> <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button variant="secondary" className="w-full justify-between" onClick={() => navigate('/dashboard/ai-usage')}>
+                <span>AI Models & API Consumption</span> <ArrowRight className="h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // ── Render 2: HR Dashboard ─────────────────────────────────────────────────
+  if (roleName.includes('hr')) {
+    return (
+      <motion.div className="space-y-8" variants={containerVariants} initial="hidden" animate="visible">
+        <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <Badge className="bg-indigo-600 text-white border-0 px-3 py-1 font-semibold mb-2">HR Command Center</Badge>
+            <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white">Human Resources Dashboard</h1>
+          </div>
+          <div className="flex gap-3">
+            <Button onClick={() => navigate('/dashboard/hr')} className="bg-indigo-600 hover:bg-indigo-500">
+              <Briefcase className="mr-2 h-4 w-4" /> HR Analytics
+            </Button>
+            <Button onClick={() => navigate('/dashboard/users')} variant="secondary">
+              <Users className="mr-2 h-4 w-4" /> Employee Directory
+            </Button>
+          </div>
+        </motion.div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard icon={Users} label="Headcount" value={stats?.totalEmployees || 0} bgClass="bg-indigo-600" />
+          <StatCard icon={CheckCircle2} label="Present Today" value={stats?.todayCheckins || 0} bgClass="bg-emerald-500" />
+          <StatCard icon={Calendar} label="On Leave Today" value={2} bgClass="bg-amber-500" />
+          <StatCard icon={Award} label="Open Regularizations" value={stats?.openTickets || 0} bgClass="bg-rose-500" />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2">
+            <CardHeader><CardTitle>Workforce Attendance Trends</CardTitle></CardHeader>
+            <CardContent className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Area type="monotone" dataKey="checkins" stroke="#4f46e5" fill="#e0e7ff" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>HR Quick Actions</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <Button variant="secondary" className="w-full justify-between" onClick={() => navigate('/dashboard/leave')}>
+                <span>Manage Leave Requests</span> <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button variant="secondary" className="w-full justify-between" onClick={() => navigate('/dashboard/payroll')}>
+                <span>Process Monthly Payroll</span> <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button variant="secondary" className="w-full justify-between" onClick={() => navigate('/dashboard/performance')}>
+                <span>Performance Reviews</span> <ArrowRight className="h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // ── Render 3: Manager Dashboard ────────────────────────────────────────────
+  if (roleName.includes('manager')) {
+    return (
+      <motion.div className="space-y-8" variants={containerVariants} initial="hidden" animate="visible">
+        <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <Badge className="bg-teal-600 text-white border-0 px-3 py-1 font-semibold mb-2">Team Operations</Badge>
+            <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white">Manager Workspace</h1>
+          </div>
+          <Button onClick={() => navigate('/dashboard/attendance')} className="bg-teal-600 hover:bg-teal-500">
+            <Camera className="mr-2 h-4 w-4" /> Team Kiosk Check-In
+          </Button>
+        </motion.div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard icon={Users} label="Team Direct Reports" value={stats?.totalEmployees || 0} bgClass="bg-teal-600" />
+          <StatCard icon={Clock} label="Today's Check-ins" value={stats?.todayCheckins || 0} bgClass="bg-emerald-500" />
+          <StatCard icon={TrendingUp} label="On Time Rate" value="94%" bgClass="bg-indigo-500" />
+          <StatCard icon={AlertTriangle} label="Pending Approvals" value={stats?.openTickets || 0} bgClass="bg-amber-500" />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="lg:col-span-2">
+            <CardHeader><CardTitle>Team Attendance History</CardTitle></CardHeader>
+            <CardContent className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Area type="monotone" dataKey="checkins" stroke="#0d9488" fill="#ccfbf1" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader><CardTitle>Manager Workflow Actions</CardTitle></CardHeader>
+            <CardContent className="space-y-3">
+              <Button variant="secondary" className="w-full justify-between" onClick={() => navigate('/dashboard/approval-workflows')}>
+                <span>Approve Attendance Regularization</span> <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button variant="secondary" className="w-full justify-between" onClick={() => navigate('/dashboard/leave')}>
+                <span>Approve Team Leaves</span> <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button variant="secondary" className="w-full justify-between" onClick={() => navigate('/dashboard/reports')}>
+                <span>Generate Team Reports</span> <ArrowRight className="h-4 w-4" />
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // ── Render 4: Candidate / Recruitment Dashboard ───────────────────────────
+  if (roleName.includes('candidate')) {
+    return (
+      <motion.div className="space-y-8" variants={containerVariants} initial="hidden" animate="visible">
+        <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <Badge className="bg-sky-600 text-white border-0 px-3 py-1 font-semibold mb-2">Recruitment Portal</Badge>
+            <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white">Candidate Dashboard</h1>
+          </div>
+          <Button onClick={() => navigate('/dashboard/open-positions')} className="bg-sky-600 hover:bg-sky-500">
+            <Briefcase className="mr-2 h-4 w-4" /> Browse Open Positions
+          </Button>
+        </motion.div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          <StatCard icon={FileText} label="Submitted Applications" value={1} bgClass="bg-sky-600" />
+          <StatCard icon={UserCheck} label="Interview Status" value="Under Review" bgClass="bg-emerald-500" />
+          <StatCard icon={Briefcase} label="Available Roles" value={5} bgClass="bg-indigo-500" />
+        </div>
+
+        <Card>
+          <CardHeader><CardTitle>Recruitment Quick Actions</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <Button variant="secondary" className="w-full justify-between" onClick={() => navigate('/dashboard/open-positions')}>
+              <span>View Available Job Openings</span> <ArrowRight className="h-4 w-4" />
+            </Button>
+            <Button variant="secondary" className="w-full justify-between" onClick={() => navigate('/dashboard/candidate-pipeline')}>
+              <span>Check Application Status</span> <ArrowRight className="h-4 w-4" />
+            </Button>
+          </CardContent>
+        </Card>
+      </motion.div>
+    );
+  }
+
+  // ── Render 5: Employee / Personal Workspace (Default) ─────────────────────
   return (
     <motion.div 
       className="space-y-6 lg:space-y-8"
@@ -548,23 +378,24 @@ export default function Overview() {
       {/* Header */}
       <motion.div variants={itemVariants} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
+          <Badge className="bg-blue-600 text-white border-0 px-3 py-1 font-semibold mb-2">Personal Workspace</Badge>
           <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">Overview</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
             Welcome back, <span className="font-semibold text-slate-700 dark:text-slate-300">{user?.full_name || 'User'}</span>
           </p>
         </div>
-        <Button onClick={() => navigate('/dashboard/attendance')} className="shadow-lg shadow-primary-500/30 hover:scale-105 transition-transform">
+        <Button onClick={() => navigate('/dashboard/attendance')} className="shadow-lg shadow-primary-500/30 hover:scale-105 transition-transform bg-indigo-600 text-white">
           <Camera className="mr-2 h-5 w-5" />
-          Check In Now
+          Biometric Check In
         </Button>
       </motion.div>
 
       {/* Stats Bento */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-        <StatCard icon={Users} label="Total Employees" value={stats?.totalEmployees || 0} bgClass="bg-blue-600" />
+        <StatCard icon={Users} label="Organization Total" value={stats?.totalEmployees || 0} bgClass="bg-blue-600" />
         <StatCard icon={Clock} label="Today's Check-ins" value={stats?.todayCheckins || 0} bgClass="bg-emerald-500" />
-        <StatCard icon={TrendingUp} label="On Time" value={stats?.onTime || 0} bgClass="bg-indigo-500" trend={12} />
-        <StatCard icon={AlertTriangle} label="Late Arrivals" value={stats?.late || 0} bgClass="bg-amber-500" />
+        <StatCard icon={TrendingUp} label="On Time Rate" value={stats?.onTime || 0} bgClass="bg-indigo-500" trend={12} />
+        <StatCard icon={AlertTriangle} label="Open Support Tickets" value={stats?.openTickets || 0} bgClass="bg-amber-500" />
       </div>
 
       {/* Main Content Grid */}
@@ -617,6 +448,13 @@ export default function Overview() {
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white/10 rounded-lg"><Receipt className="h-4 w-4" /></div>
                   <span className="font-medium text-sm">Submit Expense</span>
+                </div>
+                <ArrowRight className="h-4 w-4 opacity-50" />
+              </button>
+              <button onClick={() => navigate('/dashboard/leave')} className="w-full flex items-center justify-between p-3 bg-white/10 hover:bg-white/20 rounded-xl transition-colors backdrop-blur-sm border border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white/10 rounded-lg"><Calendar className="h-4 w-4" /></div>
+                  <span className="font-medium text-sm">Apply for Leave</span>
                 </div>
                 <ArrowRight className="h-4 w-4 opacity-50" />
               </button>

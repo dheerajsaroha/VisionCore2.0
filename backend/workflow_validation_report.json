@@ -1,0 +1,286 @@
+{
+  "metadata": {
+    "suite": "Enterprise Approval Workflow Engine",
+    "sprint": "Sprint 2",
+    "entity": "Approval Workflow Engine",
+    "timestamp": "2026-07-25T07:53:55.273284+00:00"
+  },
+  "phases": {
+    "templates": {
+      "passed": 3,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "A.1 POST /workflow/seed returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.2 GET /workflow/templates returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.3 Blueprint templates seeded (>0)",
+          "passed": true,
+          "detail": "count=6"
+        }
+      ]
+    },
+    "workflows": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "A.4 GET /workflow/workflows returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.5 POST /workflow/workflows creates custom workflow",
+          "passed": true,
+          "detail": "Got 201"
+        }
+      ]
+    },
+    "stages": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "B.1 Custom workflow has 2 stages",
+          "passed": true,
+          "detail": "stages=2"
+        },
+        {
+          "name": "B.2 POST /workflows/{id}/stages appends 3rd stage",
+          "passed": true,
+          "detail": "Got 201"
+        }
+      ]
+    },
+    "request_flow": {
+      "passed": 8,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "C.1 POST /requests/submit creates request",
+          "passed": true,
+          "detail": "Got 201"
+        },
+        {
+          "name": "C.2 Initial status is pending",
+          "passed": true,
+          "detail": "status=pending"
+        },
+        {
+          "name": "C.3 Stage order is 1",
+          "passed": true,
+          "detail": "stage=1"
+        },
+        {
+          "name": "C.4 Stage 1 approval advances request",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "C.5 Current stage order is 2",
+          "passed": true,
+          "detail": "stage=2"
+        },
+        {
+          "name": "C.6 Stage 2 approval advances request",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "C.7 Stage 3 approval completes workflow",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "C.8 Final status is approved",
+          "passed": true,
+          "detail": "status=approved"
+        }
+      ]
+    },
+    "rejection": {
+      "passed": 1,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "D.1 Rejection sets status to rejected",
+          "passed": true,
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "rework": {
+      "passed": 1,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "D.2 Return sets status to returned",
+          "passed": true,
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "auto_approve": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "E.1 Auto-approval workflow created",
+          "passed": true,
+          "detail": "Got 201"
+        },
+        {
+          "name": "E.2 Auto-approval triggers status=approved immediately",
+          "passed": true,
+          "detail": "Got 201"
+        }
+      ]
+    },
+    "inspector": {
+      "passed": 1,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "E.3 POST /workflow/inspect returns applicable stages",
+          "passed": true,
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "delegations": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "F.1 POST /workflow/delegations creates delegation",
+          "passed": true,
+          "detail": "Got 201"
+        },
+        {
+          "name": "F.2 GET /workflow/delegations returns active delegation",
+          "passed": true,
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "sla": {
+      "passed": 1,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "F.3 POST /workflow/sla/check-breaches executes successfully",
+          "passed": true,
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "queues": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "G.1 GET /workflow/requests/pending returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "G.2 GET /workflow/requests/my-requests returns user requests",
+          "passed": true,
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "analytics": {
+      "passed": 1,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "G.3 GET /workflow/analytics returns performance metrics",
+          "passed": true,
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "security": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "H.1 Non-admin cannot create workflow (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "H.2 Unauthenticated submit returns 401",
+          "passed": true,
+          "detail": "Got 401"
+        }
+      ]
+    },
+    "performance": {
+      "passed": 3,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "I.1 Workflows listing < 200ms",
+          "passed": true,
+          "detail": "took 21.2ms"
+        },
+        {
+          "name": "I.2 Pending queue resolution < 200ms",
+          "passed": true,
+          "detail": "took 23.5ms"
+        },
+        {
+          "name": "I.3 Workflow inspector < 200ms",
+          "passed": true,
+          "detail": "took 21.7ms"
+        }
+      ]
+    },
+    "regression": {
+      "passed": 5,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "J.1 /users/me works (Auth/User frozen)",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "J.2 /org/current works (Organization frozen)",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "J.3 RBAC permissions works (RBAC frozen)",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "J.4 Subscription plans works (Subscription frozen)",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "J.5 Data scope works (Data Scope frozen)",
+          "passed": true,
+          "detail": "Got 200"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total": 36,
+    "passed": 36,
+    "failed": 0,
+    "defects": []
+  }
+}

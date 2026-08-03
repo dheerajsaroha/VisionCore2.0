@@ -61,10 +61,55 @@ class CRUDUser:
             org_id=org_id,
             role_id=role.id,
             employee_id=f"EMP-{uuid.uuid4().hex[:6].upper()}",
-            is_active=True,
-            is_deleted=False,
+            is_active=1,
+            is_deleted=0,
         )
         db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+
+    def update(self, db: Session, *, user_id: int, org_id: uuid.UUID, obj_in: dict) -> Optional[User]:
+        """
+        Update editable fields on a user. Scoped to org_id for tenant safety.
+        Handles role name → role_id resolution and dept/shift lookups.
+        """
+        db_obj = db.query(User).filter(
+            User.id == user_id,
+            User.org_id == org_id,
+            User.is_deleted == 0,
+        ).first()
+        if not db_obj:
+            return None
+
+        if "full_name" in obj_in and obj_in["full_name"] is not None:
+            db_obj.full_name = obj_in["full_name"]
+        if "is_active" in obj_in and obj_in["is_active"] is not None:
+            db_obj.is_active = obj_in["is_active"]
+        if "dept_id" in obj_in and obj_in["dept_id"] is not None:
+            db_obj.dept_id = obj_in["dept_id"]
+        if "shift_id" in obj_in and obj_in["shift_id"] is not None:
+            db_obj.shift_id = obj_in["shift_id"]
+        if "role" in obj_in and obj_in["role"] is not None:
+            role = db.query(Role).filter(Role.name == obj_in["role"]).first()
+            if role:
+                db_obj.role_id = role.id
+
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+
+    def soft_delete(self, db: Session, *, user_id: int, org_id: uuid.UUID) -> Optional[User]:
+        """Soft-delete a user. Sets is_deleted=1. NEVER hard deletes."""
+        db_obj = db.query(User).filter(
+            User.id == user_id,
+            User.org_id == org_id,
+            User.is_deleted == 0,
+        ).first()
+        if not db_obj:
+            return None
+        db_obj.is_deleted = 1
+        db_obj.is_active = 0
         db.commit()
         db.refresh(db_obj)
         return db_obj
@@ -77,15 +122,15 @@ class CRUDUser:
         # Deactivate previous
         db.query(FaceEmbedding).filter(
             FaceEmbedding.user_id == user_id,
-            FaceEmbedding.is_active == True
-        ).update({"is_active": False})
+            FaceEmbedding.is_active == 1
+        ).update({"is_active": 0})
         db.commit()
 
         face_obj = FaceEmbedding(
             user_id=user_id,
             embedding=embedding,
             model_name="face_recognition",
-            is_active=True
+            is_active=1
         )
         db.add(face_obj)
         db.commit()

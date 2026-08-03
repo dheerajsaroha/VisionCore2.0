@@ -9,3 +9,8 @@ class Token(BaseModel):
 class TokenPayload(BaseModel):
     sub: Optional[str] = None
     role: Optional[int] = None
+
+
+class RefreshTokenRequest(BaseModel):
+    """Request body for POST /auth/refresh."""
+    refresh_token: str

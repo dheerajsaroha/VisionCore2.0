@@ -4,51 +4,117 @@ from jose import jwt, JWTError
 from passlib.context import CryptContext
 from app.core.config import settings
 import re
+import uuid
 
-import redis.asyncio as redis_async
 
 # Exported for any module that needs it directly
 ALGORITHM = settings.ALGORITHM
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Global Token Blacklist via Redis
-redis_client = redis_async.from_url(settings.REDIS_URL, decode_responses=True)
+# ── Lazy Redis Client (optional) ───────────────────────────────────────────
+# Redis is instantiated lazily with timeouts so that an unavailable Redis
+# server does NOT block application startup or cause imports to hang.
+_redis_client = None
 
-async def blacklist_token(token: str, expires_in: int = None) -> None:
+def _get_redis():
+    """Return a lazily-initialized async Redis client with connection timeouts."""
+    global _redis_client
+    if _redis_client is None:
+        import redis.asyncio as redis_async
+        _redis_client = redis_async.from_url(
+            settings.REDIS_URL,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+            retry_on_timeout=False,
+        )
+    return _redis_client
+
+
+async def blacklist_token(token: str, expires_in: int | None = None) -> None:
+    # Ensure expires_in is always an int; Redis TTL requires an integer.
     if expires_in is None:
         expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    await redis_client.setex(f"blacklist:{token}", expires_in, "revoked")
+    else:
+        expires_in = int(expires_in)
+    try:
+        client = _get_redis()
+        await client.setex(f"blacklist:{token}", expires_in, "revoked")
+    except Exception as exc:
+        # Redis supplements database-backed session revocation; it must not make
+        # logout or authentication unavailable.
+        import logging
+        logging.getLogger(__name__).warning("Redis unavailable for token blacklist write: %s", exc)
+
 
 async def is_token_blacklisted(token: str) -> bool:
     try:
-        return await redis_client.exists(f"blacklist:{token}") > 0
+        client = _get_redis()
+        return await client.exists(f"blacklist:{token}") > 0
     except Exception as exc:
-        # If Redis is unavailable, treat tokens as not blacklisted to avoid
-        # failing all authenticated requests. This makes the blacklist an
-        # optional best-effort feature in development environments.
+        # Redis is optional. If it's down/unreachable, don't fail authentication.
         import logging
         logging.getLogger(__name__).warning(
             f"Redis unavailable for token blacklist check: {exc}")
         return False
 
 
-def create_access_token(subject: Union[str, Any], expires_delta: timedelta = None) -> str:
+
+
+
+def create_access_token(
+    subject: Union[str, Any],
+    expires_delta: timedelta | None = None,
+    *,
+    session_jti: str | None = None,
+) -> str:
+
+
+    now = datetime.now(timezone.utc)
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = now + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode = {"exp": expire, "sub": str(subject), "type": "access"}
+        expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    if session_jti is None:
+        session_jti = str(uuid.uuid4())
+
+    to_encode = {
+        "exp": expire,
+        "sub": str(subject),
+        "type": "access",
+        "jti": session_jti,
+        "iat": int(now.timestamp()),
+    }
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
-def create_refresh_token(subject: Union[str, Any], expires_delta: timedelta = None) -> str:
+def create_refresh_token(
+    subject: Union[str, Any],
+    expires_delta: timedelta | None = None,
+    *,
+    session_jti: str | None = None,
+) -> str:
+
+    now = datetime.now(timezone.utc)
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = now + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode = {"exp": expire, "sub": str(subject), "type": "refresh"}
+        expire = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+
+    if session_jti is None:
+        session_jti = str(uuid.uuid4())
+
+    to_encode = {
+        "exp": expire,
+        "sub": str(subject),
+        "type": "refresh",
+        "jti": session_jti,
+        "iat": int(now.timestamp()),
+    }
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+
 
 
 def verify_token_type(token: str, expected_type: str) -> bool:

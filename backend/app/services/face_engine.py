@@ -1,14 +1,24 @@
 import logging
+import os
 import numpy as np
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
+# CRITICAL: The face_recognition library (via dlib/tensorflow) calls
+# os.environ.pop('TF_CPP_MIN_LOG_LEVEL') which raises KeyError if the
+# key is not already set. Set it preemptively to avoid ModuleNotFoundError
+# / KeyError crashes at import time.
+_TF_LOG_LEVEL = os.environ.get("TF_CPP_MIN_LOG_LEVEL")
+if _TF_LOG_LEVEL is None:
+    os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+
+FACE_RECOGNITION_AVAILABLE = False
 try:
-    import face_recognition
+    import face_recognition  # type: ignore[import-untyped]
     FACE_RECOGNITION_AVAILABLE = True
-except ImportError:
-    FACE_RECOGNITION_AVAILABLE = False
+except (ImportError, KeyError, RuntimeError, OSError) as _fr_err:
+    logger.warning("face_recognition module unavailable: %s", _fr_err)
 
 class FaceEngine:
     @staticmethod

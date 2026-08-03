@@ -31,7 +31,6 @@ export const Button = React.forwardRef(
       isLoading = false,
       disabled = false,
       className,
-      as: Component = 'button',
       ...props
     },
     ref
@@ -39,7 +38,7 @@ export const Button = React.forwardRef(
     const isDisabled = disabled || isLoading;
 
     return (
-      <Component
+      <button
         ref={ref}
         disabled={isDisabled}
         className={cn(
@@ -73,7 +72,7 @@ export const Button = React.forwardRef(
           </svg>
         )}
         {children}
-      </Component>
+</button>
     );
   }
 );

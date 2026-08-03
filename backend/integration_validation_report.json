@@ -1,0 +1,154 @@
+{
+  "entity": "Entity 6: Enterprise Authorization Integration",
+  "timestamp": "2026-07-25T08:14:23.697433+00:00",
+  "phases": {
+    "identity": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "A.1 SuperAdmin identity verified",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.2 Tenant context verified",
+          "status": "PASS",
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "eaac_eval": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "B.1 POST /eaac/evaluate grants SuperAdmin access",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "B.2 GET /eaac/user-pipeline returns 8-stage pipeline state",
+          "status": "PASS",
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "subscription": {
+      "passed": 1,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "C.1 Subscription plans active",
+          "status": "PASS",
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "roles": {
+      "passed": 1,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "D.1 Effective permissions resolved for dynamic user",
+          "status": "PASS",
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "scope": {
+      "passed": 1,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "E.1 Data scope resolved for attendance.read",
+          "status": "PASS",
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "workflow": {
+      "passed": 1,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "F.1 Workflows engine integrated",
+          "status": "PASS",
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "security": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "G.1 Non-admin unauthorized role creation returns 403",
+          "status": "PASS",
+          "detail": "Got 403"
+        },
+        {
+          "name": "G.2 Unauthenticated access returns 401",
+          "status": "PASS",
+          "detail": "Got 401"
+        }
+      ]
+    },
+    "performance": {
+      "passed": 1,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "H.1 Unified EAAC evaluation benchmark < 200ms",
+          "status": "PASS",
+          "detail": "took 23.7ms"
+        }
+      ]
+    },
+    "regression": {
+      "passed": 7,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "I.1 Auth & User Service intact",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "I.2 Organization Service intact",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "I.3 RBAC Permission System intact",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "I.4 Subscription & Feature Engine intact",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "I.5 Data Scope Engine intact",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "I.6 Approval Workflow Engine intact",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "I.7 Dynamic Roles & Templates Engine intact",
+          "status": "PASS",
+          "detail": "Got 200"
+        }
+      ]
+    }
+  },
+  "passed": 18,
+  "failed": 0,
+  "total": 18,
+  "score": 100.0
+}

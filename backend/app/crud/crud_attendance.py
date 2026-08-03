@@ -1,9 +1,12 @@
+import uuid
 from typing import Optional
 from sqlalchemy.orm import Session
 from app.crud.base import CRUDBase
 from app.db.models.all_models import AttendanceLog
 from app.schema.attendance import CheckInRequest
 from pydantic import BaseModel
+
+from app.core.config import settings
 
 class CheckInUpdate(BaseModel):
     pass
@@ -27,22 +30,75 @@ class CRUDAttendance(CRUDBase[AttendanceLog, CheckInRequest, CheckInUpdate]):
         db.refresh(db_obj)
         return db_obj
 
-    def find_user_by_face(self, db: Session, *, embedding: list[float], threshold: float = 0.5) -> Optional[int]:
+    def verify_user_face(
+        self,
+        db: Session,
+        *,
+        user_id: int,
+        embedding: list[float],
+        threshold: float | None = None,
+    ) -> tuple[bool, float | None]:
+        """
+        Verify that a face embedding matches a specific user's enrolled biometric template.
+        Returns (is_match, distance).
+        """
         from app.db.models.all_models import FaceEmbedding
-        from sqlalchemy import select, func
-        
-        # Find the closest embedding using pgvector L2 distance
+        from sqlalchemy import select
+
+        if threshold is None:
+            threshold = settings.FACE_DISTANCE_THRESHOLD
+
         stmt = (
             select(FaceEmbedding, FaceEmbedding.embedding.l2_distance(embedding).label("distance"))
+            .where(FaceEmbedding.user_id == user_id)
             .where(FaceEmbedding.is_active == 1)
             .order_by(FaceEmbedding.embedding.l2_distance(embedding))
             .limit(1)
         )
         row = db.execute(stmt).first()
-        
-        # CRITICAL: Only return a match if the distance is within the allowed threshold.
-        # Without this check, ANY face would match the closest person in the DB.
-        if row and row.distance <= threshold:
+
+        if not row or row.distance is None:
+            # If no active template enrolled, allow or require enrollment
+            return True, None
+
+        is_match = row.distance <= threshold
+        return is_match, float(row.distance)
+
+    def find_user_by_face(
+        self,
+        db: Session,
+        *,
+        embedding: list[float],
+        threshold: float | None = None,
+        org_id: uuid.UUID | None = None,
+    ) -> Optional[int]:
+        """
+        Find the user who matches the given face embedding.
+
+        CRITICAL TENANT ISOLATION:
+        When ``org_id`` is provided, the vector search is scoped to embeddings
+        belonging to users in that organization only.
+        """
+        from app.db.models.all_models import FaceEmbedding, User
+        from sqlalchemy import select
+
+        if threshold is None:
+            threshold = settings.FACE_DISTANCE_THRESHOLD
+
+        stmt = (
+            select(FaceEmbedding, FaceEmbedding.embedding.l2_distance(embedding).label("distance"))
+            .join(User, User.id == FaceEmbedding.user_id)
+            .where(FaceEmbedding.is_active == 1)
+            .where(User.is_deleted == 0)
+            .order_by(FaceEmbedding.embedding.l2_distance(embedding))
+            .limit(1)
+        )
+        if org_id is not None:
+            stmt = stmt.where(User.org_id == org_id)
+
+        row = db.execute(stmt).first()
+
+        if row and row.distance is not None and row.distance <= threshold:
             return row.FaceEmbedding.user_id
         return None
 

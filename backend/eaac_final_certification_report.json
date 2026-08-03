@@ -1,0 +1,283 @@
+{
+  "suite": "VisionCore v2.0 \u2014 EAAC Final System Certification",
+  "sprint": "Sprint 2",
+  "entity": "Entity 7",
+  "timestamp": "2026-07-25T08:19:02.594709+00:00",
+  "phases": {
+    "pipeline_happy": {
+      "passed": 9,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "A.1 SuperAdmin identity resolution",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.2 Tenant context resolution",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.3 Subscription layer accessible",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.4 Permission layer accessible",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.5 Data scope layer resolves correctly",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.6 Approval workflow layer accessible",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.7 Dynamic role effective authorization resolved",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.8 EAAC unified pipeline evaluation granted",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.9 EAAC pipeline state returns all 8 stages",
+          "status": "PASS",
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "denial": {
+      "passed": 5,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "B.1 Employee cannot create dynamic roles (403)",
+          "status": "PASS",
+          "detail": "Got 403"
+        },
+        {
+          "name": "B.2 Employee cannot seed templates (403)",
+          "status": "PASS",
+          "detail": "Got 403"
+        },
+        {
+          "name": "B.3 Employee cannot create workflow (403)",
+          "status": "PASS",
+          "detail": "Got 403"
+        },
+        {
+          "name": "B.4 Unauthenticated request returns 401",
+          "status": "PASS",
+          "detail": "Got 401"
+        },
+        {
+          "name": "B.5 Unauthenticated EAAC inspector returns 401",
+          "status": "PASS",
+          "detail": "Got 401"
+        }
+      ]
+    },
+    "role_cross": {
+      "passed": 3,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "C.1 SuperAdmin can list all dynamic roles",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "C.2 Employee can read role templates",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "C.3 EAAC evaluation for employee-level permission",
+          "status": "PASS",
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "subscription_gate": {
+      "passed": 2,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "D.1 Subscription plans endpoint responds",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "D.2 Effective features array populated",
+          "status": "PASS",
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "tenant_isolation": {
+      "passed": 3,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "E.1 SA can read own org context",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "E.2 Employee resolves to same tenant org",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "E.3 Employee role list is tenant-scoped",
+          "status": "PASS",
+          "detail": "Got 200"
+        }
+      ]
+    },
+    "security_audit": {
+      "passed": 3,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "F.1 Employee cannot create platform RBAC roles",
+          "status": "PASS",
+          "detail": "Got 403"
+        },
+        {
+          "name": "F.2 Employee denied payroll.execute via EAAC",
+          "status": "PASS",
+          "detail": "granted=False"
+        },
+        {
+          "name": "F.3 Employee cannot set role inheritance (403)",
+          "status": "PASS",
+          "detail": "Got 405"
+        }
+      ]
+    },
+    "token_security": {
+      "passed": 4,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "G.1 Login returns 200 with access_token",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "G.2 Fresh token authenticates user",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "G.3 Logout succeeds",
+          "status": "PASS",
+          "detail": "Got 200"
+        },
+        {
+          "name": "G.4 Invalid token returns 401/403",
+          "status": "PASS",
+          "detail": "Got 403"
+        }
+      ]
+    },
+    "performance": {
+      "passed": 4,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "H.1 Unified EAAC evaluation < 200ms avg",
+          "status": "PASS",
+          "detail": "avg=22.9ms"
+        },
+        {
+          "name": "H.2 Effective auth resolution < 200ms avg",
+          "status": "PASS",
+          "detail": "avg=19.0ms"
+        },
+        {
+          "name": "H.3 Scope resolution < 200ms avg",
+          "status": "PASS",
+          "detail": "avg=16.4ms"
+        },
+        {
+          "name": "H.4 Workflow listing < 200ms avg",
+          "status": "PASS",
+          "detail": "avg=19.3ms"
+        }
+      ]
+    },
+    "rapid_fire": {
+      "passed": 1,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "I.1 All 5 rapid EAAC evaluations succeed (200)",
+          "status": "PASS",
+          "detail": "statuses=[200, 200, 200, 200, 200]"
+        }
+      ]
+    },
+    "regression": {
+      "passed": 8,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "J \u2014 Auth/User (Entity 1) intact",
+          "status": "PASS",
+          "detail": "GET /api/v1/users/me \u2192 200"
+        },
+        {
+          "name": "J \u2014 Organization (Entity 1) intact",
+          "status": "PASS",
+          "detail": "GET /api/v1/org/current \u2192 200"
+        },
+        {
+          "name": "J \u2014 Permission System (Entity 2) intact",
+          "status": "PASS",
+          "detail": "GET /api/v1/rbac/permissions \u2192 200"
+        },
+        {
+          "name": "J \u2014 Subscription & Features (Entity 3) intact",
+          "status": "PASS",
+          "detail": "GET /api/v1/subscription/plans \u2192 200"
+        },
+        {
+          "name": "J \u2014 Data Scope Engine (Entity 3) intact",
+          "status": "PASS",
+          "detail": "GET /api/v1/scope/effective-scope?permission=attendance.read \u2192 200"
+        },
+        {
+          "name": "J \u2014 Approval Workflow Engine (Entity 4) intact",
+          "status": "PASS",
+          "detail": "GET /api/v1/workflow/workflows \u2192 200"
+        },
+        {
+          "name": "J \u2014 Dynamic Roles Engine (Entity 5) intact",
+          "status": "PASS",
+          "detail": "GET /api/v1/dynamic-roles/roles \u2192 200"
+        },
+        {
+          "name": "J \u2014 EAAC Integration (Entity 6) intact",
+          "status": "PASS",
+          "detail": "GET /api/v1/eaac/user-pipeline \u2192 200"
+        }
+      ]
+    }
+  },
+  "passed": 42,
+  "failed": 0,
+  "total": 42,
+  "defects": [],
+  "score": 100.0
+}

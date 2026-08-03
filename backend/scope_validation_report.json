@@ -1,0 +1,558 @@
+{
+  "metadata": {
+    "suite": "Data Scope & Resource Ownership",
+    "sprint": "Sprint 2",
+    "entity": "Data Scope & Resource Ownership",
+    "timestamp": "2026-07-25T07:47:17.816275+00:00"
+  },
+  "phases": {
+    "scope_apis": {
+      "passed": 20,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "A.0 SuperAdmin login",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.1 POST /scope/seed returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.2 Seed returns scopes_seeded",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.3 GET /data-scopes returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.4 Has total field",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.5 Has data_scopes array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.6 At least 11 scopes seeded",
+          "passed": true,
+          "detail": "Got 11"
+        },
+        {
+          "name": "A.7 Scope 'platform' exists",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.7 Scope 'organization' exists",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.7 Scope 'department' exists",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.7 Scope 'self' exists",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.8 Duplicate scope code \u2192 409",
+          "passed": true,
+          "detail": "Got 409"
+        },
+        {
+          "name": "A.9 GET /role-data-scopes returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.10 Has role_data_scopes array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.11 GET /effective-scope returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "A.12 Has scope_code",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.13 Has scope_level",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "A.14 SuperAdmin gets platform scope",
+          "passed": true,
+          "detail": "Got platform"
+        },
+        {
+          "name": "A.15 SuperAdmin scope level 100",
+          "passed": true,
+          "detail": "Got 100"
+        },
+        {
+          "name": "A.16 is_platform_admin=true",
+          "passed": true,
+          "detail": ""
+        }
+      ]
+    },
+    "ownership_apis": {
+      "passed": 12,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "B.0 SuperAdmin login",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "B.1 POST /ownerships returns 201",
+          "passed": true,
+          "detail": "Got 201"
+        },
+        {
+          "name": "B.2 Has id",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "B.3 owner_type=creator",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "B.4 GET /ownerships returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "B.5 Has ownerships array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "B.6 Has total",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "B.7 POST /ownerships/transfer returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "B.8 Transfer new owner_type=assignee",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "B.9 GET /ownerships/history returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "B.10 Has history array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "B.11 History has records",
+          "passed": true,
+          "detail": ""
+        }
+      ]
+    },
+    "delegation": {
+      "passed": 7,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "C.0 SuperAdmin login",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "C.1 POST /delegations returns 201",
+          "passed": true,
+          "detail": "Got 201"
+        },
+        {
+          "name": "C.2 Delegation has id",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "C.3 Delegation is_active=true",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "C.4 GET /delegations returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "C.5 Has delegations array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "C.6 Has total",
+          "passed": true,
+          "detail": ""
+        }
+      ]
+    },
+    "rules_policies": {
+      "passed": 8,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "D.0 SuperAdmin login",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "D.1 GET /rules returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "D.2 Has rules array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "D.3 Rules seeded (>0)",
+          "passed": true,
+          "detail": "count=5"
+        },
+        {
+          "name": "D.4 GET /policies returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "D.5 Has policies array",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "D.6 Policies seeded (>0)",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "D.7 POST /rules returns 201",
+          "passed": true,
+          "detail": "Got 201"
+        }
+      ]
+    },
+    "scope_resolution": {
+      "passed": 12,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "E.0 SuperAdmin login",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "E.1 SuperAdmin effective-scope 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "E.2 SA scope=platform",
+          "passed": true,
+          "detail": "Got platform"
+        },
+        {
+          "name": "E.3 SA level=100",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "E.0 OrgAdmin login",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "E.1 OrgAdmin effective-scope 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "E.4 OA scope=organization",
+          "passed": true,
+          "detail": "Got organization"
+        },
+        {
+          "name": "E.5 OA level=80",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "E.0 OrgEmployee login",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "E.1 OrgEmployee effective-scope 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "E.6 Emp scope=self",
+          "passed": true,
+          "detail": "Got self"
+        },
+        {
+          "name": "E.7 Emp level=10",
+          "passed": true,
+          "detail": ""
+        }
+      ]
+    },
+    "inspector": {
+      "passed": 8,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "F.0 SuperAdmin login",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "F.1 POST /inspect returns 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "F.2 Has allowed field",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "F.3 SA allowed=true",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "F.4 Has resolved_scope_code",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "F.5 Has ownership_matched",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "F.6 Employee inspect 200",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "F.7 Employee scope=self",
+          "passed": true,
+          "detail": "Got self"
+        }
+      ]
+    },
+    "database": {
+      "passed": 10,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "G.1 DataScope table exists",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "G.2 RoleDataScope table exists",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "G.3 ResourceOwnership table exists",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "G.4 OwnershipHistory table exists",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "G.5 OwnershipDelegation table exists",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "G.6 OwnershipRule table exists",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "G.7 OwnershipPolicy table exists",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "G.8 OwnershipException table exists",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "G.9 Platform scope level=100",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "G.10 Self scope level=10",
+          "passed": true,
+          "detail": ""
+        }
+      ]
+    },
+    "security": {
+      "passed": 7,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "H.0 Employee login",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "H.1 Employee cannot seed (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "H.2 Employee cannot create scope (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "H.3 Employee cannot create RDS (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "H.4 Employee cannot create rules (403)",
+          "passed": true,
+          "detail": "Got 403"
+        },
+        {
+          "name": "H.5 Unauthenticated \u2192 401",
+          "passed": true,
+          "detail": "Got 401"
+        },
+        {
+          "name": "H.6 Unauthenticated effective-scope \u2192 401",
+          "passed": true,
+          "detail": "Got 401"
+        }
+      ]
+    },
+    "performance": {
+      "passed": 5,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "I.0 SuperAdmin login",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "I.1 Scope resolution < 200ms",
+          "passed": true,
+          "detail": "took 13.5ms"
+        },
+        {
+          "name": "I.2 Ownership lookup < 200ms",
+          "passed": true,
+          "detail": "took 18.7ms"
+        },
+        {
+          "name": "I.3 Inspector < 200ms",
+          "passed": true,
+          "detail": "took 17.7ms"
+        },
+        {
+          "name": "I.4 Data scopes listing < 200ms",
+          "passed": true,
+          "detail": "took 25.5ms"
+        }
+      ]
+    },
+    "regression": {
+      "passed": 7,
+      "failed": 0,
+      "tests": [
+        {
+          "name": "J.1 Login still works",
+          "passed": true,
+          "detail": ""
+        },
+        {
+          "name": "J.2 /users/me works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "J.3 /org/current works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "J.4 RBAC permissions works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "J.5 Subscription plans works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "J.6 Health check works",
+          "passed": true,
+          "detail": "Got 200"
+        },
+        {
+          "name": "J.7 Features endpoint works",
+          "passed": true,
+          "detail": "Got 200"
+        }
+      ]
+    }
+  },
+  "summary": {
+    "total": 96,
+    "passed": 96,
+    "failed": 0,
+    "defects": [],
+    "score": 100.0,
+    "frozen": true
+  }
+}

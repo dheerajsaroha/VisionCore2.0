@@ -1,9 +1,13 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { cn } from '../../lib/utils';
+
+let inputCounter = 0;
+const fallbackId = () => `input-${++inputCounter}`;
 
 export const Input = React.forwardRef(
   ({ className, type = 'text', label, error, icon: Icon, helperText, ...props }, ref) => {
-    const id = props.id || props.name || Math.random().toString(36).slice(2);
+    const autoId = useId() ?? fallbackId();
+    const id = props.id || props.name || autoId;
 
     return (
       <div className="w-full">
