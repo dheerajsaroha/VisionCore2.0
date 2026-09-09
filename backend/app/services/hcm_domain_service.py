@@ -312,6 +312,11 @@ class GoalService:
         db.add(goal)
         db.commit()
         db.refresh(goal)
+        audit_service.record(
+            actor_user_id=actor_id or user_id, organization_id=str(org_id),
+            module="hcm_goals", action="create", entity_type="goal",
+            entity_id=str(goal.id), summary=f"Goal '{goal.title}' created for user {user_id}",
+        )
         event_bus.publish(
             "GoalCreated", str(org_id),
             {"goal_id": goal.id, "user_id": user_id, "title": goal.title},
@@ -346,6 +351,11 @@ class GoalService:
             )
         db.commit()
         db.refresh(goal)
+        audit_service.record(
+            actor_user_id=actor_id or user_id, organization_id=str(org_id),
+            module="hcm_goals", action="update", entity_type="goal",
+            entity_id=str(goal.id), summary=f"Goal '{goal.title}' progress logged ({value})",
+        )
         return goal
 
 
@@ -362,6 +372,11 @@ class ReviewService:
         db.add(review)
         db.commit()
         db.refresh(review)
+        audit_service.record(
+            actor_user_id=actor_id, organization_id=str(org_id),
+            module="hcm_reviews", action="create", entity_type="performance_review",
+            entity_id=str(review.id), summary=f"Performance review created for user {review.reviewee_user_id}",
+        )
         event_bus.publish(
             "PerformanceReviewStarted", str(org_id),
             {"review_id": review.id, "reviewee": review.reviewee_user_id, "type": review.review_type},
@@ -391,6 +406,11 @@ class ReviewService:
         review.submitted_at = _now()
         db.commit()
         db.refresh(review)
+        audit_service.record(
+            actor_user_id=actor_id, organization_id=str(org_id),
+            module="hcm_reviews", action="submit", entity_type="performance_review",
+            entity_id=str(review.id), summary=f"Performance review submitted for user {review.reviewee_user_id}",
+        )
         event_bus.publish(
             "PerformanceReviewCompleted", str(org_id),
             {"review_id": review.id, "reviewee": review.reviewee_user_id, "score": review.overall_score},
@@ -426,6 +446,11 @@ class CourseService:
         db.add(course)
         db.commit()
         db.refresh(course)
+        audit_service.record(
+            actor_user_id=actor_id, organization_id=str(org_id),
+            module="hcm_learning", action="create", entity_type="course",
+            entity_id=str(course.id), summary=f"Course '{course.title}' created",
+        )
         return course
 
 
@@ -434,6 +459,9 @@ class LearningService:
 
     def enroll(self, db: Session, org_id, course_id: int, user_id: int,
                assigned_by: Optional[int] = None, actor_id: Optional[int] = None) -> CourseEnrollment:
+        course = db.query(Course).filter(Course.id == course_id, Course.organization_id == org_id).first()
+        if not course:
+            raise ValueError("Course not found in organization")
         enrollment = CourseEnrollment(
             organization_id=org_id, course_id=course_id, user_id=user_id,
             assigned_by_user_id=assigned_by or user_id,
@@ -441,6 +469,11 @@ class LearningService:
         db.add(enrollment)
         db.commit()
         db.refresh(enrollment)
+        audit_service.record(
+            actor_user_id=actor_id or user_id, organization_id=str(org_id),
+            module="hcm_learning", action="create", entity_type="course_enrollment",
+            entity_id=str(enrollment.id), summary=f"User {user_id} enrolled in course '{course.title}'",
+        )
         event_bus.publish(
             "CourseAssigned", str(org_id),
             {"enrollment_id": enrollment.id, "course_id": course_id, "user_id": user_id},
@@ -470,6 +503,11 @@ class LearningService:
         enrollment.completed_at = _now()
         db.commit()
         db.refresh(enrollment)
+        audit_service.record(
+            actor_user_id=actor_id or enrollment.user_id, organization_id=str(org_id),
+            module="hcm_learning", action="complete", entity_type="course_enrollment",
+            entity_id=str(enrollment.id), summary=f"Course enrollment {enrollment_id} completed",
+        )
         event_bus.publish(
             "CourseCompleted", str(org_id),
             {"enrollment_id": enrollment.id, "course_id": enrollment.course_id, "user_id": enrollment.user_id},
@@ -490,6 +528,8 @@ class AssessmentService:
                        enrollment_id: Optional[int] = None,
                        response_data: Optional[dict] = None) -> AssessmentAttempt:
         quiz = db.query(AssessmentQuiz).filter(AssessmentQuiz.id == quiz_id).first()
+        if quiz and hasattr(quiz, "organization_id") and quiz.organization_id and quiz.organization_id != org_id:
+            raise ValueError("Quiz not found in organization")
         pass_threshold = quiz.pass_score if quiz else 70.0
         passed = score >= pass_threshold
         attempt = AssessmentAttempt(
@@ -500,6 +540,11 @@ class AssessmentService:
         db.add(attempt)
         db.commit()
         db.refresh(attempt)
+        audit_service.record(
+            actor_user_id=user_id, organization_id=str(org_id),
+            module="hcm_learning", action="submit_assessment", entity_type="assessment_attempt",
+            entity_id=str(attempt.id), summary=f"Assessment attempt submitted by user {user_id} (Score: {score})",
+        )
         if passed:
             event_bus.publish(
                 "AssessmentPassed", str(org_id),
@@ -522,7 +567,7 @@ class SkillService:
                             actor_id: Optional[int] = None) -> EmployeeSkill:
         record = (
             db.query(EmployeeSkill)
-            .filter(EmployeeSkill.org_id == org_id, EmployeeSkill.user_id == user_id,
+            .filter(EmployeeSkill.organization_id == org_id, EmployeeSkill.user_id == user_id,
                     EmployeeSkill.skill_id == skill_id)
             .first()
         )
@@ -534,7 +579,7 @@ class SkillService:
                 record.verified_at = _now()
         else:
             record = EmployeeSkill(
-                org_id=org_id, user_id=user_id, skill_id=skill_id,
+                organization_id=org_id, user_id=user_id, skill_id=skill_id,
                 proficiency_level=proficiency_level, source=source,
                 verified_by_user_id=verified_by,
                 verified_at=_now() if verified_by else None,
@@ -551,7 +596,7 @@ class SkillService:
         return record
 
     def list_skills(self, db: Session, org_id, user_id: Optional[int] = None) -> List[EmployeeSkill]:
-        q = db.query(EmployeeSkill).filter(EmployeeSkill.org_id == org_id)
+        q = db.query(EmployeeSkill).filter(EmployeeSkill.organization_id == org_id)
         if user_id:
             q = q.filter(EmployeeSkill.user_id == user_id)
         return q.order_by(EmployeeSkill.skill_id).all()
@@ -585,7 +630,7 @@ class CompetencyService:
         )
         skills = (
             db.query(EmployeeSkill)
-            .filter(EmployeeSkill.org_id == org_id, EmployeeSkill.user_id == user_id)
+            .filter(EmployeeSkill.organization_id == org_id, EmployeeSkill.user_id == user_id)
             .all()
         )
         level_score = {"beginner": 1, "intermediate": 2, "advanced": 3, "expert": 4}
@@ -626,6 +671,11 @@ class CertificationService:
         db.add(cert)
         db.commit()
         db.refresh(cert)
+        audit_service.record(
+            actor_user_id=actor_id or user_id, organization_id=str(org_id),
+            module="hcm_certifications", action="issue", entity_type="certificate",
+            entity_id=str(cert.id), summary=f"Certificate {cert_number} issued to user {user_id}",
+        )
         event_bus.publish(
             "CertificationIssued", str(org_id),
             {"certificate_id": cert.id, "user_id": user_id, "course_id": course_id,
@@ -668,6 +718,11 @@ class CareerService:
         db.add(path)
         db.commit()
         db.refresh(path)
+        audit_service.record(
+            actor_user_id=actor_id, organization_id=str(org_id),
+            module="hcm_career", action="create", entity_type="career_path",
+            entity_id=str(path.id), summary=f"Career path '{path.title}' created",
+        )
         return path
 
     def list_idps(self, db: Session, org_id, user_id: Optional[int] = None) -> List[IndividualDevelopmentPlan]:
@@ -682,6 +737,11 @@ class CareerService:
         db.add(idp)
         db.commit()
         db.refresh(idp)
+        audit_service.record(
+            actor_user_id=actor_id or user_id, organization_id=str(org_id),
+            module="hcm_career", action="create", entity_type="individual_development_plan",
+            entity_id=str(idp.id), summary=f"Individual development plan created for user {user_id}",
+        )
         event_bus.publish(
             "CareerPlanUpdated", str(org_id),
             {"idp_id": idp.id, "user_id": user_id},
@@ -711,6 +771,11 @@ class SuccessionService:
         db.add(kp)
         db.commit()
         db.refresh(kp)
+        audit_service.record(
+            actor_user_id=actor_id, organization_id=str(org_id),
+            module="hcm_succession", action="create", entity_type="key_position",
+            entity_id=str(kp.id), summary=f"Key position '{kp.title}' created",
+        )
         return kp
 
     def list_plans(self, db: Session, org_id) -> List[SuccessionPlan]:
@@ -727,12 +792,20 @@ class SuccessionService:
         db.add(plan)
         db.commit()
         db.refresh(plan)
+        audit_service.record(
+            actor_user_id=actor_id, organization_id=str(org_id),
+            module="hcm_succession", action="create", entity_type="succession_plan",
+            entity_id=str(plan.id), summary=f"Succession plan created for key position {plan.key_position_id}",
+        )
         return plan
 
     def nominate_candidate(self, db: Session, org_id, plan_id: int, candidate_user_id: int,
                            readiness_rating: str = "ready_1_year",
                            nomination_notes: Optional[str] = None,
                            actor_id: Optional[int] = None) -> SuccessorCandidate:
+        plan = db.query(SuccessionPlan).filter(SuccessionPlan.id == plan_id, SuccessionPlan.organization_id == org_id).first()
+        if not plan:
+            raise ValueError("Succession plan not found in organization")
         candidate = SuccessorCandidate(
             succession_plan_id=plan_id, candidate_user_id=candidate_user_id,
             readiness_rating=readiness_rating, nomination_notes=nomination_notes,
@@ -740,6 +813,11 @@ class SuccessionService:
         db.add(candidate)
         db.commit()
         db.refresh(candidate)
+        audit_service.record(
+            actor_user_id=actor_id, organization_id=str(org_id),
+            module="hcm_succession", action="nominate", entity_type="successor_candidate",
+            entity_id=str(candidate.id), summary=f"Candidate {candidate_user_id} nominated for succession plan {plan_id}",
+        )
         event_bus.publish(
             "SuccessorAssigned", str(org_id),
             {"candidate_id": candidate.id, "plan_id": plan_id, "user_id": candidate_user_id,
@@ -775,6 +853,11 @@ class SuccessionService:
         db.add(record)
         db.commit()
         db.refresh(record)
+        audit_service.record(
+            actor_user_id=evaluated_by or user_id, organization_id=str(org_id),
+            module="hcm_succession", action="evaluate_nine_box", entity_type="nine_box_grid",
+            entity_id=str(record.id), summary=f"9-box grid evaluated for user {user_id} ({box_category})",
+        )
         event_bus.publish(
             "NineBoxEvaluated", str(org_id),
             {"grid_id": record.id, "user_id": user_id, "box": box_category},
@@ -792,10 +875,15 @@ class DocumentService:
 
     def upload_document(self, db: Session, org_id, user_id: int, data: Dict[str, Any],
                         actor_id: Optional[int] = None) -> EmployeeDocument:
-        doc = EmployeeDocument(org_id=org_id, user_id=user_id, is_signed=False, **data)
+        doc = EmployeeDocument(org_id=org_id, user_id=user_id, **data)
         db.add(doc)
         db.commit()
         db.refresh(doc)
+        audit_service.record(
+            actor_user_id=actor_id or user_id, organization_id=str(org_id),
+            module="hcm_documents", action="upload", entity_type="employee_document",
+            entity_id=str(doc.id), summary=f"Document '{doc.title}' uploaded for user {user_id}",
+        )
         return doc
 
     def list_documents(self, db: Session, org_id, user_id: Optional[int] = None,
@@ -845,12 +933,20 @@ class TalentService:
         db.add(pool)
         db.commit()
         db.refresh(pool)
+        audit_service.record(
+            actor_user_id=actor_id, organization_id=str(org_id),
+            module="hcm_talent", action="create", entity_type="talent_pool",
+            entity_id=str(pool.id), summary=f"Talent pool '{pool.name}' created",
+        )
         return pool
 
     def add_member(self, db: Session, org_id, pool_id: int, user_id: int,
                    readiness_level: str = "ready_1_year",
                    nomination_reason: Optional[str] = None,
                    actor_id: Optional[int] = None) -> TalentPoolMember:
+        pool = db.query(TalentPool).filter(TalentPool.id == pool_id, TalentPool.org_id == org_id).first()
+        if not pool:
+            raise ValueError("Talent pool not found in organization")
         member = TalentPoolMember(
             pool_id=pool_id, user_id=user_id,
             readiness_level=readiness_level, nomination_reason=nomination_reason,
@@ -858,6 +954,11 @@ class TalentService:
         db.add(member)
         db.commit()
         db.refresh(member)
+        audit_service.record(
+            actor_user_id=actor_id, organization_id=str(org_id),
+            module="hcm_talent", action="add_member", entity_type="talent_pool_member",
+            entity_id=str(member.id), summary=f"User {user_id} added to talent pool {pool_id}",
+        )
         event_bus.publish(
             "TalentPoolMemberAdded", str(org_id),
             {"member_id": member.id, "pool_id": pool_id, "user_id": user_id,
@@ -867,6 +968,9 @@ class TalentService:
         return member
 
     def pool_members(self, db: Session, org_id, pool_id: int) -> List[TalentPoolMember]:
+        pool = db.query(TalentPool).filter(TalentPool.id == pool_id, TalentPool.org_id == org_id).first()
+        if not pool:
+            return []
         return (
             db.query(TalentPoolMember)
             .filter(TalentPoolMember.pool_id == pool_id)
@@ -917,7 +1021,7 @@ def hcm_dashboard(db: Session, org_id) -> Dict[str, Any]:
     enrollments = db.query(CourseEnrollment).filter(
         CourseEnrollment.organization_id == org_id).count()
     certs = db.query(Certificate).filter(Certificate.organization_id == org_id).count()
-    skills = db.query(EmployeeSkill).filter(EmployeeSkill.org_id == org_id).count()
+    skills = db.query(EmployeeSkill).filter(EmployeeSkill.organization_id == org_id).count()
     key_positions = db.query(KeyPosition).filter(KeyPosition.organization_id == org_id).count()
     successors = db.query(SuccessorCandidate).join(
         SuccessionPlan, SuccessionPlan.id == SuccessorCandidate.succession_plan_id

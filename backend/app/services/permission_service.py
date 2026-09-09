@@ -31,7 +31,6 @@ from app.db.models.all_models import (
     User,
 )
 from app.crud.crud_role import permission_crud
-from app.api.deps import normalize_role_name
 
 logger = logging.getLogger(__name__)
 
@@ -145,8 +144,8 @@ class PermissionService:
         if not role:
             return []
 
-        # SuperAdmin has all active permissions (handles PLATFORM:SuperAdmin variant)
-        if normalize_role_name(role.name) == "SuperAdmin":
+        # SuperAdmin has all active permissions
+        if role.name == "SuperAdmin":
             all_perms = db.query(Permission.name).filter(
                 Permission.is_active == True
             ).all()

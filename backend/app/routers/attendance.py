@@ -1,12 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Request, Body
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Request
 
 from sqlalchemy.orm import Session
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, List
 import base64
 import logging
 
-from app.schema.attendance import CheckInRequest, AttendanceLogResponse, CheckOutRequest
+from app.schema.attendance import CheckInRequest, AttendanceLogResponse
 from app.db.database import get_db
 from app.api import deps
 from app.db.models.all_models import User, AttendanceLog
@@ -14,8 +14,8 @@ from app.services.analytics import analytics_service
 from app.services.cache import cache_response
 from app.services.attendance_controller import attendance_controller
 from app.services.blockchain import background_blockchain_anchor
-from app.services.attendance_pipeline.pipeline import LivenessFailedError
 from app.core.rate_limit import rate_limit_dependency
+
 
 
 router = APIRouter()
@@ -69,18 +69,7 @@ def get_logs(
     if date_to:
         query = query.filter(AttendanceLog.check_in <= date_to)
 
-    logs = query.order_by(AttendanceLog.check_in.desc()).offset(skip).limit(limit).all()
-    results = []
-    for log in logs:
-        item = AttendanceLogResponse.model_validate(log)
-        if log.user:
-            item.user_name = log.user.full_name
-            item.user_email = log.user.email
-        else:
-            item.user_name = f"User #{log.user_id}"
-        results.append(item)
-    return results
-
+    return query.order_by(AttendanceLog.check_in.desc()).offset(skip).limit(limit).all()
 
 
 @router.post("/check-in", response_model=AttendanceLogResponse)
@@ -93,6 +82,7 @@ async def check_in(
     current_user: User = Depends(deps.get_current_active_user),
     _: bool = Depends(rate_limit_dependency(max_requests=10, window_seconds=60)),
 ) -> Any:
+
     """
     Refactored check-in with robust error handling and async anchoring.
     SECURE: Requires authenticated user. Users can only check in as themselves
@@ -106,15 +96,6 @@ async def check_in(
             background_tasks=background_tasks,
         )
         return log
-    except LivenessFailedError as e:
-        raise HTTPException(
-            status_code=403,
-            detail={
-                "code": getattr(e, "code", "LIVENESS_FAILED"),
-                "message": str(e),
-                "score": getattr(e, "score", 0.0),
-            },
-        )
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except LookupError as e:
@@ -129,116 +110,6 @@ async def check_in(
         raise HTTPException(status_code=500, detail="Biometric processing failed")
 
 
-@router.post("/check-out", response_model=AttendanceLogResponse)
-async def check_out(
-    *,
-    request: Request,
-    db: Session = Depends(get_db),
-    req: Optional[CheckOutRequest] = Body(None),
-    current_user: User = Depends(deps.get_current_active_user),
-    _: bool = Depends(rate_limit_dependency(max_requests=10, window_seconds=60)),
-) -> Any:
-    """
-    First-class check-out endpoint.
-    SECURE: Requires authenticated user. Optionally re-verifies identity via face recognition.
-    Enforces that an active check-in exists and prevents duplicate check-outs.
-    """
-    from app.crud.crud_attendance import attendance as crud_attendance
-
-    user_id = req.user_id if req and req.user_id else current_user.id
-    timestamp = req.timestamp if req else None
-
-    if req and req.image_base64:
-        image_bytes = attendance_controller.extract_image_bytes(req.image_base64)
-        if not image_bytes:
-            raise HTTPException(status_code=400, detail="Invalid image for check-out verification")
-
-        try:
-            pipeline_result = attendance_controller.run_face_pipeline(
-                db,
-                image_bytes=image_bytes,
-                existing_user_id=current_user.id,
-                org_id=current_user.org_id,
-            )
-            if pipeline_result.user_id != current_user.id:
-                raise HTTPException(status_code=403, detail="Face verification failed for check-out")
-        except LivenessFailedError as e:
-            raise HTTPException(
-                status_code=403,
-                detail={
-                    "code": getattr(e, "code", "LIVENESS_FAILED"),
-                    "message": str(e),
-                    "score": getattr(e, "score", 0.0),
-                },
-            )
-        except PermissionError as e:
-            raise HTTPException(status_code=403, detail=str(e))
-        except LookupError as e:
-            raise HTTPException(status_code=404, detail=str(e))
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
-        except Exception as e:
-            request_id = getattr(getattr(request, "state", None), "request_id", None)
-            logger.exception(f"Check-out biometric failed [request_id={request_id}]: {e}")
-            raise HTTPException(status_code=500, detail="Check-out verification failed")
-
-    try:
-        log = crud_attendance.log_check_out(db, user_id=user_id, timestamp=timestamp)
-        res = AttendanceLogResponse.model_validate(log)
-        res.user_name = current_user.full_name
-        res.user_email = current_user.email
-        return res
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.exception(f"Check-out failed for user {user_id}: {e}")
-        raise HTTPException(status_code=500, detail="Check-out processing failed")
-
-
-@router.post("/break-start", response_model=AttendanceLogResponse)
-async def break_start(
-    *,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(deps.get_current_active_user),
-    _: bool = Depends(rate_limit_dependency(max_requests=20, window_seconds=60)),
-) -> Any:
-    """Start a break for the current user's active attendance session."""
-    from app.crud.crud_attendance import attendance as crud_attendance
-    try:
-        log = crud_attendance.log_break_start(db, user_id=current_user.id)
-        res = AttendanceLogResponse.model_validate(log)
-        res.user_name = current_user.full_name
-        res.user_email = current_user.email
-        return res
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.exception(f"Break start failed for user {current_user.id}: {e}")
-        raise HTTPException(status_code=500, detail="Break start processing failed")
-
-
-@router.post("/break-end", response_model=AttendanceLogResponse)
-async def break_end(
-    *,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(deps.get_current_active_user),
-    _: bool = Depends(rate_limit_dependency(max_requests=20, window_seconds=60)),
-) -> Any:
-    """End the current user's active break."""
-    from app.crud.crud_attendance import attendance as crud_attendance
-    try:
-        log = crud_attendance.log_break_end(db, user_id=current_user.id)
-        res = AttendanceLogResponse.model_validate(log)
-        res.user_name = current_user.full_name
-        res.user_email = current_user.email
-        return res
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.exception(f"Break end failed for user {current_user.id}: {e}")
-        raise HTTPException(status_code=500, detail="Break end processing failed")
-
-
 @router.patch("/logs/{log_id}", response_model=AttendanceLogResponse)
 def update_attendance_log(
     *,
@@ -248,6 +119,8 @@ def update_attendance_log(
     current_user: User = Depends(deps.require_permission("attendance.override")),
     background_tasks: BackgroundTasks
 ) -> Any:
+
+    # SECURE: Ensure the log belongs to the admin's organization
     log = db.query(AttendanceLog).join(User).filter(
         AttendanceLog.id == log_id,
         User.org_id == current_user.org_id
@@ -288,31 +161,6 @@ def submit_attendance_correction(
     db.add(correction)
     db.commit()
     db.refresh(correction)
-
-    try:
-        from app.routers.notifications import push_notification, push_notification_to_org_managers
-        push_notification(
-            str(current_user.org_id),
-            current_user.id,
-            title="Attendance Correction Submitted",
-            message=f"Your regularization request for '{payload.get('reason', '')}' is pending review.",
-            notif_type="info",
-            action_url="/dashboard/workforce/leave-requests",
-            source_event="attendance_correction.submitted"
-        )
-        push_notification_to_org_managers(
-            db,
-            current_user.org_id,
-            title="Pending Attendance Correction",
-            message=f"{current_user.full_name} submitted an attendance correction request: '{payload.get('reason', '')}'.",
-            notif_type="warning",
-            action_url="/dashboard/workforce/leave-requests",
-            source_event="attendance_correction.manager_alert",
-            exclude_user_id=current_user.id
-        )
-    except Exception as err:
-        logger.warning(f"Failed to push notification for correction submit: {err}")
-
     return {
         "id": correction.id,
         "status": correction.status,
@@ -332,8 +180,7 @@ def list_attendance_corrections(
     from app.db.models.all_models import AttendanceCorrection
 
     q = db.query(AttendanceCorrection).filter(AttendanceCorrection.organization_id == current_user.org_id)
-    role_name = current_user.role.name if current_user.role else ""
-    if role_name not in ["Admin", "SuperAdmin", "OrgAdmin", "Manager", "OrgManager"]:
+    if current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "Manager"]:
         q = q.filter(AttendanceCorrection.user_id == current_user.id)
     elif user_id:
         q = q.filter(AttendanceCorrection.user_id == user_id)
@@ -366,7 +213,7 @@ def approve_attendance_correction(
     current_user: User = Depends(deps.get_current_active_user)
 ):
     """Approve or reject an attendance correction request."""
-    if not deps.has_any_role(current_user, "Admin", "SuperAdmin", "OrgAdmin", "Manager", "OrgManager"):
+    if current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "Manager"]:
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     from app.db.models.all_models import AttendanceCorrection
@@ -385,6 +232,7 @@ def approve_attendance_correction(
     corr.reviewer_note = payload.get("note")
     corr.reviewed_at = datetime.now()
 
+    # If approved and log exists, update log
     if status_action == "approved" and corr.attendance_log:
         if corr.requested_clock_in:
             corr.attendance_log.check_in = corr.requested_clock_in
@@ -395,21 +243,6 @@ def approve_attendance_correction(
 
     db.commit()
     db.refresh(corr)
-
-    try:
-        from app.routers.notifications import push_notification
-        push_notification(
-            str(corr.organization_id),
-            corr.user_id,
-            title=f"Attendance Correction {status_action.capitalize()}",
-            message=f"Your attendance correction request was {status_action} by {current_user.full_name}.",
-            notif_type="success" if status_action == "approved" else "warning",
-            action_url="/dashboard/workforce/leave-requests",
-            source_event="attendance_correction.reviewed"
-        )
-    except Exception as err:
-        logger.warning(f"Failed to push notification for correction review: {err}")
-
     return {"id": corr.id, "status": corr.status, "reviewed_at": corr.reviewed_at}
 
 
@@ -423,8 +256,7 @@ def get_attendance_summary(
 ):
     """Get aggregated monthly attendance statistics."""
     target_user_id = user_id or current_user.id
-    role_name = current_user.role.name if current_user.role else ""
-    if target_user_id != current_user.id and role_name not in ["Admin", "SuperAdmin", "OrgAdmin", "Manager", "OrgManager"]:
+    if target_user_id != current_user.id and current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "Manager"]:
         raise HTTPException(status_code=403, detail="Unauthorized to view summary of other users")
 
     logs = db.query(AttendanceLog).filter(
@@ -436,6 +268,7 @@ def get_attendance_summary(
 
     total_present = len([l for l in filtered_logs if l.status in ["on_time", "early"]])
     total_late = len([l for l in filtered_logs if l.status == "late"])
+    total_absent = 0  # Can be calculated against working days
 
     return {
         "user_id": target_user_id,
@@ -444,5 +277,4 @@ def get_attendance_summary(
         "total_days_logged": len(filtered_logs),
         "present_count": total_present,
         "late_count": total_late,
-        "attendance_rate_pct": round((total_present / max(1, len(filtered_logs))) * 100, 1)
     }

@@ -30,7 +30,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_active_user, require_permission, has_any_role
+from app.api.deps import get_db, get_current_active_user, require_permission
 from app.db.models.all_models import User
 from app.services.hcm_domain_service import (
     assessment_service,
@@ -295,8 +295,12 @@ class TalentMemberAdd(BaseModel):
     nomination_reason: Optional[str] = None
 
 
+_ADMIN_ROLES = ("Admin", "SuperAdmin", "OrgAdmin")
+
+
 def _is_admin(user: User) -> bool:
-    return has_any_role(user, "SuperAdmin", "OrgAdmin")
+    """Safely check if current user has an administrative role without throwing AttributeError."""
+    return bool(user and getattr(user, "role", None) and getattr(user.role, "name", None) in _ADMIN_ROLES)
 
 
 # =============================================================================
@@ -819,6 +823,7 @@ def list_certifications(
     return res
 
 
+@router.post("/certifications", status_code=status.HTTP_201_CREATED, tags=["certifications"])
 @router.post("/certifications/issue", status_code=status.HTTP_201_CREATED, tags=["certifications"])
 def issue_certification(
     payload: CertificationIssue,
@@ -866,6 +871,7 @@ def create_career_path(
     return _model_to_dict(p)
 
 
+@router.get("/career/idps", tags=["career"])
 @router.get("/career/idp", tags=["career"])
 def list_idps(
     user_id: Optional[int] = None,
@@ -882,6 +888,7 @@ def list_idps(
     return res
 
 
+@router.post("/career/idps", status_code=status.HTTP_201_CREATED, tags=["career"])
 @router.post("/career/idp", status_code=status.HTTP_201_CREATED, tags=["career"])
 def create_idp(
     payload: IDPCreate,
@@ -956,6 +963,7 @@ def create_succession_plan(
     return _model_to_dict(plan)
 
 
+@router.post("/succession/plans/{plan_id}/nominate", status_code=status.HTTP_201_CREATED, tags=["succession"])
 @router.post("/succession/plans/{plan_id}/candidates", status_code=status.HTTP_201_CREATED, tags=["succession"])
 def nominate_candidate(
     plan_id: int,
@@ -1040,6 +1048,22 @@ def add_talent_pool_member(
         payload.readiness_level, payload.nomination_reason, actor_id=current_user.id,
     )
     return _model_to_dict(member)
+
+
+@router.get("/succession/talent-pools/{pool_id}/members", tags=["succession"])
+def list_talent_pool_members(
+    pool_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> List[Dict[str, Any]]:
+    members = talent_service.pool_members(db, current_user.org_id, pool_id)
+    res = []
+    for m in members:
+        d = _model_to_dict(m)
+        if m.user:
+            d["user_name"] = m.user.full_name
+        res.append(d)
+    return res
 
 
 @router.get("/succession/talent-dashboard", tags=["succession"])
