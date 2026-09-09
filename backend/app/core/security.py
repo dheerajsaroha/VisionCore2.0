@@ -15,21 +15,8 @@ ALGORITHM = settings.ALGORITHM
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated="auto")
 
-# Global Token Blacklist via Redis.
-# socket_connect_timeout / socket_timeout prevent the asyncio retry wrapper
-# from re-raising ConnectionError past our try/except in is_token_blacklisted.
-redis_client = redis_async.from_url(
-    settings.REDIS_URL,
-    decode_responses=True,
-    socket_connect_timeout=2,
-    socket_timeout=2,
-)
-
-<<<<<<< HEAD
-# ── Lazy Redis Client (optional) ───────────────────────────────────────────
-# Redis is instantiated lazily with timeouts so that an unavailable Redis
-# server does NOT block application startup or cause imports to hang.
 _redis_client = None
+
 
 def _get_redis():
     """Return a lazily-initialized async Redis client with connection timeouts."""
@@ -47,7 +34,7 @@ def _get_redis():
 
 
 async def blacklist_token(token: str, expires_in: int | None = None) -> None:
-    # Ensure expires_in is always an int; Redis TTL requires an integer.
+    """Add a token to the Redis blacklist. Best-effort — silently skips if Redis is down."""
     if expires_in is None:
         expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
     else:
@@ -56,21 +43,7 @@ async def blacklist_token(token: str, expires_in: int | None = None) -> None:
         client = _get_redis()
         await client.setex(f"blacklist:{token}", expires_in, "revoked")
     except Exception as exc:
-        # Redis supplements database-backed session revocation; it must not make
-        # logout or authentication unavailable.
-        import logging
-        logging.getLogger(__name__).warning("Redis unavailable for token blacklist write: %s", exc)
-=======
-
-async def blacklist_token(token: str, expires_in: int = None) -> None:
-    """Add a token to the Redis blacklist. Best-effort — silently skips if Redis is down."""
-    if expires_in is None:
-        expires_in = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-    try:
-        await redis_client.setex(f"blacklist:{token}", expires_in, "revoked")
-    except Exception as exc:
         logger.warning("Redis unavailable — token blacklist write skipped: %s", exc)
->>>>>>> refs/remotes/origin/main
 
 
 async def is_token_blacklisted(token: str) -> bool:
@@ -79,17 +52,21 @@ async def is_token_blacklisted(token: str) -> bool:
         client = _get_redis()
         return await client.exists(f"blacklist:{token}") > 0
     except Exception as exc:
-<<<<<<< HEAD
-        # Redis is optional. If it's down/unreachable, don't fail authentication.
-        import logging
-        logging.getLogger(__name__).warning(
-            f"Redis unavailable for token blacklist check: {exc}")
-=======
-        # Fail-open: Redis being down must NOT block all authenticated requests.
-        # A revoked token may briefly continue to work — acceptable in development.
-        # In production, ensure Redis is highly available.
         logger.warning("Redis unavailable for token blacklist check (fail-open): %s", exc)
->>>>>>> refs/remotes/origin/main
+        return False
+
+
+async def consume_one_time_token(token: str, expires_in: int) -> bool:
+    """Atomically consume a short-lived credential.
+
+    Password-reset tokens are security-sensitive, so a Redis outage is a
+    fail-closed condition rather than allowing a token to be reused.
+    """
+    try:
+        client = _get_redis()
+        return bool(await client.set(f"one-time:{token}", "used", ex=expires_in, nx=True))
+    except Exception as exc:
+        logger.error("One-time token store unavailable: %s", exc)
         return False
 
 
@@ -147,6 +124,17 @@ def create_refresh_token(
         "iat": int(now.timestamp()),
     }
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_password_reset_token(subject: Union[str, Any]) -> str:
+    now = datetime.now(timezone.utc)
+    return jwt.encode({
+        "exp": now + timedelta(minutes=settings.PASSWORD_RESET_EXPIRE_MINUTES),
+        "sub": str(subject),
+        "type": "password_reset",
+        "jti": str(uuid.uuid4()),
+        "iat": int(now.timestamp()),
+    }, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
 

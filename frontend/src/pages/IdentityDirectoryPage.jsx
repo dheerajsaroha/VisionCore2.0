@@ -23,8 +23,8 @@ export default function IdentityDirectoryPage() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/users');
-      setUsers(res.data);
+      const res = await api.get('/users/');
+      setUsers(Array.isArray(res.data) ? res.data : (res.data.users || []));
     } catch (err) {
       console.error('Failed to load users:', err);
     } finally {
@@ -127,9 +127,16 @@ export default function IdentityDirectoryPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-800 text-gray-300">
-                      {u.role?.name || 'User'}
-                    </span>
+                    <div className="flex flex-col">
+                      <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-gray-800 text-gray-300 w-fit">
+                        {u.role?.name || 'User'}
+                      </span>
+                      {(u.dept_name || u.org_name) && (
+                        <span className="text-xs text-gray-400 mt-1">
+                          {u.dept_name || 'General'}{u.org_name ? ` • ${u.org_name}` : ''}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4">
                     <span

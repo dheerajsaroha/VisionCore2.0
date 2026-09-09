@@ -6,11 +6,17 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: { 'Content-Type': 'application/json' }
 });
 
 let isRefreshing = false;
 let refreshSubscribers: ((token: string) => void)[] = [];
+let inMemoryAccessToken: string | null = null;
+
+export function setAccessToken(token: string | null): void {
+  inMemoryAccessToken = token;
+}
 
 function onTokenRefreshed(token: string) {
   refreshSubscribers.forEach((cb) => cb(token));
@@ -21,82 +27,34 @@ function addRefreshSubscriber(cb: (token: string) => void) {
   refreshSubscribers.push(cb);
 }
 
-// Helper to read token from Zustand persisted store (auth-storage)
-function getAuthToken(): string | null {
-  try {
-    const raw = localStorage.getItem('auth-storage');
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed?.state?.token || null;
-  } catch {
-    return null;
-  }
-}
-
-function getRefreshToken(): string | null {
-  try {
-    const raw = localStorage.getItem('auth-storage');
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed?.state?.refreshToken || null;
-  } catch {
-    return null;
-  }
-}
-
 function clearAuthStorage(): void {
-  localStorage.removeItem('auth-storage');
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
+  // Access credentials live only in the Zustand in-memory store. The refresh
+  // credential is an HttpOnly cookie and cannot be cleared from JavaScript.
 }
 
-<<<<<<< HEAD
-// Intercept requests to add JWT token (only if not already explicitly provided)
 apiClient.interceptors.request.use((config) => {
-  // Do NOT override an explicitly provided Authorization header
-  if (!config.headers.Authorization) {
-    const token = getAuthToken();
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+  const token = inMemoryAccessToken;
+  if (token && !config.headers?.Authorization) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-  // Add request ID for tracing
   config.headers['X-Request-ID'] = Math.random().toString(36).substring(2, 10);
   return config;
 }, (error) => Promise.reject(error));
-=======
-// Intercept requests to add JWT token
-// apiClient.interceptors.request.use((config) => {
-//   const token = getAuthToken();
-//   if (token) {
-//     config.headers.Authorization = `Bearer ${token}`;
-//   }
-//   // Add request ID for tracing
-//   config.headers['X-Request-ID'] = Math.random().toString(36).substring(2, 10);
-//   return config;
-// }, (error) => Promise.reject(error));
 
-apiClient.interceptors.request.use((config) => {
-    const token = getAuthToken();
-
-    // Don't overwrite an explicitly supplied Authorization header
-    if (token && !config.headers?.Authorization) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
-
-    return config;
-});
->>>>>>> refs/remotes/origin/main
-
-// Intercept responses for global error handling and token refresh
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Never intercept the login or refresh endpoints themselves.
+    const isAuthEndpoint =
+      originalRequest?.url?.includes('/auth/login') ||
+      originalRequest?.url?.includes('/auth/refresh') ||
+      originalRequest?.url?.includes('/auth/forgot-password') ||
+      originalRequest?.url?.includes('/auth/reset-password');
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       if (isRefreshing) {
-        // Wait for token refresh and retry
         return new Promise((resolve) => {
           addRefreshSubscriber((token: string) => {
             originalRequest.headers.Authorization = `Bearer ${token}`;
@@ -109,38 +67,23 @@ apiClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const refreshToken = getRefreshToken();
-        if (!refreshToken) {
-          throw new Error('No refresh token');
-        }
-
-        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-          refresh_token: refreshToken
-        });
+        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, null, { withCredentials: true });
 
         const newAccessToken = response.data.access_token;
-        const newRefreshToken = response.data.refresh_token;
-        // Sync back to Zustand store shape to avoid mismatch on next request
-        const raw = localStorage.getItem('auth-storage');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          parsed.state.token = newAccessToken;
-          if (newRefreshToken) {
-            parsed.state.refreshToken = newRefreshToken;
-          }
-          localStorage.setItem('auth-storage', JSON.stringify(parsed));
-        }
-        localStorage.setItem('access_token', newAccessToken);
-        if (newRefreshToken) {
-          localStorage.setItem('refresh_token', newRefreshToken);
-        }
+        setAccessToken(newAccessToken);
         apiClient.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
         onTokenRefreshed(newAccessToken);
 
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return apiClient(originalRequest);
       } catch (refreshError) {
-        // Clear tokens and redirect to login
+        const status = refreshError.response?.status;
+        // 422 from refresh means the cookie is invalid/malformed.
+        // Treat it the same as an expired cookie: clear state and redirect.
+        if (status === 422) {
+          console.warn('Refresh token invalid (422). Clearing session.');
+        }
+        setAccessToken(null);
         clearAuthStorage();
         window.location.href = '/login';
         return Promise.reject(refreshError);
@@ -149,9 +92,20 @@ apiClient.interceptors.response.use(
       }
     }
 
-    // Handle other global errors
     if (error.response?.status === 403) {
-      console.error('Forbidden: You do not have permission to access this resource.');
+      const data = error.response?.data;
+      let detail = 'You do not have permission to access this resource.';
+      let errorCode = 'PERMISSION_DENIED';
+
+      if (data && typeof data === 'object') {
+        detail = data.detail || data.message || detail;
+        errorCode = data.code || errorCode;
+      } else if (typeof data === 'string') {
+        detail = data;
+      }
+
+      console.error(`Forbidden [${errorCode}]:`, detail);
+      window.dispatchEvent(new CustomEvent('app:forbidden', { detail: { code: errorCode, message: detail } }));
     }
 
     return Promise.reject(error);

@@ -237,11 +237,10 @@ def test_performance_cycle_creation_and_ratings_dashboard():
 
     # ratings dashboard
     db = MagicMock()
-    db.query.side_effect = lambda model: (_ for _ in ()).throw(
-        AssertionError("unexpected query")) if False else MagicMock()
-    # Configure via direct mock chain: db.query(PerformanceRating).filter().all()
     q_mock = MagicMock()
-    q_mock.filter.return_value.all.return_value = ratings
+    # .filter().filter().all() or .filter().all() — all chains end in ratings
+    q_mock.filter.return_value = q_mock
+    q_mock.all.return_value = ratings
     db.query.return_value = q_mock
     dash = performance_service.ratings_dashboard(db, org)
     assert dash["total_rated"] == 3
@@ -595,32 +594,34 @@ def test_hcm_executive_dashboard_aggregates_domains():
     """The unified HCM dashboard aggregates KPIs across all HCM domains."""
     org = _org_id()
     db = MagicMock()
-    counts = {}
 
-    def cfg(model, value):
-        m = MagicMock()
-        m.filter.return_value.count.return_value = value
-        m.join.return_value.filter.return_value.count.return_value = value
-        counts[model] = m
-        return m
-
-    # Every model queried by hcm_dashboard
-    cfg(User, 10)
-    cfg(EmployeeProfile, 8)
-    cfg(Goal, 5)          # active goals
-    cfg(Goal, 7)          # completed goals (second query returns same mock → 5)
-    cfg(PerformanceReview, 3)
-    cfg(PerformanceReview, 4)
-    cfg(CourseEnrollment, 12)
-    cfg(Certificate, 4)
-    cfg(EmployeeSkill, 20)
-    cfg(KeyPosition, 6)
-    cfg(SuccessorCandidate, 4)
-    cfg(EmployeeDocument, 9)
-    cfg(TalentPool, 2)
+    # Track how many times each model has been queried; return different values per call
+    call_counts: dict = {}
+    # (model, call_index) -> count value
+    model_return_values = {
+        User: [10],
+        EmployeeProfile: [8],
+        Goal: [5, 7],            # first query = active (5), second = completed (7)
+        PerformanceReview: [3, 4],  # first = pending (3), second = submitted (4)
+        CourseEnrollment: [12],
+        Certificate: [4],
+        EmployeeSkill: [20],
+        KeyPosition: [6],
+        SuccessorCandidate: [4],
+        EmployeeDocument: [9],
+        TalentPool: [2],
+    }
 
     def side(model):
-        return counts[model]
+        idx = call_counts.get(model, 0)
+        call_counts[model] = idx + 1
+        values = model_return_values.get(model, [0])
+        count_val = values[min(idx, len(values) - 1)]
+        m = MagicMock()
+        m.filter.return_value.count.return_value = count_val
+        m.filter.return_value.in_.return_value = m.filter.return_value
+        m.join.return_value.filter.return_value.count.return_value = count_val
+        return m
 
     db.query.side_effect = side
 
@@ -634,4 +635,3 @@ def test_hcm_executive_dashboard_aggregates_domains():
         assert dash["succession"]["key_positions"] == 6
         assert dash["documents"] == 9
         assert dash["talent_pools"] == 2
-

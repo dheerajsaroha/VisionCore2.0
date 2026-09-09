@@ -1,7 +1,7 @@
 from sqlalchemy import text
 from app.db.database import engine
 from app.db.models.base import Base
-import app.db.models.all_models  # Ensure all models (including subscription) are loaded
+import app.db.models.all_models  # Ensure all models are loaded
 
 def create_tables():
     # Extensions must be committed before tables that use uuid_generate_v4(),
@@ -27,11 +27,4 @@ def create_tables():
             """))
             print("HNSW index enabled.")
     except Exception as e:
-<<<<<<< HEAD
-        print(f"Warning: Could not enable extensions automatically (probably permissions). Ensure they are enabled manually. {e}")
-        
-    Base.metadata.create_all(bind=engine)
-
-=======
         print(f"Warning: Could not create HNSW index automatically. Ensure it is enabled manually. {e}")
->>>>>>> refs/remotes/origin/main

@@ -149,6 +149,41 @@
   }
 }
 
+/* ── Light theme ────────────────────────────────────────────────────
+   Applied when <html class="light"> is set by useTheme hook.
+   Overrides structural surface colors so the app reads on white.
+   Components using hardcoded dark Tailwind classes are addressed here
+   through CSS custom property overrides read at the :root level.
+─────────────────────────────────────────────────────────────────── */
+html.light {
+  color-scheme: light;
+
+  /* Glass surface — white frosted */
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(0, 0, 0, 0.1);
+
+  /* Page-level surface and text */
+  --vc-bg: #f1f5f9;
+  --vc-surface: #ffffff;
+  --vc-surface-2: #f8fafc;
+  --vc-border: #e2e8f0;
+  --vc-text: #0f172a;
+  --vc-text-muted: #64748b;
+  --vc-text-subtle: #94a3b8;
+}
+
+html.light body {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+html.light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 /* Animations */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }

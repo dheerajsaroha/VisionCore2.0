@@ -21,146 +21,8 @@ from fastapi import HTTPException
 
 
 @pytest.fixture(autouse=True)
-def scoped_stubs(monkeypatch):
-    # Inject minimal stub modules so importing app.api.deps doesn't require the whole backend stack.
-    # Everything is scoped to this test via monkeypatch so it automatically restores.
-
-    fastapi_security_mod = types.ModuleType("fastapi.security")
-
-    class OAuth2PasswordBearer:
-        def __init__(self, tokenUrl):
-            self.tokenUrl = tokenUrl
-
-    fastapi_security_mod.OAuth2PasswordBearer = OAuth2PasswordBearer
-    monkeypatch.setitem(sys.modules, 'fastapi.security', fastapi_security_mod)
-
-    jose_mod = types.ModuleType('jose')
-
-    class JWTError(Exception):
-        pass
-
-    jose_mod.JWTError = JWTError
-    jwt_stub = types.SimpleNamespace(decode=lambda *a, **k: {})
-    monkeypatch.setitem(sys.modules, 'jose', jose_mod)
-    monkeypatch.setitem(sys.modules, 'jose.jwt', jwt_stub)
-
-    pydantic_mod = types.ModuleType('pydantic')
-
-    class ValidationError(Exception):
-        pass
-
-    # Only stub what this test needs.
-    pydantic_mod.ValidationError = ValidationError
-    monkeypatch.setitem(sys.modules, 'pydantic', pydantic_mod)
-
-    # SQLAlchemy stubs: ONLY add missing attributes required by deps import.
-    # Do NOT replace sqlalchemy.orm completely to avoid breaking mapper configuration.
-    import sqlalchemy.orm as real_orm
-
-    def foreign(*args, **kwargs):
-        return None
-
-    monkeypatch.setattr(real_orm, 'foreign', foreign, raising=False)
-
-    # Minimal app core stubs
-    app_core_config = types.ModuleType('app.core.config')
-    settings = types.SimpleNamespace(API_V1_STR='/api/v1', SECRET_KEY='x' * 32, ALGORITHM='HS256')
-    app_core_config.settings = settings
-    monkeypatch.setitem(sys.modules, 'app.core.config', app_core_config)
-
-    app_core_security = types.ModuleType('app.core.security')
-
-    async def is_token_blacklisted(token):
-        return False
-
-    app_core_security.is_token_blacklisted = is_token_blacklisted
-    monkeypatch.setitem(sys.modules, 'app.core.security', app_core_security)
-
-    # Minimal DB and model stubs
-    app_db_database = types.ModuleType('app.db.database')
-    app_db_database.SessionLocal = lambda: None
-    monkeypatch.setitem(sys.modules, 'app.db.database', app_db_database)
-
-    app_db_models = types.ModuleType('app.db.models.all_models')
-
-    class User:
-        pass
-
-    class Permission:
-        name = None
-        is_active = True
-
-    class RolePermission:
-        permission_id = None
-
-        class _Inable:
-            def in_(self, vals):
-                return self
-
-        role_id = _Inable()
-
-    class UserRole:
-        user_id = None
-        role_id = None
-
-    class Role:
-        pass
-
-    class Organization:
-        pass
-
-    class OrgApiKey:
-        pass
-
-    class Department:
-        pass
-
-    class Shift:
-        pass
-
-    class FaceEmbedding:
-        pass
-
-    class AttendanceLog:
-        pass
-
-    class ManualOverride:
-        pass
-
-    class BlockchainAuditLog:
-        pass
-
-    class MonthlyGrowthSummary:
-        pass
-
-    class OfflineSyncQueue:
-        pass
-
-    app_db_models.User = User
-    app_db_models.Permission = Permission
-    app_db_models.RolePermission = RolePermission
-    app_db_models.UserRole = UserRole
-    app_db_models.Role = Role
-    app_db_models.Organization = Organization
-    app_db_models.OrgApiKey = OrgApiKey
-    app_db_models.Department = Department
-    app_db_models.Shift = Shift
-    app_db_models.FaceEmbedding = FaceEmbedding
-    app_db_models.AttendanceLog = AttendanceLog
-    app_db_models.ManualOverride = ManualOverride
-    app_db_models.BlockchainAuditLog = BlockchainAuditLog
-    app_db_models.MonthlyGrowthSummary = MonthlyGrowthSummary
-    app_db_models.OfflineSyncQueue = OfflineSyncQueue
-    monkeypatch.setitem(sys.modules, 'app.db.models.all_models', app_db_models)
-
-    app_schema_token = types.ModuleType('app.schema.token')
-
-    class TokenPayload:
-        def __init__(self, **kwargs):
-            self.__dict__.update(kwargs)
-
-    app_schema_token.TokenPayload = TokenPayload
-    monkeypatch.setitem(sys.modules, 'app.schema.token', app_schema_token)
+def scoped_stubs():
+    pass
 
 
 
@@ -186,6 +48,9 @@ class DummyQuery:
         return self
 
     def filter_by(self, **kwargs):
+        return self
+
+    def join(self, *args, **kwargs):
         return self
 
     def first(self):
@@ -257,4 +122,5 @@ import asyncio
 
 
 def asyncio_run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
+

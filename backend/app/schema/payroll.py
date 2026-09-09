@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-from pydantic import BaseModel, ConfigDict
-=======
-from pydantic import BaseModel, Field
->>>>>>> refs/remotes/origin/main
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 from typing import Optional
 import uuid

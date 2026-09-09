@@ -9,7 +9,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_active_user
+from app.api.deps import get_db, get_current_active_user, require_permission, has_permission
 from app.db.models.all_models import User
 from app.crud.crud_leave import (
     crud_leave_type, crud_leave_balance, crud_leave_request
@@ -29,12 +29,9 @@ router = APIRouter()
 def create_leave_type(
     payload: LeaveTypeCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission("leave.manage")),
 ):
-    """Create a new leave type configuration (Admin/HR)."""
-    if current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin"]:
-        raise HTTPException(status_code=403, detail="Only Organization Admins can create leave types")
-
+    """Create a new leave type configuration (HR/Admin)."""
     existing = crud_leave_type.get_by_code(db, current_user.org_id, payload.code)
     if existing:
         raise HTTPException(status_code=400, detail=f"Leave type with code '{payload.code}' already exists")
@@ -46,10 +43,9 @@ def create_leave_type(
 def get_leave_types(
     active_only: bool = True,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """List all configured leave types for current organization."""
-    # Ensure standard leave types exist
     seed_leave_types_for_org(db, current_user.org_id)
     return crud_leave_type.get_all_for_org(db, current_user.org_id, active_only=active_only)
 
@@ -59,12 +55,9 @@ def update_leave_type(
     type_id: int,
     payload: LeaveTypeUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission("leave.manage")),
 ):
-    """Update leave type configuration (Admin/HR)."""
-    if current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin"]:
-        raise HTTPException(status_code=403, detail="Unauthorized")
-
+    """Update leave type configuration (HR/Admin)."""
     lt = crud_leave_type.get_by_id(db, type_id)
     if not lt or lt.organization_id != current_user.org_id:
         raise HTTPException(status_code=404, detail="Leave type not found")
@@ -78,14 +71,16 @@ def get_user_leave_balances(
     user_id: Optional[int] = None,
     year: int = 2025,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """Get leave balances for current user or targeted user."""
     target_user_id = user_id or current_user.id
-    if target_user_id != current_user.id and current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "Manager"]:
+    if target_user_id != current_user.id and not (
+        has_permission(db, current_user, "leave.view_team")
+        or has_permission(db, current_user, "leave.view_org")
+    ):
         raise HTTPException(status_code=403, detail="Cannot view leave balance of other users")
 
-    # Ensure leave types and balances are initialized
     seed_leave_types_for_org(db, current_user.org_id)
     crud_leave_balance.initialize_all_balances_for_user(db, target_user_id, current_user.org_id, year)
 
@@ -117,7 +112,7 @@ def get_user_leave_balances(
 def submit_leave_request(
     payload: LeaveRequestCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission("leave.apply")),
 ):
     """Submit a new leave application."""
     lt = crud_leave_type.get_by_id(db, payload.leave_type_id)
@@ -130,7 +125,6 @@ def submit_leave_request(
     if payload.total_days > lt.max_days_per_request:
         raise HTTPException(status_code=400, detail=f"Request exceeds max single request limit of {lt.max_days_per_request} days")
 
-    # Check balance
     bal = crud_leave_balance.get_or_create_balance(db, current_user.id, current_user.org_id, lt)
     if bal.available_days < payload.total_days:
         raise HTTPException(status_code=400, detail=f"Insufficient leave balance. Available: {bal.available_days} days, Requested: {payload.total_days} days")
@@ -153,11 +147,14 @@ def list_leave_requests(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """List leave requests with status filtering."""
     target_user_id = user_id
-    if current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "Manager"] and user_id is None:
+    if target_user_id != current_user.id and not (
+        has_permission(db, current_user, "leave.view_team")
+        or has_permission(db, current_user, "leave.view_org")
+    ):
         target_user_id = current_user.id
 
     requests = crud_leave_request.list_requests(
@@ -183,18 +180,22 @@ def approve_leave_request(
     request_id: int,
     payload: LeaveApprovalAction,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission("leave.approve")),
 ):
-    """Approve or reject a leave request (Manager/Admin)."""
-    if current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "Manager"]:
-        raise HTTPException(status_code=403, detail="Unauthorized to approve leave requests")
-
+    """Approve or reject a leave request."""
     req = crud_leave_request.get_by_id(db, request_id)
     if not req or req.organization_id != current_user.org_id:
         raise HTTPException(status_code=404, detail="Leave request not found")
 
     if req.status != "pending":
         raise HTTPException(status_code=400, detail=f"Cannot process request in '{req.status}' state")
+
+    if req.user_id == current_user.id:
+        raise HTTPException(status_code=403, detail="You cannot approve your own leave request")
+
+    if req.user and current_user.role and req.user.dept_id and current_user.dept_id:
+        if req.user.dept_id != current_user.dept_id:
+            raise HTTPException(status_code=403, detail="You can only approve leave requests from your department")
 
     if payload.status == "approved":
         updated_req = crud_leave_request.approve_request(db, req, current_user.id, payload.note)
@@ -217,14 +218,17 @@ def approve_leave_request(
 def cancel_leave_request(
     request_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(get_current_active_user),
 ):
     """Cancel a leave request (by owner or admin)."""
     req = crud_leave_request.get_by_id(db, request_id)
     if not req or req.organization_id != current_user.org_id:
         raise HTTPException(status_code=404, detail="Leave request not found")
 
-    if req.user_id != current_user.id and current_user.role.name not in ["Admin", "SuperAdmin"]:
+    is_owner = req.user_id == current_user.id
+    is_admin = has_permission(db, current_user, "leave.manage")
+
+    if not is_owner and not is_admin:
         raise HTTPException(status_code=403, detail="Cannot cancel leave requests of another user")
 
     if req.status in ["cancelled", "rejected"]:

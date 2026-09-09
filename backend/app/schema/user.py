@@ -1,5 +1,5 @@
 import uuid
-from pydantic import BaseModel, EmailStr, ConfigDict
+from pydantic import BaseModel, EmailStr, ConfigDict, field_validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -31,6 +31,23 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     dept_id: Optional[int] = None
     shift_id: Optional[int] = None
+
+
+class UserUpdateMe(BaseModel):
+    """Fields an authenticated user may change on their own profile.
+
+    Deliberately excludes role, organization, activation and employee identity;
+    those remain administrator-managed fields.
+    """
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def empty_email_to_none(cls, v):
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return None
+        return v
 
 
 class PasswordChange(BaseModel):
@@ -69,4 +86,3 @@ class UserListResponse(BaseModel):
 class FaceEnroll(BaseModel):
     face_embedding: Optional[List[float]] = None
     image_base64: Optional[str] = None
-

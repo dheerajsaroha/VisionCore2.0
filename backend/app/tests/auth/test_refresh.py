@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
+from app.core.config import settings
 
 
 @pytest.fixture
@@ -22,11 +23,13 @@ def test_refresh_rotation_flow(client: TestClient, qa_email, qa_password):
 
     payload = login_res.json()
     access_1 = payload["access_token"]
-    refresh_1 = payload["refresh_token"]
+    assert access_1
+    assert payload.get("refresh_token") is None
+    refresh_1 = client.cookies.get(settings.REFRESH_COOKIE_NAME)
+    assert refresh_1
 
     # Refresh should rotate refresh token
-    # Backend expects `refresh_token` as a query parameter.
-    refresh_res = client.post(f"/api/v1/auth/refresh?refresh_token={refresh_1}")
+    refresh_res = client.post("/api/v1/auth/refresh")
 
 
 
@@ -38,23 +41,23 @@ def test_refresh_rotation_flow(client: TestClient, qa_email, qa_password):
 
     payload2 = refresh_res.json()
     access_2 = payload2["access_token"]
-    refresh_2 = payload2["refresh_token"]
+    refresh_2 = client.cookies.get(settings.REFRESH_COOKIE_NAME)
 
     assert access_2
     assert refresh_2
-    # In this codebase refresh may return the same refresh_token when rotation
-    # is not implemented/disabled. Contract check is limited to successful refresh.
+    assert payload2.get("refresh_token") is None
+    assert refresh_2 != refresh_1
 
 
 
     # Replay old refresh token should now be rejected.
     # If refresh-token rotation is not implemented/disabled, this may still succeed.
     # We treat non-200 as the desired behavior.
-    replay_res = client.post(
-        f"/api/v1/auth/refresh?refresh_token={refresh_1}"
-    )
-    assert replay_res.status_code != 500
-
+    # Explicitly supplying the stolen, pre-rotation credential must fail even
+    # though the client's cookie already contains the rotated credential.
+    client.cookies.delete(settings.REFRESH_COOKIE_NAME)
+    replay_res = client.post(f"/api/v1/auth/refresh?refresh_token={refresh_1}")
+    assert replay_res.status_code == 401
 
 
 

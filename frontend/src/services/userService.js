@@ -7,30 +7,21 @@ export const userService = {
 
   getUserById: (id) => apiClient.get(`/users/${id}`),
 
-<<<<<<< HEAD
   updateUser: (id, data) => apiClient.patch(`/users/${id}`, data),
+
+  updateMyProfile: (data) => apiClient.patch('/users/me', data),
+
 
   deleteUser: (id) => apiClient.delete(`/users/${id}`),
 
-  enrollFace: (userId, faceEmbedding) =>
-    apiClient.post(`/users/${userId}/enroll`, { face_embedding: faceEmbedding }),
-=======
-  // enrollFace: (userId, faceEmbedding) =>
-  //   apiClient.post(`/users/${userId}/enroll`, { face_embedding: faceEmbedding }),
-  enrollFace: async (userId, file) => {
-  const formData = new FormData();
-
-  formData.append("file", file);
-
-  return apiClient.post(
-    `/users/${userId}/enroll-face`,
-    formData,
-    {
-      headers: {
-        "Content-Type": "multipart/form-data",
-      },
+  enrollFace: async (userId, fileOrEmbedding) => {
+    if (fileOrEmbedding instanceof File) {
+      const formData = new FormData();
+      formData.append("file", fileOrEmbedding);
+      return apiClient.post(`/users/${userId}/enroll-face`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
     }
-  );
-},
->>>>>>> refs/remotes/origin/main
+    return apiClient.post(`/users/${userId}/enroll`, { face_embedding: fileOrEmbedding });
+  },
 };

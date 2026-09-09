@@ -129,6 +129,7 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
             "notifications.read",
             "org.settings.view",
             "policy.read", "policy.acknowledge", "policy.compliance.view",
+            "leave.view_self", "leave.view_team", "leave.approve",
         ],
     },
     "OrgHR": {
@@ -147,6 +148,7 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
             "policy.archive", "policy.acknowledge", "policy.compliance.view",
             "policy.compliance.manage", "policy.reminders.manage", "policy.distribute",
             "policy.analytics.view", "policy.versions.view", "policy.attachments.manage",
+            "leave.view_self", "leave.view_team", "leave.view_org", "leave.approve", "leave.manage",
         ],
     },
     "OrgFinance": {
@@ -171,6 +173,7 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
             "tickets.read", "tickets.create", "tickets.update",
             "users.read",
             "notifications.read",
+            "leave.view_self", "leave.view_team", "leave.approve",
         ],
     },
     "OrgTeamLead": {
@@ -182,6 +185,7 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
             "tickets.read", "tickets.create", "tickets.update",
             "users.read",
             "notifications.read",
+            "leave.view_self", "leave.view_team",
         ],
     },
     "OrgEmployee": {
@@ -192,6 +196,7 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
             "tickets.read", "tickets.create",
             "reimbursements.read", "reimbursements.create",
             "notifications.read",
+            "leave.apply", "leave.view_self",
         ],
     },
     "OrgContractor": {
@@ -201,6 +206,7 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
             "attendance.checkin", "attendance.checkout", "attendance.history",
             "tickets.read", "tickets.create",
             "notifications.read",
+            "leave.view_self",
         ],
     },
     "OrgIntern": {
@@ -210,6 +216,7 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
             "attendance.checkin", "attendance.checkout", "attendance.history",
             "tickets.read",
             "notifications.read",
+            "leave.view_self",
         ],
     },
     "OrgViewer": {
@@ -221,6 +228,7 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
             "tickets.read",
             "users.read",
             "notifications.read",
+            "leave.view_self",
         ],
     },
     "OrgDepartmentHead": {
@@ -491,6 +499,63 @@ ALL_PERMISSIONS: Dict[str, Dict[str, List[Tuple[str, str]]]] = {
             ("asset.audit", "Perform and manage asset audits"),
             ("asset.export", "Export asset data and reports"),
             ("asset.manage", "Full asset management access"),
+        ],
+    },
+    "leave": {
+        "Platform": [
+            ("leave.apply", "Submit leave request"),
+            ("leave.view_self", "View own leave requests"),
+            ("leave.view_team", "View team leave requests"),
+            ("leave.view_org", "View organization leave"),
+            ("leave.approve", "Approve leave requests"),
+            ("leave.reject", "Reject leave requests"),
+            ("leave.cancel", "Cancel leave requests"),
+            ("leave.manage", "Full leave management"),
+        ],
+    },
+    "succession": {
+        "Platform": [
+            ("succession.view", "View succession plans"),
+            ("succession.create", "Create succession plans"),
+            ("succession.update", "Update succession plans"),
+            ("succession.manage", "Full succession management"),
+        ],
+    },
+    "learning": {
+        "Platform": [
+            ("learning.view", "View courses and enrollments"),
+            ("learning.create", "Create courses"),
+            ("learning.update", "Update courses"),
+            ("learning.manage", "Full learning management"),
+        ],
+    },
+    "performance": {
+        "Platform": [
+            ("performance.view", "View performance data"),
+            ("performance.create", "Create performance cycles"),
+            ("performance.update", "Update performance reviews"),
+            ("performance.manage", "Full performance management"),
+        ],
+    },
+    "recruitment": {
+        "Platform": [
+            ("recruitment.view", "View recruitment data"),
+            ("recruitment.create", "Create job postings"),
+            ("recruitment.update", "Update recruitment records"),
+            ("recruitment.manage", "Full recruitment management"),
+        ],
+    },
+    "hcm": {
+        "Platform": [
+            ("hcm.view", "View HCM data"),
+            ("hcm.update", "Update HCM records"),
+            ("hcm.manage", "Full HCM management"),
+        ],
+    },
+    "workforce": {
+        "Platform": [
+            ("workforce.view", "View workforce data"),
+            ("workforce.manage", "Manage workforce operations"),
         ],
     },
 }

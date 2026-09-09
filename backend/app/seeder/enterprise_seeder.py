@@ -25,6 +25,7 @@ from app.db.models.all_models import (
     AttendanceLog, LeaveRequest, Ticket, Payroll
 )
 from app.core.security import get_password_hash
+from app.core.biometric_crypto import encrypt_embedding
 
 logger = logging.getLogger("visioncore.seeder")
 logging.basicConfig(level=logging.INFO)
@@ -88,18 +89,20 @@ class EnterpriseSeeder:
             self.db.rollback()
 
     def seed_rbac_roles(self):
-        """Step 2: Seed canonical system roles (SuperAdmin, Admin, HR, Manager, Employee, Candidate)."""
-        logger.info("Step 2/9: Seeding RBAC Roles...")
-        roles_master = ["SuperAdmin", "Admin", "HR", "Manager", "Employee", "Candidate"]
+        """Step 2: Seed canonical RBAC roles and permissions, and provision test user personas."""
+        logger.info("Step 2/9: Seeding RBAC Roles & Provisioning Test Personas...")
+        from app.db.seed_rbac import seed_all
+        from app.db.provision_test_users import provision_test_personas
+
+        seed_stats = seed_all(self.db)
+        logger.info("RBAC Seeder execution completed: %s", seed_stats)
+
+        personas_res = provision_test_personas(self.db)
+        logger.info("Test personas provisioned: %s", personas_res)
+
         role_map = {}
-        for r_name in roles_master:
-            role = self.db.query(Role).filter(Role.name == r_name).first()
-            if not role:
-                role = Role(name=r_name, permissions=["*"] if r_name == "SuperAdmin" else ["read"])
-                self.db.add(role)
-                self.db.commit()
-                self.db.refresh(role)
-            role_map[r_name] = role.id
+        for role in self.db.query(Role).all():
+            role_map[role.name] = role.id
         self.tenant_context["role_map"] = role_map
 
     def seed_organization_lifecycle(self):
@@ -206,11 +209,12 @@ class EnterpriseSeeder:
                     FaceEmbedding.user_id == u.id, FaceEmbedding.is_active == 1
                 ).first()
                 if not existing_emb:
-                    # Seeded deterministic random 128-d vector
                     mock_vec = [round(random.uniform(-0.08, 0.08), 4) for _ in range(128)]
                     fe = FaceEmbedding(
                         user_id=u.id,
+                        org_id=u.org_id,
                         embedding=mock_vec,
+                        encrypted_embedding=encrypt_embedding(mock_vec),
                         model_name="face_recognition",
                         is_active=1
                     )

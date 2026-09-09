@@ -59,6 +59,7 @@ class AttendanceController:
         *,
         image_bytes: bytes,
         existing_user_id: Optional[int],
+        org_id,
     ) -> FacePipelineResult:
         """Detection → Liveness → Embedding → Vector search → Thresholding.
 
@@ -66,7 +67,9 @@ class AttendanceController:
         """
 
         pipeline = FaceAttendancePipeline(attendance_repo=attendance_repo, user_repo=user_repo)
-        out = pipeline.run(db, image_bytes=image_bytes, existing_user_id=existing_user_id)
+        out = pipeline.run(
+            db, image_bytes=image_bytes, existing_user_id=existing_user_id, org_id=org_id
+        )
         return FacePipelineResult(user_id=out.user_id, emotion=out.emotion, is_live=out.is_live)
 
 
@@ -121,6 +124,7 @@ class AttendanceController:
                 db,
                 image_bytes=image_bytes,
                 existing_user_id=None,
+                org_id=current_user.org_id,
             )
 
         except ValueError as e:
@@ -188,4 +192,3 @@ class AttendanceController:
 
 
 attendance_controller = AttendanceController()
-

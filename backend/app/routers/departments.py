@@ -4,7 +4,7 @@ Used by the frontend for dropdown population in forms.
 All queries are tenant-scoped to current_user.org_id.
 """
 from typing import Any, List
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, ConfigDict
 
@@ -40,11 +40,9 @@ class ShiftResponse(BaseModel):
 @router.get("/departments/", response_model=List[DepartmentResponse])
 def list_departments(
     db: Session = Depends(get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(deps.require_permission("departments.read")),
 ) -> Any:
     """List all active departments for the current user's organization."""
-    if current_user.role.name not in ["Admin", "Manager", "Employee"]:
-        raise HTTPException(status_code=403, detail="Unauthorized")
     return db.query(Department).filter(
         Department.org_id == current_user.org_id,
         Department.is_deleted == 0,
@@ -54,11 +52,9 @@ def list_departments(
 @router.get("/shifts/", response_model=List[ShiftResponse])
 def list_shifts(
     db: Session = Depends(get_db),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(deps.require_permission("shifts.read")),
 ) -> Any:
     """List all active shifts for the current user's organization."""
-    if current_user.role.name not in ["Admin", "Manager", "Employee"]:
-        raise HTTPException(status_code=403, detail="Unauthorized")
     return db.query(Shift).filter(
         Shift.org_id == current_user.org_id,
         Shift.is_deleted == 0,

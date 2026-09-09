@@ -1,9 +1,9 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import { authService } from '../services/authService';
+import { setAccessToken } from '../services/apiClient';
+import { usePermissionStore } from './permissionStore';
 
 export const useAuthStore = create(
-  persist(
     (set, get) => ({
       user: null,
       token: null,
@@ -11,79 +11,93 @@ export const useAuthStore = create(
       isAuthenticated: false,
       isLoading: false,
       isHydrated: false,
+      authorizationInitialized: false,
+      sessionEpoch: 0,
 
-login: async (email, password) => {
-        set({ isLoading: true });
+      initializeAuthorization: async () => {
+        const permissionStore = usePermissionStore.getState();
+        const permissions = await permissionStore.fetchMyPermissions();
+        set({ authorizationInitialized: true });
+        return permissions;
+      },
+
+      login: async (email, password) => {
+        // Sign-in can replace another browser identity. Clear every
+        // authorization-derived value before issuing the new request.
+        const sessionEpoch = get().sessionEpoch + 1;
+        usePermissionStore.getState().clearAuthorization();
+        set({ isLoading: true, isHydrated: false, authorizationInitialized: false, sessionEpoch });
         try {
           const response = await authService.login(email, password);
-          const { access_token, refresh_token } = response.data;
+          const { access_token } = response.data;
           
-          // 🐛 FIX: Save token to store FIRST so apiClient interceptor picks it up
-          // from localStorage (via Zustand persist middleware) before getMe call
-          set({ token: access_token, refreshToken: refresh_token });
+          set({ token: access_token, refreshToken: null });
+          setAccessToken(access_token);
           
-          // Fetch user profile immediately after login
           const meResponse = await authService.getMe(access_token);
+          // An earlier refresh/hydration request must never overwrite a
+          // successful interactive login.
+          if (get().sessionEpoch !== sessionEpoch) return false;
           
           set({
             user: meResponse.data,
             isAuthenticated: true,
-            isLoading: false,
+            isHydrated: true,
           });
+          await get().initializeAuthorization();
+          if (get().sessionEpoch !== sessionEpoch) return false;
+          set({ isLoading: false });
           return true;
         } catch (error) {
-<<<<<<< HEAD
-          set({ isLoading: false, token: null, refreshToken: null, isAuthenticated: false, user: null });
-=======
-          set({ isLoading: false });
-          // Surface real backend error (often /users/me fails after successful /auth/login)
+          if (get().sessionEpoch !== sessionEpoch) throw error;
+          setAccessToken(null);
+          usePermissionStore.getState().clearAuthorization();
+          set({ isLoading: false, token: null, refreshToken: null, isAuthenticated: false, user: null, isHydrated: true, authorizationInitialized: false });
           const detail = error?.response?.data?.detail;
-          if (detail) {
+          if (detail && error.response && error.response.data) {
             error.response.data.detail = detail;
           }
->>>>>>> refs/remotes/origin/main
           throw error;
         }
       },
 
       logout: async () => {
+        const sessionEpoch = get().sessionEpoch + 1;
         try {
           const { token } = get();
           if (token) {
             await authService.logout(token);
           }
-        } catch {
+        } catch (e) {
           // Ignore logout errors
           void e;
         } finally {
+          setAccessToken(null);
+          usePermissionStore.getState().clearAuthorization();
           set({
             user: null,
             token: null,
             refreshToken: null,
             isAuthenticated: false,
             isLoading: false,
+            isHydrated: true,
+            authorizationInitialized: false,
+            sessionEpoch,
           });
-          localStorage.removeItem('auth-storage');
         }
       },
 
-      setToken: (token) => set({ token }),
+      setToken: (token) => {
+        setAccessToken(token);
+        set({ token });
+      },
       setRefreshToken: (refreshToken) => set({ refreshToken }),
 
       refreshAccessToken: async () => {
-        const { refreshToken } = get();
-        if (!refreshToken) {
-          get().logout();
-          throw new Error('No refresh token available');
-        }
-        try {
-          const response = await authService.refreshToken(refreshToken);
-          set({ token: response.data.access_token, isAuthenticated: true });
-          return response.data.access_token;
-        } catch (error) {
-          get().logout();
-          throw error;
-        }
+        const response = await authService.refreshToken();
+        setAccessToken(response.data.access_token);
+        set({ token: response.data.access_token, isAuthenticated: true });
+        return response.data.access_token;
       },
 
       refreshProfile: async () => {
@@ -101,15 +115,20 @@ login: async (email, password) => {
 
       hydrate: () => {
         const state = get();
+        if (state.isLoading) return;
+        const sessionEpoch = state.sessionEpoch + 1;
+        set({ isLoading: true, authorizationInitialized: false, sessionEpoch });
         if (state.token && !state.user) {
-          // Try to restore user from token
           authService
             .getMe(state.token)
             .then((res) => {
+              if (get().sessionEpoch !== sessionEpoch) return null;
               set({ user: res.data, isAuthenticated: true, isHydrated: true });
+              return get().initializeAuthorization();
             })
             .catch(() => {
-              // Token invalid or expired — clear auth state completely
+              if (get().sessionEpoch !== sessionEpoch) return;
+              usePermissionStore.getState().clearAuthorization();
               set({
                 user: null,
                 token: null,
@@ -117,22 +136,36 @@ login: async (email, password) => {
                 isAuthenticated: false,
                 isHydrated: true,
               });
-              localStorage.removeItem('auth-storage');
+            })
+            .finally(() => {
+              if (get().sessionEpoch === sessionEpoch) set({ isLoading: false });
             });
         } else {
-          set({ isHydrated: true });
+          // The access token deliberately is not persisted. Restore a browser
+          // session through the HttpOnly refresh cookie after a reload.
+          authService.refreshToken()
+            .then((response) => {
+              if (get().sessionEpoch !== sessionEpoch) return null;
+              const token = response.data.access_token;
+              setAccessToken(token);
+              set({ token, isAuthenticated: true });
+              return token;
+            })
+            .then((token) => authService.getMe(token))
+            .then((res) => {
+              if (get().sessionEpoch !== sessionEpoch) return null;
+              set({ user: res.data, isAuthenticated: true, isHydrated: true });
+              return get().initializeAuthorization();
+            })
+            .catch(() => {
+              if (get().sessionEpoch !== sessionEpoch) return;
+              usePermissionStore.getState().clearAuthorization();
+              set({ user: null, token: null, refreshToken: null, isAuthenticated: false, isHydrated: true });
+            })
+            .finally(() => {
+              if (get().sessionEpoch === sessionEpoch) set({ isLoading: false });
+            });
         }
       },
-    }),
-    {
-      name: 'auth-storage',
-      partialize: (state) => ({
-        token: state.token,
-        refreshToken: state.refreshToken,
-        user: state.user,
-        isAuthenticated: state.isAuthenticated,
-      }),
-    }
-  )
+    })
 );
-

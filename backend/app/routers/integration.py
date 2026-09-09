@@ -19,6 +19,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
+from app.api import deps
 from app.api.deps import get_current_active_user
 from app.db.database import get_db
 from app.db.models.all_models import User
@@ -37,7 +38,9 @@ from app.services.webhook_dispatcher import webhook_dispatcher
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+# Integrations can issue credentials and send data outside the tenant.  They are
+# deliberately admin-only; authentication alone must never grant this access.
+router = APIRouter(dependencies=[Depends(deps.require_permission("integration.manage"))])
 
 
 # =============================================================================
@@ -81,7 +84,7 @@ def get_webhook(
     current_user: User = Depends(get_current_active_user),
 ):
     """Get a webhook configuration by ID."""
-    webhook = integration_engine.get_webhook(webhook_id)
+    webhook = integration_engine.get_webhook(webhook_id, str(current_user.org_id))
     if not webhook:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -98,7 +101,7 @@ def update_webhook(
 ):
     """Update a webhook configuration."""
     webhook = integration_engine.update_webhook(
-        webhook_id, config.model_dump(exclude_none=True)
+        webhook_id, config.model_dump(exclude_none=True), str(current_user.org_id)
     )
     if not webhook:
         raise HTTPException(
@@ -118,7 +121,7 @@ def delete_webhook(
     current_user: User = Depends(get_current_active_user),
 ):
     """Delete a webhook configuration."""
-    if not integration_engine.delete_webhook(webhook_id):
+    if not integration_engine.delete_webhook(webhook_id, str(current_user.org_id)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Webhook {webhook_id} not found",
@@ -136,6 +139,8 @@ def get_webhook_deliveries(
     current_user: User = Depends(get_current_active_user),
 ):
     """Get delivery logs for a webhook."""
+    if not integration_engine.get_webhook(webhook_id, str(current_user.org_id)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Webhook {webhook_id} not found")
     logs = integration_engine.get_delivery_logs(webhook_id, limit=limit)
     return {
         "total": len(logs),
@@ -185,7 +190,7 @@ def exchange_oauth2_token(
     current_user: User = Depends(get_current_active_user),
 ):
     """Exchange an authorization code for OAuth2 tokens."""
-    result = integration_engine.exchange_oauth2_token(client_id, code, redirect_uri)
+    result = integration_engine.exchange_oauth2_token(client_id, code, redirect_uri, str(current_user.org_id))
     if not result:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -204,7 +209,7 @@ def refresh_oauth2_token(
     current_user: User = Depends(get_current_active_user),
 ):
     """Refresh an OAuth2 access token."""
-    result = integration_engine.refresh_oauth2_token(client_id)
+    result = integration_engine.refresh_oauth2_token(client_id, str(current_user.org_id))
     if not result:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -222,7 +227,7 @@ def delete_oauth2_client(
     current_user: User = Depends(get_current_active_user),
 ):
     """Delete an OAuth2 client."""
-    if not integration_engine.delete_oauth2_client(client_id):
+    if not integration_engine.delete_oauth2_client(client_id, str(current_user.org_id)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"OAuth2 client {client_id} not found",
@@ -275,7 +280,7 @@ def revoke_api_key(
     current_user: User = Depends(get_current_active_user),
 ):
     """Revoke an API key."""
-    if not integration_engine.revoke_api_key(key_id):
+    if not integration_engine.revoke_api_key(key_id, str(current_user.org_id)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"API key {key_id} not found",
@@ -327,7 +332,7 @@ def test_connector(
     current_user: User = Depends(get_current_active_user),
 ):
     """Test a connector connection."""
-    result = integration_engine.test_connector(connector_id)
+    result = integration_engine.test_connector(connector_id, str(current_user.org_id))
     if not result:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -345,7 +350,7 @@ def delete_connector(
     current_user: User = Depends(get_current_active_user),
 ):
     """Delete a connector."""
-    if not integration_engine.delete_connector(connector_id):
+    if not integration_engine.delete_connector(connector_id, str(current_user.org_id)):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Connector {connector_id} not found",
@@ -366,6 +371,9 @@ def dispatch_event(
     current_user: User = Depends(get_current_active_user),
 ):
     """Dispatch an integration event to all subscribed webhooks."""
+    # The request body is untrusted: never allow a caller to dispatch to a
+    # different tenant by supplying another organization_id.
+    event = event.model_copy(update={"organization_id": str(current_user.org_id)})
     results = integration_engine.dispatch_event(event)
     return {
         "message": f"Event dispatched to {len(results)} webhook(s)",
@@ -450,5 +458,76 @@ def get_available_events():
             for e in WebhookEvent
         ],
         "total": len(WebhookEvent),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+# =============================================================================
+#  Sprint 10: Event Streaming & Gateway Monitoring Endpoints
+# =============================================================================
+
+@router.get("/stream/history", response_model=dict)
+def get_stream_history(
+    event_name: Optional[str] = None,
+    limit: int = Query(default=50, ge=1, le=500),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Retrieve tenant-scoped event stream history."""
+    from app.services.sprint10_event_stream import event_stream_service
+    org_id = str(current_user.org_id)
+    history = event_stream_service.get_event_history(org_id, event_name=event_name, limit=limit)
+    return {
+        "total": len(history),
+        "history": history,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.get("/stream/dlq", response_model=dict)
+def get_stream_dlq(
+    limit: int = Query(default=50, ge=1, le=500),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Retrieve dead letter queue (DLQ) messages for the organization."""
+    from app.services.sprint10_event_stream import event_stream_service
+    org_id = str(current_user.org_id)
+    messages = event_stream_service.get_dlq_messages(org_id, limit=limit)
+    return {
+        "total": len(messages),
+        "dlq_messages": messages,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.post("/stream/dlq/{dlq_id}/replay", response_model=dict)
+def replay_stream_dlq(
+    dlq_id: str,
+    current_user: User = Depends(get_current_active_user),
+):
+    """Replay a DLQ event back onto the active event bus."""
+    from app.services.sprint10_event_stream import event_stream_service
+    org_id = str(current_user.org_id)
+    result = event_stream_service.replay_dlq_message(org_id, dlq_id)
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"DLQ entry {dlq_id} not found",
+        )
+    return {
+        "message": "Event replayed successfully",
+        "entry": result,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@router.get("/gateway/metrics", response_model=dict)
+def get_gateway_metrics(
+    current_user: User = Depends(get_current_active_user),
+):
+    """Retrieve API gateway request metrics and rate limit stats."""
+    from app.services.gateway_service import gateway_service
+    return {
+        "metrics": gateway_service.get_metrics(),
+        "stats": gateway_service.get_stats(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }

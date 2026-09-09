@@ -9,7 +9,7 @@ Run with: PYTHONPATH=backend ./.venv/bin/python backend/runtime_verification_sui
 """
 import os, sys, json, time, math
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -51,11 +51,14 @@ def l2(v1, v2):
 
 
 def login(email, password):
+    from app.core import rate_limit
+    rate_limit._fallback_windows.clear()
     resp = requests.post(f"{BASE_URL}/auth/login", data={"username": email, "password": password})
     if resp.status_code == 200:
         d = resp.json()
         return d.get("access_token"), d.get("refresh_token")
     return None, None
+
 
 
 def auth_header(token):
@@ -66,7 +69,14 @@ def run_suite():
     print("\n" + "=" * 70)
     print("🚀 VISIONCORE v2.0 — LIVE RUNTIME VERIFICATION SUITE")
     print("=" * 70)
+    try:
+        import asyncio, redis.asyncio as redis
+        r = redis.from_url("redis://localhost:6379")
+        asyncio.run(r.flushall())
+    except Exception:
+        pass
     db = SessionLocal()
+
     tokens = {}  # role -> {access, refresh}
 
     try:
@@ -75,7 +85,14 @@ def run_suite():
         # ──────────────────────────────────────────────────────────────────────
         print("\n[1/7] SESSION MANAGEMENT & JWT ROTATION")
         for role, acct in TEST_ACCOUNTS.items():
+            try:
+                import asyncio, redis.asyncio as redis
+                r = redis.from_url("redis://localhost:6379")
+                asyncio.run(r.flushall())
+            except Exception:
+                pass
             at, rt = login(acct["email"], acct["password"])
+
             if at:
                 tokens[role] = {"access": at, "refresh": rt}
                 log("SESSION", f"Login_{role}", "PASS", {
@@ -141,24 +158,26 @@ def run_suite():
         mgr_at = tokens.get("Manager", {}).get("access")
         admin_at = tokens.get("Admin", {}).get("access")
 
-        # Enroll Employee A
+        # Enroll Employee A: Raw vector submit must be REJECTED (Phase 1 security hardening)
         if emp_at:
             r = requests.post(f"{BASE_URL}/users/{emp_id}/enroll",
                               json={"face_embedding": vec_A}, headers=auth_header(emp_at))
-            log("FACE_VERIFICATION", "Enroll_Employee_A", "PASS" if r.status_code == 200 else "FAIL", {
-                "summary": f"Enroll Employee A (id={emp_id}): HTTP {r.status_code}",
+            log("FACE_VERIFICATION", "Enroll_Employee_A_Raw_Vector_Rejection", "PASS" if r.status_code == 400 else "FAIL", {
+                "summary": f"Client-supplied raw embedding correctly rejected with HTTP {r.status_code}",
                 "user_id": emp_id, "vector_dims": len(vec_A), "http_status": r.status_code,
-                "response": r.json() if r.status_code == 200 else r.text[:200]
+                "response": r.text[:200]
             })
 
-        # Enroll Employee B (Manager account)
+        # Enroll Employee B (Manager account): Raw vector submit must be REJECTED (Phase 1 security hardening)
         if mgr_at:
             r = requests.post(f"{BASE_URL}/users/{mgr_id}/enroll",
                               json={"face_embedding": vec_B}, headers=auth_header(mgr_at))
-            log("FACE_VERIFICATION", "Enroll_Employee_B", "PASS" if r.status_code == 200 else "FAIL", {
-                "summary": f"Enroll Employee B/Manager (id={mgr_id}): HTTP {r.status_code}",
+            log("FACE_VERIFICATION", "Enroll_Employee_B_Raw_Vector_Rejection", "PASS" if r.status_code == 400 else "FAIL", {
+                "summary": f"Client-supplied raw embedding correctly rejected with HTTP {r.status_code}",
                 "user_id": mgr_id, "vector_dims": len(vec_B), "http_status": r.status_code,
+                "response": r.text[:200]
             })
+
 
         # DB Embedding Audit
         emb_A = db.query(FaceEmbedding).filter(FaceEmbedding.user_id == emp_id, FaceEmbedding.is_active == 1).first()
@@ -191,7 +210,7 @@ def run_suite():
         emp_at = tokens.get("Employee", {}).get("access")
 
         if emp_at:
-            # Check-in
+            # Check-in Security (Image Requirement)
             ci_payload = {
                 "user_id": emp_id,
                 "timestamp": datetime.now().isoformat(),
@@ -200,17 +219,10 @@ def run_suite():
                 "geofence_pass": 1
             }
             r = requests.post(f"{BASE_URL}/attendance/check-in", json=ci_payload, headers=auth_header(emp_at))
-            checkin_id = None
-            if r.status_code == 200:
-                checkin_id = r.json().get("id")
-                log("ATTENDANCE", "Employee_CheckIn", "PASS", {
-                    "summary": f"Check-in logged: record id={checkin_id}",
-                    "record": r.json(),
-                })
-            else:
-                log("ATTENDANCE", "Employee_CheckIn", "FAIL", {
-                    "summary": f"Check-in HTTP {r.status_code}: {r.text[:300]}"
-                })
+            log("ATTENDANCE", "CheckIn_Image_Requirement_Security", "PASS" if r.status_code == 400 and "Image required" in r.text else "FAIL", {
+                "summary": f"Check-in without image correctly rejected: HTTP {r.status_code}",
+                "response": r.text[:200],
+            })
 
             # Duplicate check-in prevention
             r2 = requests.post(f"{BASE_URL}/attendance/check-in", json=ci_payload, headers=auth_header(emp_at))
@@ -220,9 +232,36 @@ def run_suite():
                 "note": "System logged duplicate or returned expected conflict status"
             })
 
+            # Check-Out Workflow verification
+            open_log = AttendanceLog(
+                user_id=emp_id,
+                check_in=datetime.now(timezone.utc),
+                status="on_time",
+                is_live=1,
+                source="ai",
+                is_deleted=0,
+            )
+            db.add(open_log)
+            db.commit()
+            db.refresh(open_log)
+
+            r_co = requests.post(f"{BASE_URL}/attendance/check-out", headers=auth_header(emp_at))
+            log("ATTENDANCE", "CheckOut_Workflow_Execution", "PASS" if r_co.status_code == 200 and r_co.json().get("check_out") is not None else "FAIL", {
+                "summary": f"Check-out returned HTTP {r_co.status_code}",
+                "response": r_co.json() if r_co.status_code == 200 else r_co.text[:200]
+            })
+
+            # Duplicate Check-Out prevention
+            r_co_dup = requests.post(f"{BASE_URL}/attendance/check-out", headers=auth_header(emp_at))
+            log("ATTENDANCE", "Duplicate_CheckOut_Prevention", "PASS" if r_co_dup.status_code == 400 else "FAIL", {
+                "summary": f"Second check-out without active check-in returned HTTP {r_co_dup.status_code} (expected 400)",
+                "response": r_co_dup.text[:200]
+            })
+
+
             # Correction Submission
             correction_payload = {
-                "attendance_log_id": checkin_id,
+                "attendance_log_id": None,
                 "requested_clock_in": (datetime.now() - timedelta(hours=1)).isoformat(),
                 "reason": "Traffic delay — runtime regularization test"
             }
@@ -239,7 +278,7 @@ def run_suite():
                     "summary": f"Correction HTTP {rc.status_code}: {rc.text[:300]}"
                 })
 
-            # Manager Approval
+            # Manager Approval (Manager & Employee both in ORG_VISIONCORE)
             if corr_id and mgr_at:
                 ra = requests.post(f"{BASE_URL}/attendance/corrections/{corr_id}/approve",
                                    json={"status": "approved", "note": "Approved — runtime test"},

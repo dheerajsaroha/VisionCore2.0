@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi.testclient import TestClient
 
-from main import app
+from main import app as fastapi_app
 from app.api.deps import get_current_active_user, get_db
 from app.services.face_engine import face_engine
 from app.services.liveness import liveness_service
@@ -14,7 +14,7 @@ from app.services.liveness import liveness_service
 # TEST CLIENT
 # =====================================================
 
-client = TestClient(app)
+client = TestClient(fastapi_app)
 
 
 # =====================================================
@@ -34,6 +34,7 @@ class DummyShift:
 class MockUser:
     id = 1
     org_id = "test-org-uuid"
+    role_id = 1
     role = DummyRole()
     shift = DummyShift()
 
@@ -47,17 +48,20 @@ def override_get_db():
     yield session
 
 
-app.dependency_overrides[get_current_active_user] = (
-    override_get_current_active_user
-)
-app.dependency_overrides[get_db] = override_get_db
+@pytest.fixture(autouse=True)
+def setup_biometrics_overrides():
+    fastapi_app.dependency_overrides[get_current_active_user] = override_get_current_active_user
+    fastapi_app.dependency_overrides[get_db] = override_get_db
+    yield
+    fastapi_app.dependency_overrides.pop(get_current_active_user, None)
+    fastapi_app.dependency_overrides.pop(get_db, None)
 
 
 # =====================================================
 # REDIS MOCK
 # =====================================================
 
-import app.core.rate_limit
+from app.core import rate_limit
 
 
 class MockPipeline:
@@ -82,7 +86,7 @@ class MockRedisClient:
         return MockPipeline()
 
 
-app.core.rate_limit.redis_client = MockRedisClient()
+rate_limit.redis_client = MockRedisClient()
 
 
 # =====================================================

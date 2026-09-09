@@ -274,10 +274,26 @@ def list_positions(
     db: Session = Depends(get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
-    return position_service.list_positions(db, current_user.org_id)
+    positions = position_service.list_positions(db, current_user.org_id)
+    return [
+        {
+            "id": p.id,
+            "code": p.code,
+            "title": p.title,
+            "dept_id": p.dept_id,
+            "reporting_position_id": p.reporting_position_id,
+            "grade": p.grade,
+            "band": p.band,
+            "min_salary": float(p.min_salary) if p.min_salary is not None else None,
+            "max_salary": float(p.max_salary) if p.max_salary is not None else None,
+            "headcount_capacity": p.headcount_capacity,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        }
+        for p in positions
+    ]
 
 
-@router.post("/positions")
+@router.post("/positions", status_code=201)
 def create_position(
     req: PositionCreate,
     db: Session = Depends(get_db),
@@ -285,7 +301,20 @@ def create_position(
 ) -> Any:
     if current_user.role.name not in ["Admin", "SuperAdmin"]:
         raise HTTPException(status_code=403, detail="Unauthorized")
-    return position_service.create_position(db, current_user.org_id, req.model_dump())
+    p = position_service.create_position(db, current_user.org_id, req.model_dump())
+    return {
+        "id": p.id,
+        "code": p.code,
+        "title": p.title,
+        "dept_id": p.dept_id,
+        "reporting_position_id": p.reporting_position_id,
+        "grade": p.grade,
+        "band": p.band,
+        "min_salary": float(p.min_salary) if p.min_salary is not None else None,
+        "max_salary": float(p.max_salary) if p.max_salary is not None else None,
+        "headcount_capacity": p.headcount_capacity,
+        "created_at": p.created_at.isoformat() if p.created_at else None,
+    }
 
 
 # ── Employment Endpoints ────────────────────────────────----------------──────

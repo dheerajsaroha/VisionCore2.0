@@ -122,6 +122,35 @@ class CRUDUserSession:
         db.refresh(obj)
         return obj
 
+    def consume_refresh_session(self, db: Session, *, user_id: int, refresh_jti: str,
+                                reason: str = "refresh_rotated") -> bool:
+        """Atomically consume one active refresh session.
+
+        A conditional update makes concurrent use of the same refresh token a
+        one-winner operation. The winner may issue replacement credentials;
+        every replay observes zero rows and is rejected.
+        """
+        now = datetime.now(timezone.utc)
+        updated = (
+            db.query(UserSession)
+            .filter(
+                UserSession.user_id == user_id,
+                UserSession.refresh_jti == refresh_jti,
+                UserSession.is_active == True,
+            )
+            .update(
+                {
+                    UserSession.is_active: False,
+                    UserSession.revoked_at: now,
+                    UserSession.revoke_reason: reason,
+                    UserSession.last_activity_at: now,
+                },
+                synchronize_session=False,
+            )
+        )
+        db.commit()
+        return updated == 1
+
     def revoke_all_for_user(self, db: Session, *, user_id: int, except_jti: str | None = None,
                             reason: Optional[str] = None, logout: bool = False) -> List[UserSession]:
         q = db.query(UserSession).filter(UserSession.user_id == user_id)
@@ -145,4 +174,3 @@ class CRUDUserSession:
 
 
 user_session = CRUDUserSession()
-

@@ -1,0 +1,274 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.3, pluggy-1.6.0
+rootdir: /home/dheeraj/NIELIT/Project/Face-Recognition-Based-Attendance-System/backend
+configfile: pytest.ini
+plugins: cov-7.1.0
+collected 16 items
+
+app/tests/test_hcm_domain.py ...F....FF...F.F                            [100%]
+
+=================================== FAILURES ===================================
+____________ test_performance_cycle_creation_and_ratings_dashboard _____________
+
+    def test_performance_cycle_creation_and_ratings_dashboard():
+        """Cycle creation emits PerformanceCycleCreated; ratings dashboard aggregates
+        final ratings distribution."""
+        org = _org_id()
+        cycle = MagicMock(id=1, organization_id=org, name="H1 2026", created_by_user_id=5)
+        ratings = [
+            PerformanceRating(id=1, organization_id=org, user_id=10, final_rating=4.8),
+            PerformanceRating(id=2, organization_id=org, user_id=11, final_rating=3.2),
+            PerformanceRating(id=3, organization_id=org, user_id=12, final_rating=2.4),
+        ]
+    
+        with patch("app.services.event_bus.event_bus.publish") as mock_event:
+            created = performance_service.create_cycle(
+                db=MagicMock(), org_id=org,
+                data={"name": "H1 2026", "cycle_type": "half_year",
+                      "start_date": datetime(2026, 1, 1, tzinfo=timezone.utc),
+                      "end_date": datetime(2026, 6, 30, tzinfo=timezone.utc)},
+                created_by=5,
+            )
+            assert created.name == "H1 2026"
+            mock_event.assert_called_with("PerformanceCycleCreated", str(org), ANY, actor_id=5)
+    
+        # ratings dashboard
+        db = MagicMock()
+        db.query.side_effect = lambda model: (_ for _ in ()).throw(
+            AssertionError("unexpected query")) if False else MagicMock()
+        # Configure via direct mock chain: db.query(PerformanceRating).filter().all()
+        q_mock = MagicMock()
+        q_mock.filter.return_value.all.return_value = ratings
+        db.query.return_value = q_mock
+        dash = performance_service.ratings_dashboard(db, org)
+>       assert dash["total_rated"] == 3
+E       assert 0 == 3
+
+app/tests/test_hcm_domain.py:247: AssertionError
+______________________ test_skill_verification_and_matrix ______________________
+
+    def test_skill_verification_and_matrix():
+        """Adding a skill with a verifier emits SkillVerified; the org skill matrix
+        computes coverage per user."""
+        org = _org_id()
+        org_users = [User(id=10, org_id=org), User(id=11, org_id=org),
+                     User(id=12, org_id=org), User(id=13, org_id=org)]
+    
+        # New skill record (no existing row) → db.query(EmployeeSkill).filter().first() returns None
+        db = _make_db({EmployeeSkill: {"first": None}})
+        with patch("app.services.event_bus.event_bus.publish") as mock_event:
+>           record = skill_service.add_or_update_skill(
+                db, org, 10, skill_id=1, proficiency_level="advanced",
+                source="course_completion", verified_by=5, actor_id=5,
+            )
+
+app/tests/test_hcm_domain.py:389: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <app.services.hcm_domain_service.SkillService object at 0x70d5d691d610>
+db = <MagicMock id='124063717153616'>
+org_id = UUID('d7bf76b7-ccc3-428b-b631-98bf26516b2d'), user_id = 10
+skill_id = 1, proficiency_level = 'advanced', source = 'course_completion'
+verified_by = 5, actor_id = 5
+
+    def add_or_update_skill(self, db: Session, org_id, user_id: int, skill_id: int,
+                            proficiency_level: str, source: str = "course_completion",
+                            verified_by: Optional[int] = None,
+                            actor_id: Optional[int] = None) -> EmployeeSkill:
+        record = (
+            db.query(EmployeeSkill)
+>           .filter(EmployeeSkill.org_id == org_id, EmployeeSkill.user_id == user_id,
+                    ^^^^^^^^^^^^^^^^^^^^
+                    EmployeeSkill.skill_id == skill_id)
+            .first()
+        )
+E       AttributeError: type object 'EmployeeSkill' has no attribute 'org_id'
+
+app/services/hcm_domain_service.py:525: AttributeError
+_________________________ test_competency_gap_analysis _________________________
+
+    def test_competency_gap_analysis():
+        """Competency gap combines nine-box placement and skill coverage."""
+        org = _org_id()
+        nine_box = NineBoxGrid(id=1, organization_id=org, user_id=10,
+                               performance_rating=2, potential_rating=3,
+                               box_category="High Potential")
+        skills = [
+>           EmployeeSkill(id=1, org_id=org, user_id=10, skill_id=1, proficiency_level="beginner"),
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            EmployeeSkill(id=2, org_id=org, user_id=10, skill_id=2, proficiency_level="intermediate"),
+        ]
+
+app/tests/test_hcm_domain.py:430: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+<string>:4: in __init__
+    ???
+.venv/lib/python3.12/site-packages/sqlalchemy/orm/state.py:596: in _initialize_instance
+    with util.safe_reraise():
+.venv/lib/python3.12/site-packages/sqlalchemy/util/langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+.venv/lib/python3.12/site-packages/sqlalchemy/orm/state.py:594: in _initialize_instance
+    manager.original_init(*mixed[1:], **kwargs)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <EmployeeSkill user=None skill=None level=None>
+kwargs = {'id': 1, 'org_id': UUID('a10d841e-884d-4584-a1da-5af2ca5cd9d4'), 'proficiency_level': 'beginner', 'skill_id': 1, ...}
+cls_ = <class 'app.db.models.all_models.EmployeeSkill'>, k = 'org_id'
+
+    def _declarative_constructor(self: Any, **kwargs: Any) -> None:
+        """A simple constructor that allows initialization from kwargs.
+    
+        Sets attributes on the constructed instance using the names and
+        values in ``kwargs``.
+    
+        Only keys that are present as
+        attributes of the instance's class are allowed. These could be,
+        for example, any mapped columns or relationships.
+        """
+        cls_ = type(self)
+        for k in kwargs:
+            if not hasattr(cls_, k):
+>               raise TypeError(
+                    "%r is an invalid keyword argument for %s" % (k, cls_.__name__)
+                )
+E               TypeError: 'org_id' is an invalid keyword argument for EmployeeSkill
+
+.venv/lib/python3.12/site-packages/sqlalchemy/orm/decl_base.py:2179: TypeError
+____________________ test_document_vault_upload_and_signing ____________________
+
+    def test_document_vault_upload_and_signing():
+        """Employee documents upload into the vault; signing flips the flag and
+        writes an audit (warning severity)."""
+        org = _org_id()
+    
+        doc = document_service.upload_document(
+            db=MagicMock(), org_id=org, user_id=10,
+            data={"title": "Offer Letter", "document_type": "offer_letter",
+                  "file_id": str(uuid.uuid4()), "access_level": "confidential"},
+        )
+        assert doc.title == "Offer Letter"
+>       assert doc.is_signed is False
+E       AssertionError: assert None is False
+E        +  where None = <EmployeeDocument title='Offer Letter' type='offer_letter'>.is_signed
+
+app/tests/test_hcm_domain.py:525: AssertionError
+_______________ test_hcm_executive_dashboard_aggregates_domains ________________
+
+    def test_hcm_executive_dashboard_aggregates_domains():
+        """The unified HCM dashboard aggregates KPIs across all HCM domains."""
+        org = _org_id()
+        db = MagicMock()
+        counts = {}
+    
+        def cfg(model, value):
+            m = MagicMock()
+            m.filter.return_value.count.return_value = value
+            m.join.return_value.filter.return_value.count.return_value = value
+            counts[model] = m
+            return m
+    
+        # Every model queried by hcm_dashboard
+        cfg(User, 10)
+        cfg(EmployeeProfile, 8)
+        cfg(Goal, 5)          # active goals
+        cfg(Goal, 7)          # completed goals (second query returns same mock → 5)
+        cfg(PerformanceReview, 3)
+        cfg(PerformanceReview, 4)
+        cfg(CourseEnrollment, 12)
+        cfg(Certificate, 4)
+        cfg(EmployeeSkill, 20)
+        cfg(KeyPosition, 6)
+        cfg(SuccessorCandidate, 4)
+        cfg(EmployeeDocument, 9)
+        cfg(TalentPool, 2)
+    
+        def side(model):
+            return counts[model]
+    
+        db.query.side_effect = side
+    
+        with patch("app.services.audit_service.audit_service.record"):
+>           dash = hcm_dashboard(db, org)
+                   ^^^^^^^^^^^^^^^^^^^^^^
+
+app/tests/test_hcm_domain.py:628: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = <MagicMock id='124063717442912'>
+org_id = UUID('19c563ab-6a92-4ab8-ac03-59448454aa2d')
+
+    def hcm_dashboard(db: Session, org_id) -> Dict[str, Any]:
+        """Unified HCM executive dashboard across all 14 domains."""
+        employees = _org_user_count(db, org_id)
+        profiles = db.query(EmployeeProfile).filter(EmployeeProfile.org_id == org_id).count()
+        goals_active = db.query(Goal).filter(Goal.organization_id == org_id,
+                                             Goal.status.in_(["active", "on_hold"])).count()
+        goals_completed = db.query(Goal).filter(Goal.organization_id == org_id,
+                                                Goal.status == "completed").count()
+        reviews_pending = db.query(PerformanceReview).filter(
+            PerformanceReview.organization_id == org_id,
+            PerformanceReview.status.in_(["pending", "in_progress"])).count()
+        reviews_completed = db.query(PerformanceReview).filter(
+            PerformanceReview.organization_id == org_id,
+            PerformanceReview.status == "submitted").count()
+        enrollments = db.query(CourseEnrollment).filter(
+            CourseEnrollment.organization_id == org_id).count()
+        certs = db.query(Certificate).filter(Certificate.organization_id == org_id).count()
+>       skills = db.query(EmployeeSkill).filter(EmployeeSkill.org_id == org_id).count()
+                                                ^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: type object 'EmployeeSkill' has no attribute 'org_id'
+
+app/services/hcm_domain_service.py:920: AttributeError
+=============================== warnings summary ===============================
+app/tests/test_hcm_domain.py::test_employee_profile_upsert_publishes_event
+  /home/dheeraj/NIELIT/Project/Face-Recognition-Based-Attendance-System/backend/app/tests/test_hcm_domain.py:110: SAWarning: relationship 'Role.user_roles' will copy column roles.id to column user_roles.role_id, which conflicts with relationship(s): 'Role.members' (copies roles.id to user_roles.role_id). If this is not the intention, consider if these relationships should be linked with back_populates, or if viewonly=True should be applied to one or more if they are read-only. For the less common case that foreign key constraints are partially overlapping, the orm.foreign() annotation can be used to isolate the columns that should be written towards.   To silence this warning, add the parameter 'overlaps="members"' to the 'Role.user_roles' relationship. (Background on this warning at: https://sqlalche.me/e/20/qzyx) (This warning originated from the `configure_mappers()` process, which was invoked automatically in response to a user-initiated operation.)
+    profile = EmployeeProfile(id=1, org_id=org, user_id=10)
+
+app/tests/test_hcm_domain.py::test_employee_profile_upsert_publishes_event
+  /home/dheeraj/NIELIT/Project/Face-Recognition-Based-Attendance-System/backend/app/tests/test_hcm_domain.py:110: SAWarning: relationship 'Role.granted_permissions' will copy column roles.id to column role_permissions.role_id, which conflicts with relationship(s): 'Role.role_permissions' (copies roles.id to role_permissions.role_id). If this is not the intention, consider if these relationships should be linked with back_populates, or if viewonly=True should be applied to one or more if they are read-only. For the less common case that foreign key constraints are partially overlapping, the orm.foreign() annotation can be used to isolate the columns that should be written towards.   To silence this warning, add the parameter 'overlaps="role_permissions"' to the 'Role.granted_permissions' relationship. (Background on this warning at: https://sqlalche.me/e/20/qzyx) (This warning originated from the `configure_mappers()` process, which was invoked automatically in response to a user-initiated operation.)
+    profile = EmployeeProfile(id=1, org_id=org, user_id=10)
+
+app/tests/test_hcm_domain.py::test_employee_profile_upsert_publishes_event
+  /home/dheeraj/NIELIT/Project/Face-Recognition-Based-Attendance-System/backend/app/tests/test_hcm_domain.py:110: SAWarning: relationship 'Permission.roles' will copy column roles.id to column role_permissions.role_id, which conflicts with relationship(s): 'Role.role_permissions' (copies roles.id to role_permissions.role_id). If this is not the intention, consider if these relationships should be linked with back_populates, or if viewonly=True should be applied to one or more if they are read-only. For the less common case that foreign key constraints are partially overlapping, the orm.foreign() annotation can be used to isolate the columns that should be written towards.   To silence this warning, add the parameter 'overlaps="role_permissions"' to the 'Permission.roles' relationship. (Background on this warning at: https://sqlalche.me/e/20/qzyx) (This warning originated from the `configure_mappers()` process, which was invoked automatically in response to a user-initiated operation.)
+    profile = EmployeeProfile(id=1, org_id=org, user_id=10)
+
+app/tests/test_hcm_domain.py::test_employee_profile_upsert_publishes_event
+  /home/dheeraj/NIELIT/Project/Face-Recognition-Based-Attendance-System/backend/app/tests/test_hcm_domain.py:110: SAWarning: relationship 'Permission.role_permissions' will copy column permissions.id to column role_permissions.permission_id, which conflicts with relationship(s): 'Permission.roles' (copies permissions.id to role_permissions.permission_id), 'Role.granted_permissions' (copies permissions.id to role_permissions.permission_id). If this is not the intention, consider if these relationships should be linked with back_populates, or if viewonly=True should be applied to one or more if they are read-only. For the less common case that foreign key constraints are partially overlapping, the orm.foreign() annotation can be used to isolate the columns that should be written towards.   To silence this warning, add the parameter 'overlaps="granted_permissions,roles"' to the 'Permission.role_permissions' relationship. (Background on this warning at: https://sqlalche.me/e/20/qzyx) (This warning originated from the `configure_mappers()` process, which was invoked automatically in response to a user-initiated operation.)
+    profile = EmployeeProfile(id=1, org_id=org, user_id=10)
+
+app/tests/test_hcm_domain.py::test_employee_profile_upsert_publishes_event
+  /home/dheeraj/NIELIT/Project/Face-Recognition-Based-Attendance-System/backend/app/tests/test_hcm_domain.py:110: SAWarning: relationship 'RolePermission.role' will copy column roles.id to column role_permissions.role_id, which conflicts with relationship(s): 'Permission.roles' (copies roles.id to role_permissions.role_id), 'Role.granted_permissions' (copies roles.id to role_permissions.role_id). If this is not the intention, consider if these relationships should be linked with back_populates, or if viewonly=True should be applied to one or more if they are read-only. For the less common case that foreign key constraints are partially overlapping, the orm.foreign() annotation can be used to isolate the columns that should be written towards.   To silence this warning, add the parameter 'overlaps="granted_permissions,roles"' to the 'RolePermission.role' relationship. (Background on this warning at: https://sqlalche.me/e/20/qzyx) (This warning originated from the `configure_mappers()` process, which was invoked automatically in response to a user-initiated operation.)
+    profile = EmployeeProfile(id=1, org_id=org, user_id=10)
+
+app/tests/test_hcm_domain.py::test_employee_profile_upsert_publishes_event
+  /home/dheeraj/NIELIT/Project/Face-Recognition-Based-Attendance-System/backend/app/tests/test_hcm_domain.py:110: SAWarning: relationship 'RolePermission.permission' will copy column permissions.id to column role_permissions.permission_id, which conflicts with relationship(s): 'Permission.roles' (copies permissions.id to role_permissions.permission_id), 'Role.granted_permissions' (copies permissions.id to role_permissions.permission_id). If this is not the intention, consider if these relationships should be linked with back_populates, or if viewonly=True should be applied to one or more if they are read-only. For the less common case that foreign key constraints are partially overlapping, the orm.foreign() annotation can be used to isolate the columns that should be written towards.   To silence this warning, add the parameter 'overlaps="granted_permissions,roles"' to the 'RolePermission.permission' relationship. (Background on this warning at: https://sqlalche.me/e/20/qzyx) (This warning originated from the `configure_mappers()` process, which was invoked automatically in response to a user-initiated operation.)
+    profile = EmployeeProfile(id=1, org_id=org, user_id=10)
+
+app/tests/test_hcm_domain.py::test_employee_profile_upsert_publishes_event
+  /home/dheeraj/NIELIT/Project/Face-Recognition-Based-Attendance-System/backend/app/tests/test_hcm_domain.py:110: SAWarning: relationship 'UserRole.user' will copy column users.id to column user_roles.user_id, which conflicts with relationship(s): 'Role.members' (copies users.id to user_roles.user_id). If this is not the intention, consider if these relationships should be linked with back_populates, or if viewonly=True should be applied to one or more if they are read-only. For the less common case that foreign key constraints are partially overlapping, the orm.foreign() annotation can be used to isolate the columns that should be written towards.   To silence this warning, add the parameter 'overlaps="members"' to the 'UserRole.user' relationship. (Background on this warning at: https://sqlalche.me/e/20/qzyx) (This warning originated from the `configure_mappers()` process, which was invoked automatically in response to a user-initiated operation.)
+    profile = EmployeeProfile(id=1, org_id=org, user_id=10)
+
+app/tests/test_hcm_domain.py::test_employee_profile_upsert_publishes_event
+  /home/dheeraj/NIELIT/Project/Face-Recognition-Based-Attendance-System/backend/app/tests/test_hcm_domain.py:110: SAWarning: relationship 'UserRole.role' will copy column roles.id to column user_roles.role_id, which conflicts with relationship(s): 'Role.members' (copies roles.id to user_roles.role_id). If this is not the intention, consider if these relationships should be linked with back_populates, or if viewonly=True should be applied to one or more if they are read-only. For the less common case that foreign key constraints are partially overlapping, the orm.foreign() annotation can be used to isolate the columns that should be written towards.   To silence this warning, add the parameter 'overlaps="members"' to the 'UserRole.role' relationship. (Background on this warning at: https://sqlalche.me/e/20/qzyx) (This warning originated from the `configure_mappers()` process, which was invoked automatically in response to a user-initiated operation.)
+    profile = EmployeeProfile(id=1, org_id=org, user_id=10)
+
+app/tests/test_hcm_domain.py::test_employee_profile_upsert_publishes_event
+  /home/dheeraj/NIELIT/Project/Face-Recognition-Based-Attendance-System/backend/app/tests/test_hcm_domain.py:110: SAWarning: relationship 'User.user_roles' will copy column users.id to column user_roles.user_id, which conflicts with relationship(s): 'Role.members' (copies users.id to user_roles.user_id). If this is not the intention, consider if these relationships should be linked with back_populates, or if viewonly=True should be applied to one or more if they are read-only. For the less common case that foreign key constraints are partially overlapping, the orm.foreign() annotation can be used to isolate the columns that should be written towards.   To silence this warning, add the parameter 'overlaps="members"' to the 'User.user_roles' relationship. (Background on this warning at: https://sqlalche.me/e/20/qzyx) (This warning originated from the `configure_mappers()` process, which was invoked automatically in response to a user-initiated operation.)
+    profile = EmployeeProfile(id=1, org_id=org, user_id=10)
+
+app/tests/test_hcm_domain.py::test_employee_profile_upsert_publishes_event
+  /home/dheeraj/NIELIT/Project/Face-Recognition-Based-Attendance-System/backend/app/tests/test_hcm_domain.py:110: SAWarning: relationship 'User.roles' will copy column users.id to column user_roles.user_id, which conflicts with relationship(s): 'User.user_roles' (copies users.id to user_roles.user_id), 'UserRole.user' (copies users.id to user_roles.user_id). If this is not the intention, consider if these relationships should be linked with back_populates, or if viewonly=True should be applied to one or more if they are read-only. For the less common case that foreign key constraints are partially overlapping, the orm.foreign() annotation can be used to isolate the columns that should be written towards.   To silence this warning, add the parameter 'overlaps="user,user_roles"' to the 'User.roles' relationship. (Background on this warning at: https://sqlalche.me/e/20/qzyx) (This warning originated from the `configure_mappers()` process, which was invoked automatically in response to a user-initiated operation.)
+    profile = EmployeeProfile(id=1, org_id=org, user_id=10)
+
+app/tests/test_hcm_domain.py::test_employee_profile_upsert_publishes_event
+  /home/dheeraj/NIELIT/Project/Face-Recognition-Based-Attendance-System/backend/app/tests/test_hcm_domain.py:110: SAWarning: relationship 'User.roles' will copy column roles.id to column user_roles.role_id, which conflicts with relationship(s): 'Role.user_roles' (copies roles.id to user_roles.role_id), 'UserRole.role' (copies roles.id to user_roles.role_id). If this is not the intention, consider if these relationships should be linked with back_populates, or if viewonly=True should be applied to one or more if they are read-only. For the less common case that foreign key constraints are partially overlapping, the orm.foreign() annotation can be used to isolate the columns that should be written towards.   To silence this warning, add the parameter 'overlaps="role,user_roles"' to the 'User.roles' relationship. (Background on this warning at: https://sqlalche.me/e/20/qzyx) (This warning originated from the `configure_mappers()` process, which was invoked automatically in response to a user-initiated operation.)
+    profile = EmployeeProfile(id=1, org_id=org, user_id=10)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED app/tests/test_hcm_domain.py::test_performance_cycle_creation_and_ratings_dashboard
+FAILED app/tests/test_hcm_domain.py::test_skill_verification_and_matrix - Att...
+FAILED app/tests/test_hcm_domain.py::test_competency_gap_analysis - TypeError...
+FAILED app/tests/test_hcm_domain.py::test_document_vault_upload_and_signing
+FAILED app/tests/test_hcm_domain.py::test_hcm_executive_dashboard_aggregates_domains
+================== 5 failed, 11 passed, 11 warnings in 2.71s ===================

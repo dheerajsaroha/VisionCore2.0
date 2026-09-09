@@ -18,11 +18,15 @@ export const authService = {
       headers: { Authorization: `Bearer ${token}` },
     }),
 
-  refreshToken: (refreshToken) =>
-    apiClient.post('/auth/refresh', { refresh_token: refreshToken }),
+  refreshToken: () => apiClient.post('/auth/refresh'),
 
   getMe: (token) =>
     apiClient.get('/users/me', {
       headers: { Authorization: `Bearer ${token}` },
     }),
+
+  forgotPassword: (email) => apiClient.post('/auth/forgot-password', { email }),
+
+  resetPassword: (token, newPassword) =>
+    apiClient.post('/auth/reset-password', { token, new_password: newPassword }),
 };

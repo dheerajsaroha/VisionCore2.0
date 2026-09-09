@@ -49,11 +49,13 @@ class RateLimitRule:
         requests_per_second: float = 100.0,
         burst_size: int = 200,
         tenant_id: str = "",
+        tier: str = "STANDARD",
     ):
         self.pattern = pattern
         self.requests_per_second = requests_per_second
         self.burst_size = burst_size
         self.tenant_id = tenant_id
+        self.tier = tier
 
 
 class TransformationRule:
@@ -162,9 +164,10 @@ class GatewayService:
         requests_per_second: float,
         burst_size: int,
         tenant_id: str = "",
+        tier: str = "STANDARD",
     ) -> RateLimitRule:
         """Add a rate limiting rule."""
-        rule = RateLimitRule(pattern, requests_per_second, burst_size, tenant_id)
+        rule = RateLimitRule(pattern, requests_per_second, burst_size, tenant_id, tier)
         self._rate_limits.append(rule)
         return rule
 

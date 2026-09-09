@@ -4,6 +4,8 @@ import { useAuthStore } from './store/authStore';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import DashboardLayout from './layouts/DashboardLayout';
 import { Spinner } from './components/ui/Spinner';
+import { useTheme } from './hooks/useTheme';
+import { useToast } from './components/ui/Toast';
 
 const ScrollToTop = () => {
   const { pathname } = useLocation();
@@ -17,6 +19,9 @@ const ScrollToTop = () => {
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const SignupPage = lazy(() => import('./pages/SignupPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const AccessDeniedPage = lazy(() => import('./pages/AccessDeniedPage'));
 const Overview = lazy(() => import('./pages/Overview'));
 const Attendance = lazy(() => import('./pages/Attendance'));
 const UserManagement = lazy(() => import('./pages/UserManagement'));
@@ -83,6 +88,15 @@ const LoadingFallback = () => (
 );
 
 const AppRoutes = () => {
+  const toast = useToast();
+  useEffect(() => {
+    const handler = (e) => {
+      toast?.({ message: e.detail || 'You do not have permission to access this resource.', type: 'error', duration: 5000 });
+    };
+    window.addEventListener('app:forbidden', handler);
+    return () => window.removeEventListener('app:forbidden', handler);
+  }, [toast]);
+
   const location = useLocation();
 
   return (
@@ -91,6 +105,9 @@ const AppRoutes = () => {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/403" element={<AccessDeniedPage />} />
 
       {/* Protected Dashboard Routes */}
       <Route path="/dashboard" element={
@@ -104,110 +121,98 @@ const AppRoutes = () => {
         </ProtectedRoute>
       } />
       <Route path="/dashboard/users" element={
-<<<<<<< HEAD
-        <ProtectedRoute requiredPermission="employee.read">
-=======
-        <ProtectedRoute requiredRoles={['SuperAdmin', 'Admin']}>
->>>>>>> refs/remotes/origin/main
+        <ProtectedRoute requiredPermission="users.read">
           <DashboardLayout><UserManagement /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/reports" element={
-<<<<<<< HEAD
-        <ProtectedRoute requiredPermission="report.generate">
-=======
-        <ProtectedRoute requiredRoles={['SuperAdmin', 'Admin', 'Manager']}>
->>>>>>> refs/remotes/origin/main
+        <ProtectedRoute requiredPermission="reports.attendance.export">
           <DashboardLayout><Reports /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/settings" element={
-        <ProtectedRoute requiredPermission="settings.read">
+        <ProtectedRoute>
           <DashboardLayout><Settings /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/ticketing" element={
-        <ProtectedRoute requiredPermission="support.ticket.read">
+        <ProtectedRoute requiredPermission="tickets.read">
           <DashboardLayout><Ticketing /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/payroll" element={
-<<<<<<< HEAD
-        <ProtectedRoute requiredPermission="payroll.read">
-=======
-        <ProtectedRoute requiredRoles={['SuperAdmin', 'Admin']}>
->>>>>>> refs/remotes/origin/main
+        <ProtectedRoute requiredPermission="payroll.generate">
           <DashboardLayout><Payroll /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/reimbursements" element={
-        <ProtectedRoute requiredPermission="expense.submit">
+        <ProtectedRoute requiredPermission="reimbursements.create">
           <DashboardLayout><Reimbursements /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/leave" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="leave.view_self">
           <DashboardLayout><LeaveManagementPage /></DashboardLayout>
         </ProtectedRoute>
       } />
-      <Route path="/dashboard/workforce/attendance" element={<ProtectedRoute><DashboardLayout><AttendanceDashboardPage /></DashboardLayout></ProtectedRoute>} />
-      <Route path="/dashboard/workforce/timeline" element={<ProtectedRoute><DashboardLayout><AttendanceTimelinePage /></DashboardLayout></ProtectedRoute>} />
-      <Route path="/dashboard/workforce/devices" element={<ProtectedRoute><DashboardLayout><AttendanceDevicesPage /></DashboardLayout></ProtectedRoute>} />
-      <Route path="/dashboard/workforce/shifts" element={<ProtectedRoute><DashboardLayout><ShiftCalendarPage /></DashboardLayout></ProtectedRoute>} />
-      <Route path="/dashboard/workforce/rosters" element={<ProtectedRoute><DashboardLayout><RosterPlannerPage /></DashboardLayout></ProtectedRoute>} />
-      <Route path="/dashboard/workforce/leave-calendar" element={<ProtectedRoute><DashboardLayout><LeaveCalendarPage /></DashboardLayout></ProtectedRoute>} />
-      <Route path="/dashboard/workforce/leave-requests" element={<ProtectedRoute><DashboardLayout><LeaveRequestsPage /></DashboardLayout></ProtectedRoute>} />
-      <Route path="/dashboard/workforce/planning" element={<ProtectedRoute><DashboardLayout><WorkforcePlanningPage /></DashboardLayout></ProtectedRoute>} />
-      <Route path="/dashboard/workforce/capacity" element={<ProtectedRoute><DashboardLayout><CapacityDashboardPage /></DashboardLayout></ProtectedRoute>} />
-      <Route path="/dashboard/workforce/analytics" element={<ProtectedRoute><DashboardLayout><AttendanceAnalyticsPage /></DashboardLayout></ProtectedRoute>} />
-      <Route path="/dashboard/workforce/holidays" element={<ProtectedRoute><DashboardLayout><HolidayManagementPage /></DashboardLayout></ProtectedRoute>} />
+      <Route path="/dashboard/workforce/attendance" element={<ProtectedRoute requiredPermission="attendance.history"><DashboardLayout><AttendanceDashboardPage /></DashboardLayout></ProtectedRoute>} />
+      <Route path="/dashboard/workforce/timeline" element={<ProtectedRoute requiredPermission="attendance.history"><DashboardLayout><AttendanceTimelinePage /></DashboardLayout></ProtectedRoute>} />
+      <Route path="/dashboard/workforce/devices" element={<ProtectedRoute requiredPermission="platform.settings.manage"><DashboardLayout><AttendanceDevicesPage /></DashboardLayout></ProtectedRoute>} />
+      <Route path="/dashboard/workforce/shifts" element={<ProtectedRoute requiredPermission="shifts.read"><DashboardLayout><ShiftCalendarPage /></DashboardLayout></ProtectedRoute>} />
+      <Route path="/dashboard/workforce/rosters" element={<ProtectedRoute requiredPermission="shifts.read"><DashboardLayout><RosterPlannerPage /></DashboardLayout></ProtectedRoute>} />
+      <Route path="/dashboard/workforce/leave-calendar" element={<ProtectedRoute requiredPermission="leave.view_self"><DashboardLayout><LeaveCalendarPage /></DashboardLayout></ProtectedRoute>} />
+      <Route path="/dashboard/workforce/leave-requests" element={<ProtectedRoute requiredPermission="leave.view_self"><DashboardLayout><LeaveRequestsPage /></DashboardLayout></ProtectedRoute>} />
+      <Route path="/dashboard/workforce/planning" element={<ProtectedRoute requiredPermission="users.read"><DashboardLayout><WorkforcePlanningPage /></DashboardLayout></ProtectedRoute>} />
+      <Route path="/dashboard/workforce/capacity" element={<ProtectedRoute requiredPermission="users.read"><DashboardLayout><CapacityDashboardPage /></DashboardLayout></ProtectedRoute>} />
+      <Route path="/dashboard/workforce/analytics" element={<ProtectedRoute requiredPermission="reports.attendance.export"><DashboardLayout><AttendanceAnalyticsPage /></DashboardLayout></ProtectedRoute>} />
+      <Route path="/dashboard/workforce/holidays" element={<ProtectedRoute requiredPermission="org.settings.manage"><DashboardLayout><HolidayManagementPage /></DashboardLayout></ProtectedRoute>} />
       <Route path="/dashboard/permissions" element={
         <ProtectedRoute requiredPermission="roles.view">
           <DashboardLayout><PermissionManagement /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/scope-ownership" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="platform.settings.manage">
           <DashboardLayout><ScopeOwnershipPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/approval-workflows" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="roles.view">
           <DashboardLayout><ApprovalWorkflowPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/dynamic-roles" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="roles.view">
           <DashboardLayout><DynamicRoleManagementPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/hr" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="hcm.view">
           <DashboardLayout><HRDashboardPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/performance" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="performance.view">
           <DashboardLayout><PerformanceManagementPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/learning" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="learning.view">
           <DashboardLayout><LearningDevelopmentPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/succession" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="succession.view">
           <DashboardLayout><SuccessionCareerPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/policies" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="policy.read">
           <DashboardLayout><PolicyCenterPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/assets" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="asset.read">
           <DashboardLayout><AssetManagementPage /></DashboardLayout>
         </ProtectedRoute>
       } />
@@ -217,103 +222,103 @@ const AppRoutes = () => {
         </ProtectedRoute>
       } />
       <Route path="/dashboard/enterprise" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="integration.manage">
           <DashboardLayout><EnterpriseIntegrationPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/operations" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="platform.settings.manage">
           <DashboardLayout><OperationsPage /></DashboardLayout>
         </ProtectedRoute>
       } />
 
       {/* Sprint 7 — AI Platform Routes */}
       <Route path="/dashboard/ai-studio" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="ai.studio.use">
           <DashboardLayout><AIStudioPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/knowledge-center" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="knowledge.read">
           <DashboardLayout><KnowledgeCenterPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/ai-copilot-hub" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="ai.copilot.use">
           <DashboardLayout><AICopilotHubPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/ai-analytics" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="ai.analytics.read">
           <DashboardLayout><AIAnalyticsPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/prompt-manager" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="ai.prompt.manage">
           <DashboardLayout><PromptManagerPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/model-manager" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="ai.model.manage">
           <DashboardLayout><ModelManagerPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/ai-usage" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="ai.analytics.read">
           <DashboardLayout><AIUsageDashboardPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/ai-governance" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="ai.governance.manage">
           <DashboardLayout><AIGovernanceDashboardPage /></DashboardLayout>
         </ProtectedRoute>
       } />
 
       {/* Recruitment Routes */}
       <Route path="/dashboard/open-positions" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="recruitment.view">
           <DashboardLayout><OpenPositionsPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/candidate-pipeline" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="recruitment.view">
           <DashboardLayout><CandidatePipelinePage /></DashboardLayout>
         </ProtectedRoute>
       } />
 
       {/* Organization & Identity Domain Routes */}
       <Route path="/dashboard/organization" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="org.view">
           <DashboardLayout><OrganizationDashboard /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/org-hierarchy" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="org.view">
           <DashboardLayout><OrganizationHierarchyTree /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/business-units" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="departments.read">
           <DashboardLayout><BusinessUnitsPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/branches" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="org.view">
           <DashboardLayout><BranchManagementPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/positions" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="departments.read">
           <DashboardLayout><PositionManagementPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/identity-directory" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="users.read">
           <DashboardLayout><IdentityDirectoryPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/org-settings" element={
-        <ProtectedRoute>
+        <ProtectedRoute requiredPermission="org.settings.view">
           <DashboardLayout><OrganizationSettingsPage /></DashboardLayout>
         </ProtectedRoute>
       } />
@@ -326,6 +331,8 @@ const AppRoutes = () => {
 
 const App = () => {
   const { hydrate } = useAuthStore();
+  // Initialize theme from localStorage — applies class to <html> element globally
+  useTheme();
 
   useEffect(() => {
     hydrate();

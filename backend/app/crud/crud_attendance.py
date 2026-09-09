@@ -1,8 +1,5 @@
-<<<<<<< HEAD
 import uuid
-=======
 from datetime import datetime, timezone
->>>>>>> refs/remotes/origin/main
 from typing import Optional
 from sqlalchemy.orm import Session
 from app.crud.base import CRUDBase
@@ -17,10 +14,20 @@ class CheckInUpdate(BaseModel):
 
 class CRUDAttendance(CRUDBase[AttendanceLog, CheckInRequest, CheckInUpdate]):
     def log_check_in(self, db: Session, *, obj_in: CheckInRequest, status: str) -> AttendanceLog:
+        existing = (
+            db.query(AttendanceLog)
+            .filter(
+                AttendanceLog.user_id == obj_in.user_id,
+                AttendanceLog.is_deleted == 0,
+                AttendanceLog.check_out.is_(None),
+            )
+            .first()
+        )
+        if existing:
+            raise ValueError("You already have an active check-in. Please check out first.")
+
         db_obj = AttendanceLog(
             user_id=obj_in.user_id,
-            # Always use server-side UTC timestamp — never trust client-supplied time.
-            # BUG-10 fix: client previously controlled check_in via obj_in.timestamp.
             check_in=datetime.now(timezone.utc),
             status=status,
             emotion=obj_in.emotion,
@@ -35,6 +42,89 @@ class CRUDAttendance(CRUDBase[AttendanceLog, CheckInRequest, CheckInUpdate]):
         db.commit()
         db.refresh(db_obj)
         return db_obj
+
+    def log_check_out(
+        self,
+        db: Session,
+        *,
+        user_id: int,
+        timestamp: Optional[datetime] = None,
+    ) -> AttendanceLog:
+        """
+        Record check-out for the user's active check-in record.
+        """
+        now = timestamp or datetime.now(timezone.utc)
+        stmt = (
+            db.query(AttendanceLog)
+            .filter(
+                AttendanceLog.user_id == user_id,
+                AttendanceLog.is_deleted == 0,
+                AttendanceLog.check_out.is_(None),
+            )
+            .order_by(AttendanceLog.check_in.desc())
+        )
+        active_log = stmt.first()
+        if not active_log:
+            raise ValueError("No active check-in found for check-out.")
+
+        active_log.check_out = now
+        db.commit()
+        db.refresh(active_log)
+        return active_log
+
+    def log_break_start(
+        self,
+        db: Session,
+        *,
+        user_id: int,
+        timestamp: Optional[datetime] = None,
+    ) -> AttendanceLog:
+        now = timestamp or datetime.now(timezone.utc)
+        active_log = (
+            db.query(AttendanceLog)
+            .filter(
+                AttendanceLog.user_id == user_id,
+                AttendanceLog.is_deleted == 0,
+                AttendanceLog.check_out.is_(None),
+                AttendanceLog.break_start.is_(None),
+            )
+            .order_by(AttendanceLog.check_in.desc())
+            .first()
+        )
+        if not active_log:
+            raise ValueError("No active check-in found for break start.")
+        active_log.break_start = now
+        db.commit()
+        db.refresh(active_log)
+        return active_log
+
+    def log_break_end(
+        self,
+        db: Session,
+        *,
+        user_id: int,
+        timestamp: Optional[datetime] = None,
+    ) -> AttendanceLog:
+        now = timestamp or datetime.now(timezone.utc)
+        active_log = (
+            db.query(AttendanceLog)
+            .filter(
+                AttendanceLog.user_id == user_id,
+                AttendanceLog.is_deleted == 0,
+                AttendanceLog.check_out.is_(None),
+                AttendanceLog.break_start.is_not(None),
+                AttendanceLog.break_end.is_(None),
+            )
+            .order_by(AttendanceLog.check_in.desc())
+            .first()
+        )
+        if not active_log:
+            raise ValueError("No active break found for break end.")
+        active_log.break_end = now
+        db.commit()
+        db.refresh(active_log)
+        return active_log
+
 
     def verify_user_face(
         self,
@@ -64,7 +154,6 @@ class CRUDAttendance(CRUDBase[AttendanceLog, CheckInRequest, CheckInUpdate]):
         row = db.execute(stmt).first()
 
         if not row or row.distance is None:
-            # If no active template enrolled, allow or require enrollment
             return True, None
 
         is_match = row.distance <= threshold
@@ -80,10 +169,6 @@ class CRUDAttendance(CRUDBase[AttendanceLog, CheckInRequest, CheckInUpdate]):
     ) -> Optional[int]:
         """
         Find the user who matches the given face embedding.
-
-        CRITICAL TENANT ISOLATION:
-        When ``org_id`` is provided, the vector search is scoped to embeddings
-        belonging to users in that organization only.
         """
         from app.db.models.all_models import FaceEmbedding, User
         from sqlalchemy import select
@@ -100,7 +185,7 @@ class CRUDAttendance(CRUDBase[AttendanceLog, CheckInRequest, CheckInUpdate]):
             .limit(1)
         )
         if org_id is not None:
-            stmt = stmt.where(User.org_id == org_id)
+            stmt = stmt.where(FaceEmbedding.org_id == org_id)
 
         row = db.execute(stmt).first()
 

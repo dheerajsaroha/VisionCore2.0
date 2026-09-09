@@ -792,7 +792,7 @@ class DocumentService:
 
     def upload_document(self, db: Session, org_id, user_id: int, data: Dict[str, Any],
                         actor_id: Optional[int] = None) -> EmployeeDocument:
-        doc = EmployeeDocument(org_id=org_id, user_id=user_id, **data)
+        doc = EmployeeDocument(org_id=org_id, user_id=user_id, is_signed=False, **data)
         db.add(doc)
         db.commit()
         db.refresh(doc)

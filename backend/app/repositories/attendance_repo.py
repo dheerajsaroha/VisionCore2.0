@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -22,8 +23,11 @@ class AttendanceRepository:
         *,
         embedding: list[float],
         threshold: float,
+        org_id: UUID,
     ) -> FaceMatchResult:
-        user_id = crud_attendance.find_user_by_face(db, embedding=embedding, threshold=threshold)
+        user_id = crud_attendance.find_user_by_face(
+            db, embedding=embedding, threshold=threshold, org_id=org_id
+        )
         return FaceMatchResult(user_id=user_id)
 
     def log_check_in(self, db: Session, *, req: CheckInRequest, status: str) -> AttendanceLog:
@@ -31,4 +35,3 @@ class AttendanceRepository:
 
 
 attendance_repo = AttendanceRepository()
-

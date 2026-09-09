@@ -30,22 +30,47 @@ export const usePermissionStore = create(
       // UI States
       isLoading: false,
       isCacheHydrated: false,
+      authorizationInitialized: false,
       error: null,
 
       // ── My Permissions ──────────────────────────────────────────────────
 
       fetchMyPermissions: async () => {
+        set({
+          isLoading: true,
+          error: null,
+          // Never make a decision from permissions that belonged to a prior
+          // browser session while the current identity is being resolved.
+          myPermissions: [],
+          myPermissionCount: 0,
+          myRoleName: '',
+          isCacheHydrated: false,
+          authorizationInitialized: false,
+        });
         try {
           const data = await permissionService.getMyPermissions();
           set({
             myPermissions: data.permissions || [],
             myPermissionCount: data.permission_count || 0,
             myRoleName: data.role_name || '',
+            isLoading: false,
             isCacheHydrated: true,
+            authorizationInitialized: true,
           });
           return data;
         } catch (error) {
-          set({ error: error.message, isCacheHydrated: true });
+          // A failed permission request must be a deterministic deny, not a
+          // temporary allow.  Mark initialization complete so route guards
+          // can render 403 rather than evaluate stale data.
+          set({
+            myPermissions: [],
+            myPermissionCount: 0,
+            myRoleName: '',
+            error: error.message,
+            isLoading: false,
+            isCacheHydrated: true,
+            authorizationInitialized: true,
+          });
           return null;
         }
       },
@@ -212,8 +237,18 @@ export const usePermissionStore = create(
           moduleStats: [],
           moduleSummary: [],
           isLoading: false,
+          isCacheHydrated: false,
+          authorizationInitialized: false,
           error: null,
         });
+      },
+
+      clearAuthorization: () => {
+        get().reset();
+        // Zustand persist rehydrates asynchronously. Remove its backing data
+        // too, otherwise an Admin's cached permissions can flash for the next
+        // user who signs in on this browser.
+        usePermissionStore.persist.clearStorage();
       },
 
       clearError: () => set({ error: null }),
@@ -224,9 +259,7 @@ export const usePermissionStore = create(
         myPermissions: state.myPermissions,
         myPermissionCount: state.myPermissionCount,
         myRoleName: state.myRoleName,
-        isCacheHydrated: state.isCacheHydrated,
       }),
     }
   )
 );
-

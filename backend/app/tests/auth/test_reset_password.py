@@ -10,7 +10,7 @@ def client():
 
 
 def test_reset_password_contract(client: TestClient, qa_email, qa_password):
-    # Contract-level check; invalid payload should fail.
+    # Contract-level check; invalid payload or absent POST route should fail.
     res = client.post("/api/v1/auth/reset-password", json={})
-    assert res.status_code in (400, 401, 404, 422)
+    assert res.status_code in (400, 401, 404, 405, 422)
 

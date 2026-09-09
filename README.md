@@ -1,48 +1,211 @@
-# Face Recognition-Based Attendance System
-> **An Enterprise-Grade, Zero-Knowledge Biometric Time and Attendance Platform with Web3 Anchoring.**
+# VisionCore 2.0
+
+> **AI-Powered Workforce Attendance & Presence Intelligence Platform**
+
+VisionCore 2.0 is a multi-tenant enterprise attendance platform combining face-recognition biometrics, role-based access control (RBAC), and a comprehensive HR operations layer. It replaces manual check-in systems with a camera-based presence pipeline backed by a structured approval workflow.
 
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-00a393.svg)](https://fastapi.tiangolo.com/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-336791.svg)](https://www.postgresql.org/)
-[![Ethereum Web3](https://img.shields.io/badge/Web3-Sepolia_Testnet-627EEA.svg)](https://ethereum.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.141-00a393.svg)](https://fastapi.tiangolo.com/)
+[![React 19](https://img.shields.io/badge/React-19-61dafb.svg)](https://reactjs.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg)](https://www.postgresql.org/)
 
-## Executive Summary
-The Face Recognition-Based Attendance System is a modern, high-performance platform designed to eliminate buddy-punching, streamline payroll operations, and guarantee absolute auditability. By combining state-of-the-art DeepFace models, high-speed `pgvector` similarity searches, and immutable Ethereum blockchain anchoring, this system provides organizations with mathematically undeniable attendance records.
+---
 
-## Key Features
-* **Zero-Knowledge Biometrics**: Raw face images are never stored. The system strictly stores 128-dimensional mathematical embeddings.
-* **Liveness Detection**: Anti-spoofing pipeline rejects static photographs and digital masks.
-* **Web3 Audit Trail**: Every check-in is hashed and anchored to an Ethereum smart contract.
-* **Role-Based Access Control (RBAC)**: Multi-tenant architecture with distinct permissions for SuperAdmins, Admins, Managers, and Employees.
-* **Emotion & Burnout Analytics**: Background analysis of employee sentiment to detect burnout risks and trigger managerial nudges.
-* **Resilient Infrastructure**: Failsafe Redis implementation gracefully degrades token blacklisting without taking the system offline.
+## What VisionCore Does
 
-## Technology Stack
-* **Backend**: FastAPI (Python 3.12)
-* **AI/ML Engine**: DeepFace, PyTorch
-* **Database**: PostgreSQL 15+ with `pgvector` extension
-* **Caching/Rate-Limiting**: Redis (ElastiCache)
-* **Blockchain**: Solidity (`AttendanceAudit.sol`), `web3.py`
-* **Deployment**: Docker Compose, AWS EC2, GitHub Actions
+| Capability | Status |
+|---|---|
+| JWT authentication with HttpOnly refresh cookies | Implemented |
+| Multi-tenant organization isolation | Implemented |
+| Role-Based Access Control (RBAC) | Implemented |
+| Employee directory & user management | Implemented |
+| Face-recognition attendance check-in | Implemented |
+| Liveness / anti-spoofing detection | Implemented |
+| Attendance corrections with manager approval | Implemented |
+| Leave management | Implemented |
+| Payroll management | Implemented |
+| Notifications (in-memory) | Implemented |
+| Analytics dashboards | Implemented (frontend) |
+| Biometric FAR/FRR validation | **Not Verified** |
+| Blockchain audit anchoring | Disabled (config flag off) |
+| Production deployment | **Not Verified** |
 
-## Architecture Snapshot
-The platform employs a hybrid proxy architecture. A lightweight **FastAPI Monolith** handles all HTTP routing, JWT validation, rate limiting, and database interactions. Heavy biometric operations are offloaded via HTTP to an isolated **AI-Service** container, allowing the ML models to fully utilize attached GPUs (like the NVIDIA T4) without blocking concurrent API requests.
+---
 
-## Quick Start
-1. Configure your `.env` variables (see `SETUP.md`).
-2. Run the deployment sequence:
-```bash
-docker-compose -f docker-compose.prod.yml up -d
-docker-compose -f docker-compose.prod.yml run --rm backend alembic upgrade head
+## Architecture Overview
+
+```
+Browser (React 19 + Vite)
+        ↓  HTTP/JSON  (Axios, in-memory JWT)
+FastAPI Backend  (Python 3.12)
+        ↓
+ ┌──────────────────────────────────┐
+ │  Router → Service → Repository  │
+ └──────────────────────────────────┘
+        ↓                   ↓
+  PostgreSQL 15+          Redis
+  (SQLAlchemy 2 ORM)   (rate-limiting,
+  (pgvector embeddings)  token blacklist)
 ```
 
-## Documentation Index
-Comprehensive documentation can be found in the `docs/` directory:
-1. [Project Overview](docs/project-overview.md)
-2. [Architecture Blueprint](docs/architecture.md)
-3. [Database Design](docs/database-design.md)
-4. [Deployment Guide](docs/deployment-guide.md)
-5. [Security Design](docs/security-design.md)
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design.
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.12+
+- Node.js 18+
+- PostgreSQL 15+ with `pgvector` extension
+- Redis (optional — falls back to local rate limiting)
+
+### 1. Backend
+
+```bash
+cd backend
+
+# Create and activate virtual environment
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Copy and edit environment variables
+cp .env.example .env
+# Edit .env: set SECRET_KEY, POSTGRES_PASSWORD, etc.
+
+# Run database migrations
+alembic upgrade head
+
+# Seed initial data (creates roles, default org, admin user)
+python3 -m app.util.init
+
+# Start development server
+uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Backend available at: `http://localhost:8000`
+Interactive API docs: `http://localhost:8000/docs`
+
+### 2. Frontend
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Copy and edit environment
+cp .env.example .env   # or create frontend/.env
+# VITE_API_URL=http://localhost:8000/api/v1
+
+# Start development server
+npm run dev
+```
+
+Frontend available at: `http://localhost:5173`
+
+### 3. PostgreSQL Setup
+
+```sql
+CREATE DATABASE attendance_db;
+CREATE EXTENSION IF NOT EXISTS vector;   -- pgvector for face embeddings
+```
+
+### 4. Redis (optional)
+
+```bash
+redis-server
+```
+
+If Redis is unavailable, the system degrades gracefully to local in-process rate limiting. See [`docs/SECURITY.md`](docs/SECURITY.md) for implications.
+
+---
+
+## Project Structure
+
+```
+backend/
+  app/
+    api/          # Dependency injection (auth, DB session)
+    core/         # Config, security utilities
+    crud/         # Database CRUD helpers
+    db/models/    # SQLAlchemy ORM models
+    repositories/ # Data access layer
+    routers/      # FastAPI route handlers (37 routers)
+    schema/       # Pydantic request/response schemas
+    services/     # Business logic (attendance pipeline, biometrics, audit)
+    tests/        # pytest test suite
+  alembic/        # Database migration scripts
+  main.py         # Application entry point
+
+frontend/
+  src/
+    components/   # Reusable UI components
+    layouts/      # DashboardLayout with nav, notifications
+    pages/        # Route-level page components
+    services/     # API client wrappers
+    store/        # Zustand state (auth, permissions)
+    hooks/        # React hooks
+
+docs/             # Authoritative documentation (see below)
+infrastructure/   # Docker Compose for local services
+deploy/           # Production Docker Compose
+```
+
+---
+
+## Testing
+
+```bash
+# Backend tests
+cd backend
+DEBUG=false pytest app/tests/ -v
+
+# Frontend production build validation
+cd frontend
+npm run build
+```
+
+See [`docs/TESTING.md`](docs/TESTING.md) for the full testing guide.
+
+---
+
+## Documentation
+
+| Document | Purpose |
+|---|---|
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design, data flow, component responsibilities |
+| [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Developer onboarding, setup, conventions |
+| [API.md](docs/API.md) | Core API endpoint reference |
+| [SECURITY.md](docs/SECURITY.md) | Auth, RBAC, tenant isolation, security model |
+| [BIOMETRICS.md](docs/BIOMETRICS.md) | Face recognition pipeline, enrollment, verification |
+| [ATTENDANCE.md](docs/ATTENDANCE.md) | Attendance lifecycle, corrections, leave |
+| [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Docker, environment, production configuration |
+| [TESTING.md](docs/TESTING.md) | Test architecture, commands, coverage |
+| [ROADMAP.md](docs/ROADMAP.md) | Prioritized remaining work |
+
+---
+
+## Security Status
+
+| Area | Status |
+|---|---|
+| JWT in HttpOnly cookies | Implemented |
+| Token rotation on refresh | Implemented |
+| Multi-tenant isolation | Implemented |
+| RBAC permission enforcement | Implemented |
+| Rate limiting (distributed) | Partial (Redis-dependent) |
+| Biometric security hardening | Implemented |
+| Production security audit | **Not Verified** |
+
+See [`docs/SECURITY.md`](docs/SECURITY.md) for details.
+
+---
 
 ## License
-Proprietary / Closed Source. All rights reserved.
+
+Proprietary / Academic Project. All rights reserved.

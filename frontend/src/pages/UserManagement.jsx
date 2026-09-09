@@ -5,12 +5,8 @@ import Webcam from 'react-webcam';
 import { userService } from '../services/userService';
 import { departmentService } from '../services/departmentService';
 import { useAuthStore } from '../store/authStore';
-<<<<<<< HEAD
-import { Card, CardContent } from '../components/ui/Card';
-=======
 import { useToast } from '../components/ui/Toast';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
->>>>>>> refs/remotes/origin/main
+import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
@@ -45,9 +41,10 @@ export default function UserManagement() {
   const menuRef = useRef(null);
   const { user: currentUser } = useAuthStore();
   const toast = useToast();
-  const currentRole = currentUser?.role?.name;
+  const currentRole = currentUser?.role?.name || currentUser?.role;
   const canManageUsers = ['Admin', 'SuperAdmin'].includes(currentRole);
   const canAssignAdmin = currentRole === 'SuperAdmin';
+  const isAdmin = ['Admin', 'SuperAdmin'].includes(currentRole);
 
   const [form, setForm] = useState({ full_name: '', email: '', password: '', role: 'Employee', organization: '' });
   const [editForm, setEditForm] = useState({ full_name: '', role: '', dept_id: '', shift_id: '', is_active: 1 });
@@ -91,8 +88,9 @@ export default function UserManagement() {
       setForm({ full_name: '', email: '', password: '', role: 'Employee', organization: '' });
       toast({ message: `Account provisioned for ${form.full_name}.`, type: 'success' });
       fetchUsers();
-<<<<<<< HEAD
-    } catch (err) { alert(err.response?.data?.detail || 'Failed'); }
+    } catch (err) {
+      toast({ message: err.response?.data?.detail || 'Failed to create user.', type: 'error' });
+    }
   };
 
   const handleEdit = async (e) => {
@@ -106,14 +104,23 @@ export default function UserManagement() {
       if (editForm.is_active !== undefined) payload.is_active = Number(editForm.is_active);
       await userService.updateUser(editUser.id, payload);
       setEditUser(null);
+      toast({ message: 'User updated successfully.', type: 'success' });
       fetchUsers();
-    } catch (err) { alert(err.response?.data?.detail || 'Update failed'); }
+    } catch (err) {
+      toast({ message: err.response?.data?.detail || 'Update failed.', type: 'error' });
+    }
   };
 
   const handleDelete = async (u) => {
     if (!confirm(`Remove ${u.full_name}? This will deactivate and archive their account.`)) return;
-    try { await userService.deleteUser(u.id); fetchUsers(); setSelectedUser(null); }
-    catch (err) { alert(err.response?.data?.detail || 'Delete failed'); }
+    try {
+      await userService.deleteUser(u.id);
+      fetchUsers();
+      setSelectedUser(null);
+      toast({ message: 'User deleted successfully.', type: 'success' });
+    } catch (err) {
+      toast({ message: err.response?.data?.detail || 'Delete failed', type: 'error' });
+    }
   };
 
   const handleToggleActive = async (u) => {
@@ -121,7 +128,10 @@ export default function UserManagement() {
       await userService.updateUser(u.id, { is_active: u.is_active ? 0 : 1 });
       fetchUsers();
       if (selectedUser?.id === u.id) setSelectedUser({ ...u, is_active: u.is_active ? 0 : 1 });
-    } catch (err) { alert(err.response?.data?.detail || 'Failed'); }
+      toast({ message: `User status updated to ${u.is_active ? 'Inactive' : 'Active'}.`, type: 'success' });
+    } catch (err) {
+      toast({ message: err.response?.data?.detail || 'Failed', type: 'error' });
+    }
   };
 
   const openEdit = (u) => {
@@ -130,116 +140,38 @@ export default function UserManagement() {
     setActionMenu(null);
   };
 
-  const handleEnroll = async () => {
-    if (!webcamRef.current || !enrollUser) return;
-    try {
-      const mockEmbedding = Array.from({ length: 128 }, () => Math.random());
-      await userService.enrollFace(enrollUser.id, mockEmbedding);
-      setEnrollUser(null); fetchUsers();
-    } catch (err) { alert(err.response?.data?.detail || 'Enrollment failed'); }
-=======
-    } catch (err) {
-      toast({ message: err.response?.data?.detail || 'Failed to create user.', type: 'error' });
-    }
-  };
-
-  // const handleEnroll = async () => {
-  //   if (!webcamRef.current || !enrollUser) return;
-  //   try {
-  //     // const mockEmbedding = Array.from({ length: 128 }, () => Math.random());
-  //     // await userService.enrollFace(enrollUser.id, mockEmbedding);
-  //     // setEnrollUser(null);
-  //     // toast({ message: `Biometric template saved for ${enrollUser.full_name}.`, type: 'success' });
-  //     // fetchUsers();
-  //     const dataURLtoFile = async (dataUrl, filename) => {
-  //       const response = await fetch(dataUrl);
-  //       const blob = await response.blob();
-
-  //       return new File(
-  //         [blob],
-  //         filename,
-  //         {
-  //           type: "image/jpeg",
-  //         }
-  //       );
-  //     };
-  //   } catch (err) {
-  //     toast({ message: err.response?.data?.detail || 'Enrollment failed.', type: 'error' });
-  //   }
-  // };
-
-
-const handleEnroll = async () => {
-  if (!webcamRef.current || !enrollUser) {
-    return;
-  }
-
-  try {
-    const imageSrc =
-      webcamRef.current.getScreenshot();
-
-    if (!imageSrc) {
-      throw new Error(
-        "Failed to capture image"
-      );
-    }
-
-    const imageFile =
-      dataURLtoFile(
-        imageSrc,
-        "face.jpg"
-      );
-
-    await userService.enrollFace(
-      enrollUser.id,
-      imageFile
-    );
-
-    toast({
-      message: `Biometric template saved for ${enrollUser.full_name}.`,
-      type: "success",
-    });
-
-    setEnrollUser(null);
-
-    fetchUsers();
-  } catch (err) {
-    console.error(err);
-
-    toast({
-      message:
-        err.response?.data?.detail ||
-        "Enrollment failed.",
-      type: "error",
-    });
-  }
-};
   const dataURLtoFile = (dataurl, filename) => {
     const arr = dataurl.split(",");
     const mime = arr[0].match(/:(.*?);/)[1];
-
     const bstr = atob(arr[1]);
-
     let n = bstr.length;
-
     const u8arr = new Uint8Array(n);
-
     while (n--) {
       u8arr[n] = bstr.charCodeAt(n);
     }
+    return new File([u8arr], filename, { type: mime });
+  };
 
-    return new File(
-      [u8arr],
-      filename,
-      { type: mime }
-    );
->>>>>>> refs/remotes/origin/main
+  const handleEnroll = async () => {
+    if (!webcamRef.current || !enrollUser) return;
+    try {
+      const imageSrc = webcamRef.current.getScreenshot();
+      if (!imageSrc) throw new Error("Failed to capture image");
+      const imageFile = dataURLtoFile(imageSrc, "face.jpg");
+      await userService.enrollFace(enrollUser.id, imageFile);
+      toast({ message: `Biometric template saved for ${enrollUser.full_name}.`, type: "success" });
+      setEnrollUser(null);
+      fetchUsers();
+    } catch (err) {
+      console.error(err);
+      toast({ message: err.response?.data?.detail || err.message || "Enrollment failed.", type: "error" });
+    }
   };
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const roleBadgeVariant = (name) => {
-    if (name === 'Admin') return 'danger';
+    if (name === 'Admin' || name === 'SuperAdmin') return 'danger';
     if (name === 'Manager') return 'warning';
     return 'primary';
   };
@@ -291,7 +223,6 @@ const handleEnroll = async () => {
               <EmptyState icon={Shield} title="No employees found" description="Try adjusting your filters or add a new employee."
                 actionText="Add Employee" onAction={() => setShowAdd(true)} />
             ) : (
-<<<<<<< HEAD
               <>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
@@ -303,72 +234,6 @@ const handleEnroll = async () => {
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Joined</th>
                         {isAdmin && <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Actions</th>}
-=======
-              <div className="overflow-x-auto hide-scrollbar">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50/80 dark:bg-slate-800/50 backdrop-blur-sm border-b border-slate-100 dark:border-slate-800">
-                      <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Employee</th>
-                      <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Role</th>
-                      <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Organization</th>
-                      <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 bg-white dark:bg-transparent">
-                    {filtered.map((u) => (
-                      <tr key={u.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-4">
-                            <Avatar name={u.full_name} size="md" className="shadow-sm border border-slate-100 dark:border-slate-800" />
-                            <div>
-                              <p className="text-sm font-semibold text-slate-900 dark:text-white group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">{u.full_name}</p>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
-                                <Mail className="h-3 w-3" /> {u.email}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <Badge
-                            variant={
-                              u.role?.name === 'Admin'
-                                ? 'danger'
-                                : u.role?.name === 'Manager'
-                                ? 'warning'
-                                : 'primary'
-                            }
-                            className="font-medium px-2.5 py-1"
-                          >
-                            {u.role?.name}
-                          </Badge>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400">
-                            <Building className="h-4 w-4 opacity-70" />
-                            {u.organization?.name || '-'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <span className={cn(`h-2.5 w-2.5 rounded-full shadow-sm`, u.is_active ? 'bg-emerald-500 shadow-emerald-500/20' : 'bg-slate-300 dark:bg-slate-600')} />
-                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{u.is_active ? 'Active' : 'Inactive'}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          {canManageUsers && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-500/10"
-                              onClick={() => setEnrollUser(u)}
-                            >
-                              <Camera className="mr-2 h-4 w-4" />
-                              Enroll Face
-                            </Button>
-                          )}
-                        </td>
->>>>>>> refs/remotes/origin/main
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 bg-white dark:bg-transparent">
@@ -384,8 +249,8 @@ const handleEnroll = async () => {
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4"><span className="text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">{u.employee_id}</span></td>
-                          <td className="px-6 py-4"><Badge variant={roleBadgeVariant(u.role?.name)} className="font-medium px-2.5 py-1">{u.role?.name}</Badge></td>
+                          <td className="px-6 py-4"><span className="text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">{u.employee_id || u.id}</span></td>
+                          <td className="px-6 py-4"><Badge variant={roleBadgeVariant(u.role?.name || u.role)} className="font-medium px-2.5 py-1">{u.role?.name || u.role}</Badge></td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
                               <span className={cn('h-2.5 w-2.5 rounded-full shadow-sm', u.is_active ? 'bg-emerald-500 shadow-emerald-500/20' : 'bg-slate-300 dark:bg-slate-600')} />
@@ -452,14 +317,15 @@ const handleEnroll = async () => {
                   <h3 className="text-xl font-bold text-slate-900 dark:text-white">{selectedUser.full_name}</h3>
                   <p className="text-sm text-slate-500 dark:text-slate-400">{selectedUser.email}</p>
                   <div className="flex items-center gap-2 mt-3">
-                    <Badge variant={roleBadgeVariant(selectedUser.role?.name)}>{selectedUser.role?.name}</Badge>
+                    <Badge variant={roleBadgeVariant(selectedUser.role?.name || selectedUser.role)}>{selectedUser.role?.name || selectedUser.role}</Badge>
                     <Badge variant={selectedUser.is_active ? 'success' : 'default'}>{selectedUser.is_active ? 'Active' : 'Inactive'}</Badge>
                   </div>
                 </div>
                 <div className="space-y-4">
                   {[
-                    { icon: Hash, label: 'Employee ID', value: selectedUser.employee_id },
-                    { icon: Building, label: 'Organization', value: selectedUser.org_id?.slice(0, 8) + '...' },
+                    { icon: Hash, label: 'Employee ID', value: selectedUser.employee_id || selectedUser.id },
+                    { icon: Building, label: 'Organization', value: selectedUser.org_name || selectedUser.organization?.name || (selectedUser.org_id?.slice ? selectedUser.org_id.slice(0, 8) : 'N/A') },
+                    { icon: Building, label: 'Department', value: selectedUser.dept_name || 'N/A' },
                     { icon: Clock, label: 'Joined', value: formatDate(selectedUser.created_at) },
                   ].map((item) => (
                     <div key={item.label} className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
@@ -489,11 +355,6 @@ const handleEnroll = async () => {
               <Input label="Email Address" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required className="bg-slate-50 dark:bg-slate-900/50" />
               <Input label="Temporary Password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required className="bg-slate-50 dark:bg-slate-900/50" />
               <div className="grid grid-cols-2 gap-4">
-<<<<<<< HEAD
-                <Select label="Role" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
-                  options={[{ value: 'Employee', label: 'Employee' }, { value: 'Manager', label: 'Manager' }, { value: 'Admin', label: 'Admin' }]} />
-                <Input label="Organization" value={form.organization} onChange={(e) => setForm({ ...form, organization: e.target.value })} required className="bg-slate-50 dark:bg-slate-900/50" />
-=======
                 <Select
                   label="Role Assignment"
                   value={form.role}
@@ -512,7 +373,6 @@ const handleEnroll = async () => {
                   required
                   className="bg-slate-50 dark:bg-slate-900/50"
                 />
->>>>>>> refs/remotes/origin/main
               </div>
               <div className="flex gap-3 pt-6 border-t border-slate-100 dark:border-slate-800 mt-6">
                 <Button type="button" variant="ghost" className="flex-1" onClick={() => setShowAdd(false)}>Cancel</Button>

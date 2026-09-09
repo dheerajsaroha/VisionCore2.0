@@ -19,8 +19,12 @@ class CheckInRequest(BaseModel):
 class AttendanceLogResponse(BaseModel):
     id: int
     user_id: int
+    user_name: Optional[str] = None
+    user_email: Optional[str] = None
     check_in: datetime
     check_out: Optional[datetime] = None
+    break_start: Optional[datetime] = None
+    break_end: Optional[datetime] = None
     status: str
     emotion: Optional[str] = None
     is_live: int
@@ -29,9 +33,11 @@ class AttendanceLogResponse(BaseModel):
     created_at: datetime
     
     model_config = ConfigDict(from_attributes=True)
+
         
 class CheckOutRequest(BaseModel):
-    user_id: int
+    user_id: Optional[int] = None
+    image_base64: Optional[str] = Field(None, max_length=5000000)
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 class SyncLogsRequest(BaseModel):

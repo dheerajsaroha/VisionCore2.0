@@ -1,0 +1,358 @@
+{
+  "metadata": {
+    "run_at": "2026-08-31T20:28:05.857685",
+    "base_url": "http://127.0.0.1:8000/api/v1",
+    "threshold": 0.4,
+    "total": 30,
+    "passes": 30,
+    "fails": 0,
+    "warns": 0
+  },
+  "results": {
+    "SESSION": [
+      {
+        "test": "Login_SuperAdmin",
+        "status": "PASS",
+        "details": {
+          "summary": "Authenticated as SuperAdmin (superadmin@test.com)",
+          "access_token_len": 219,
+          "has_refresh_token": false
+        },
+        "timestamp": "2026-08-31T20:28:03.319057"
+      },
+      {
+        "test": "Login_Admin",
+        "status": "PASS",
+        "details": {
+          "summary": "Authenticated as Admin (james.rodriguez@visioncore.com)",
+          "access_token_len": 217,
+          "has_refresh_token": false
+        },
+        "timestamp": "2026-08-31T20:28:03.635837"
+      },
+      {
+        "test": "Login_HR",
+        "status": "PASS",
+        "details": {
+          "summary": "Authenticated as HR (hr@visioncore.io)",
+          "access_token_len": 220,
+          "has_refresh_token": false
+        },
+        "timestamp": "2026-08-31T20:28:03.690675"
+      },
+      {
+        "test": "Login_Manager",
+        "status": "PASS",
+        "details": {
+          "summary": "Authenticated as Manager (sarah.thompson@visioncore.com)",
+          "access_token_len": 217,
+          "has_refresh_token": false
+        },
+        "timestamp": "2026-08-31T20:28:04.009709"
+      },
+      {
+        "test": "Login_Employee",
+        "status": "PASS",
+        "details": {
+          "summary": "Authenticated as Employee (john.davis@visioncore.com)",
+          "access_token_len": 219,
+          "has_refresh_token": false
+        },
+        "timestamp": "2026-08-31T20:28:04.319453"
+      },
+      {
+        "test": "Login_Candidate",
+        "status": "PASS",
+        "details": {
+          "summary": "Authenticated as Candidate (candidate@visioncore.io)",
+          "access_token_len": 220,
+          "has_refresh_token": false
+        },
+        "timestamp": "2026-08-31T20:28:04.621819"
+      }
+    ],
+    "FACE_VERIFICATION": [
+      {
+        "test": "Enroll_Employee_A_Raw_Vector_Rejection",
+        "status": "PASS",
+        "details": {
+          "summary": "Client-supplied raw embedding correctly rejected with HTTP 400",
+          "user_id": 11,
+          "vector_dims": 128,
+          "http_status": 400,
+          "response": "{\"detail\":\"Client-supplied biometric embeddings are not accepted\"}"
+        },
+        "timestamp": "2026-08-31T20:28:04.635376"
+      },
+      {
+        "test": "Enroll_Employee_B_Raw_Vector_Rejection",
+        "status": "PASS",
+        "details": {
+          "summary": "Client-supplied raw embedding correctly rejected with HTTP 400",
+          "user_id": 8,
+          "vector_dims": 128,
+          "http_status": 400,
+          "response": "{\"detail\":\"Client-supplied biometric embeddings are not accepted\"}"
+        },
+        "timestamp": "2026-08-31T20:28:04.649257"
+      },
+      {
+        "test": "L2_Distance_Metrics",
+        "status": "PASS",
+        "details": {
+          "summary": "Self=0.0000, Cross-employee=5.8265, Imposter(close)=0.0275, Threshold=0.4",
+          "self_distance": 0.0,
+          "cross_employee_distance": 5.826482643928496,
+          "imposter_distance": 0.027477263328068196,
+          "threshold": 0.4,
+          "verdict_self": "MATCH (correct)",
+          "verdict_cross": "REJECTED (correct)",
+          "verdict_imposter": "FALSE POSITIVE (defect)",
+          "embedding_id_A": 36,
+          "embedding_id_B": 37,
+          "org_scope": "tenant-scoped"
+        },
+        "timestamp": "2026-08-31T20:28:05.512324"
+      }
+    ],
+    "ATTENDANCE": [
+      {
+        "test": "CheckIn_Image_Requirement_Security",
+        "status": "PASS",
+        "details": {
+          "summary": "Check-in without image correctly rejected: HTTP 400",
+          "response": "{\"detail\":\"Image required for recognition\"}"
+        },
+        "timestamp": "2026-08-31T20:28:05.529490"
+      },
+      {
+        "test": "Duplicate_CheckIn_Prevention",
+        "status": "PASS",
+        "details": {
+          "summary": "Second check-in HTTP 400 (expected 400/409 if dup prevented)",
+          "http_status": 400,
+          "note": "System logged duplicate or returned expected conflict status"
+        },
+        "timestamp": "2026-08-31T20:28:05.542109"
+      },
+      {
+        "test": "Submit_Correction_Request",
+        "status": "PASS",
+        "details": {
+          "summary": "Correction #17 submitted",
+          "correction": {
+            "id": 17,
+            "status": "pending",
+            "reason": "Traffic delay \u2014 runtime regularization test",
+            "created_at": "2026-08-31T20:28:05.553250+05:30"
+          }
+        },
+        "timestamp": "2026-08-31T20:28:05.559095"
+      },
+      {
+        "test": "Manager_Approval_of_Correction",
+        "status": "PASS",
+        "details": {
+          "summary": "Approval HTTP 200",
+          "response": {
+            "id": 17,
+            "status": "approved",
+            "reviewed_at": "2026-08-31T20:28:05.576578+05:30"
+          }
+        },
+        "timestamp": "2026-08-31T20:28:05.583549"
+      },
+      {
+        "test": "Attendance_Summary_Fetch",
+        "status": "PASS",
+        "details": {
+          "summary": "Summary HTTP 200",
+          "data": {
+            "user_id": 11,
+            "month": 8,
+            "year": 2026,
+            "total_days_logged": 4,
+            "present_count": 2,
+            "late_count": 2,
+            "attendance_rate_pct": 50.0
+          }
+        },
+        "timestamp": "2026-08-31T20:28:05.603526"
+      }
+    ],
+    "RBAC": [
+      {
+        "test": "Employee_Cannot_Create_User",
+        "status": "PASS",
+        "details": {
+          "summary": "Employee user create returned HTTP 422 (expected 403/422)",
+          "http_status": 422
+        },
+        "timestamp": "2026-08-31T20:28:05.621066"
+      },
+      {
+        "test": "Employee_Cannot_Approve_Correction",
+        "status": "PASS",
+        "details": {
+          "summary": "Employee correction approval returned HTTP 403 (expected 403)",
+          "http_status": 403
+        },
+        "timestamp": "2026-08-31T20:28:05.633349"
+      },
+      {
+        "test": "Unauthenticated_Access_Denied",
+        "status": "PASS",
+        "details": {
+          "summary": "/users/me without token: HTTP 401 (expected 401)",
+          "http_status": 401
+        },
+        "timestamp": "2026-08-31T20:28:05.638036"
+      },
+      {
+        "test": "Admin_Can_List_Users",
+        "status": "PASS",
+        "details": {
+          "summary": "Admin user list HTTP 200",
+          "http_status": 200
+        },
+        "timestamp": "2026-08-31T20:28:05.661342"
+      }
+    ],
+    "TENANT_ISOLATION": [
+      {
+        "test": "Biometric_Org_Isolation_Check",
+        "status": "PASS",
+        "details": {
+          "summary": "Employee org_id(cd36d8f7-2f2a-4c82-83b3-f84e6b5f13d9) vs HR org_id(58278af2-cc0b-4581-a800-2d47fa6f921f) \u2014 same_org=False",
+          "employee_org": "cd36d8f7-2f2a-4c82-83b3-f84e6b5f13d9",
+          "hr_org": "58278af2-cc0b-4581-a800-2d47fa6f921f",
+          "isolated": true
+        },
+        "timestamp": "2026-08-31T20:28:05.701414"
+      }
+    ],
+    "DATABASE": [
+      {
+        "test": "Table_Row_Counts",
+        "status": "PASS",
+        "details": {
+          "summary": "Users=136, Orgs=65, Roles=32, Depts=394, Embeddings=37, Logs=52, Corrections=17",
+          "users": 136,
+          "orgs": 65,
+          "roles": 32,
+          "departments": 394,
+          "face_embeddings": 37,
+          "attendance_logs": 52,
+          "corrections": 17
+        },
+        "timestamp": "2026-08-31T20:28:05.741535"
+      },
+      {
+        "test": "Orphan_Face_Embeddings",
+        "status": "PASS",
+        "details": {
+          "summary": "0 orphaned face embeddings found (expected 0)",
+          "orphan_count": 0
+        },
+        "timestamp": "2026-08-31T20:28:05.742921"
+      },
+      {
+        "test": "Duplicate_Active_Embeddings",
+        "status": "PASS",
+        "details": {
+          "summary": "0 users have >1 active embedding (expected 0)",
+          "duplicates": []
+        },
+        "timestamp": "2026-08-31T20:28:05.743656"
+      },
+      {
+        "test": "Orphan_Attendance_Logs",
+        "status": "PASS",
+        "details": {
+          "summary": "0 orphaned attendance logs (expected 0)",
+          "orphan_count": 0
+        },
+        "timestamp": "2026-08-31T20:28:05.744580"
+      }
+    ],
+    "API_HEALTH": [
+      {
+        "test": "GET__users_me",
+        "status": "PASS",
+        "details": {
+          "summary": "Current user profile: HTTP 200",
+          "endpoint": "GET /users/me",
+          "role": "Admin",
+          "http_status": 200
+        },
+        "timestamp": "2026-08-31T20:28:05.755472"
+      },
+      {
+        "test": "GET__users_",
+        "status": "PASS",
+        "details": {
+          "summary": "User list (org scoped): HTTP 200",
+          "endpoint": "GET /users/",
+          "role": "Admin",
+          "http_status": 200
+        },
+        "timestamp": "2026-08-31T20:28:05.781018"
+      },
+      {
+        "test": "GET__attendance_logs",
+        "status": "PASS",
+        "details": {
+          "summary": "Attendance logs: HTTP 200",
+          "endpoint": "GET /attendance/logs",
+          "role": "Employee",
+          "http_status": 200
+        },
+        "timestamp": "2026-08-31T20:28:05.798299"
+      },
+      {
+        "test": "GET__attendance_summary",
+        "status": "PASS",
+        "details": {
+          "summary": "Attendance summary: HTTP 200",
+          "endpoint": "GET /attendance/summary",
+          "role": "Employee",
+          "http_status": 200
+        },
+        "timestamp": "2026-08-31T20:28:05.811383"
+      },
+      {
+        "test": "GET__attendance_corrections",
+        "status": "PASS",
+        "details": {
+          "summary": "Corrections list: HTTP 200",
+          "endpoint": "GET /attendance/corrections",
+          "role": "Employee",
+          "http_status": 200
+        },
+        "timestamp": "2026-08-31T20:28:05.830217"
+      },
+      {
+        "test": "GET__leave_requests",
+        "status": "PASS",
+        "details": {
+          "summary": "Leave requests: HTTP 200",
+          "endpoint": "GET /leave/requests",
+          "role": "Employee",
+          "http_status": 200
+        },
+        "timestamp": "2026-08-31T20:28:05.843997"
+      },
+      {
+        "test": "GET__payroll_",
+        "status": "PASS",
+        "details": {
+          "summary": "Payroll records: HTTP 200",
+          "endpoint": "GET /payroll/",
+          "role": "Admin",
+          "http_status": 200
+        },
+        "timestamp": "2026-08-31T20:28:05.857160"
+      }
+    ]
+  }
+}

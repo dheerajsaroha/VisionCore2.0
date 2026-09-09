@@ -3,50 +3,35 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { usePermission } from '../hooks/usePermission';
 import { DashboardSkeleton } from './SkeletonLoader';
+import { permissionForPath } from '../lib/routeAuthorization';
 
 /**
  * ProtectedRoute - Guards routes based on authentication, permissions, and features.
  *
  * @param {React.ReactNode} children - The component to render if authorized
-<<<<<<< HEAD
  * @param {string} requiredRole - (DEPRECATED) Legacy role-based check — use requiredPermission instead
+ * @param {string[]} requiredRoles - Optional list of allowed roles
  * @param {string} requiredPermission - Permission required to access this route
  * @param {string} requiredFeature - Feature flag required (e.g., 'payroll', 'recruitment')
  * @param {string} redirectTo - Where to redirect on auth failure (default: /login)
  * @param {string} fallbackPath - Where to redirect on permission failure (default: /dashboard)
- *
- * Usage:
- *   <ProtectedRoute requiredPermission="users.read">
- *     <UserManagement />
- *   </ProtectedRoute>
- *
- *   <ProtectedRoute requiredFeature="payroll" requiredPermission="payroll.read">
- *     <Payroll />
- *   </ProtectedRoute>
- *
- * NOTE: requiredRole is DEPRECATED. Migrate to requiredPermission.
  */
 export const ProtectedRoute = ({
   children,
   requiredRole,
+  requiredRoles,
   requiredPermission,
   requiredFeature,
   redirectTo = '/login',
-  fallbackPath = '/dashboard',
+  fallbackPath = '/403',
 }) => {
-  const { isAuthenticated, user, isHydrated: authHydrated } = useAuthStore();
+  const { isAuthenticated, user, isHydrated: authHydrated, authorizationInitialized } = useAuthStore();
   const { hasPermission, hasFeature, isHydrated: permHydrated, isLoading: permLoading } = usePermission();
-=======
- * @param {string} requiredRole - Optional single role requirement
- * @param {string[]} requiredRoles - Optional list of allowed roles
- */
-export const ProtectedRoute = ({ children, requiredRole, requiredRoles }) => {
-  const { isAuthenticated, user, isHydrated } = useAuthStore();
->>>>>>> refs/remotes/origin/main
   const location = useLocation();
+  const routePermission = requiredPermission || permissionForPath(location.pathname);
 
   // Show loading while auth state is being restored
-  if (!authHydrated || (requiredPermission && permLoading)) {
+  if (!authHydrated || (isAuthenticated && routePermission && (!authorizationInitialized || permLoading || !permHydrated))) {
     return <DashboardSkeleton />;
   }
 
@@ -55,39 +40,24 @@ export const ProtectedRoute = ({ children, requiredRole, requiredRoles }) => {
     return <Navigate to={redirectTo} state={{ from: location }} replace />;
   }
 
-<<<<<<< HEAD
-  // ── NEW: Permission-based check ──────────────────────────────────────────
-  if (requiredPermission) {
-    if (!permHydrated) {
-      return <DashboardSkeleton />;
-    }
-
-    if (!hasPermission(requiredPermission)) {
+  // ── Permission-based check ──────────────────────────────────────────
+  if (routePermission) {
+    if (!hasPermission(routePermission)) {
       return <Navigate to={fallbackPath} replace />;
     }
   }
 
-  // ── NEW: Feature-based check ────────────────────────────────────────────
+  // ── Feature-based check ────────────────────────────────────────────
   if (requiredFeature) {
     if (!hasFeature(requiredFeature)) {
       return <Navigate to={fallbackPath} replace />;
     }
   }
 
-  // ── DEPRECATED: Legacy role-based check ──────────────────────────────────
-  if (requiredRole) {
-    const userRole = user?.role?.name;
-    const allowedRoles = requiredRole === 'Admin'
-      ? ['Admin', 'Manager', 'SuperAdmin']
-      : [requiredRole];
-=======
+  // ── Role-based check (Legacy / Fallback) ──────────────────────────────────
   const allowedRoles = requiredRoles || (requiredRole ? [requiredRole] : null);
-
-  // Role-based access control
   if (allowedRoles) {
-    const userRole = user?.role?.name;
->>>>>>> refs/remotes/origin/main
-
+    const userRole = user?.role?.name || user?.role;
     if (!allowedRoles.includes(userRole)) {
       return <Navigate to={fallbackPath} replace />;
     }
@@ -95,15 +65,9 @@ export const ProtectedRoute = ({ children, requiredRole, requiredRoles }) => {
 
   return children;
 };
-<<<<<<< HEAD
 
 /**
  * PermissionRoute — Alias for ProtectedRoute with permission-based access.
- *
- * Usage:
- *   <PermissionRoute permission="users.read" feature="attendance">
- *     <UsersPage />
- *   </PermissionRoute>
  */
 export const PermissionRoute = ({ permission, feature, children, ...props }) => (
   <ProtectedRoute
@@ -116,6 +80,3 @@ export const PermissionRoute = ({ permission, feature, children, ...props }) => 
 );
 
 export default ProtectedRoute;
-
-=======
->>>>>>> refs/remotes/origin/main

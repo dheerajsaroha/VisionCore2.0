@@ -1,42 +1,72 @@
 # Infrastructure
 
-This directory contains the local and cloud deployment artifacts for the platform.
+Local development services and deployment artifacts for VisionCore 2.0.
 
-## Files
+---
 
-- `docker-compose.yml` - Local development and staging orchestrator that brings up PostgreSQL with pgvector, Redis, RabbitMQ, gateway, auth-service, ai-service, attendance-service, blockchain-service, and analytics-service.
-- `k8s/` - Kubernetes manifests for production-ready deployment, including ConfigMaps, Secrets, and Ingress definitions.
+## Local Development Services
 
-## Local setup
-
-From the repository root:
+`infrastructure/docker-compose.yml` starts the **local backing services** required by the backend:
 
 ```bash
 cd infrastructure
-docker compose up --build -d
+docker compose up -d
 ```
 
-Service endpoints:
+This starts:
 
-- Gateway: `http://localhost:8000`
-- Auth service: `http://localhost:8001`
-- AI service: `http://localhost:8002`
-- Attendance service: `http://localhost:8003`
-- Blockchain service: `http://localhost:8004`
-- Analytics service: `http://localhost:8005`
+| Service | Image | Port | Purpose |
+|---|---|---|---|
+| PostgreSQL | `ankane/pgvector:v0.5.1` | `5432` | Primary database (includes pgvector for face embeddings) |
+| Redis | `redis:7.2-alpine` | `6379` | Token blacklist, rate limiting cache |
+
+**Note:** The backend application itself is **not** started by this compose file. Run the FastAPI backend separately — see [docs/DEVELOPMENT.md](../docs/DEVELOPMENT.md).
+
+---
+
+## Database Initialization
+
+The `database/` subdirectory contains:
+
+- `init.sql` — Initial schema bootstrap script (pgvector extension, base tables)
+
+This script runs automatically when the `postgres` container starts for the first time via Docker's `entrypoint-initdb.d` mechanism.
+
+After the container is running, apply Alembic migrations:
+
+```bash
+cd backend
+alembic upgrade head
+```
+
+---
+
+## Production Deployment
+
+See [`docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md) for the full production deployment guide, including:
+
+- `docker-compose.prod.yml` (repository root) — full-stack production compose
+- `deploy/` — Docker Compose, Nginx config, database init scripts, environment template
+- Environment variable reference
+
+---
 
 ## Kubernetes
 
-Build container images and deploy using your chosen registry. The `k8s/` folder contains:
+The `k8s/` directory contains Kubernetes manifests:
 
-- `configmaps.yaml` - environment variables and shared configuration.
-- `secrets.yaml` - encrypted secret references for DB credentials and JWT signing keys.
-- `ingress.yaml` - external routing into the cluster.
+| File | Purpose |
+|---|---|
+| `k8s/configmaps.yaml` | Environment configuration |
+| `k8s/secrets.yaml` | Secret references (DB credentials, JWT key) |
+| `k8s/ingress.yaml` | External routing |
 
-Deploy with:
+> **Status: NOT VERIFIED.** The Kubernetes manifests have not been validated against the current application. Review and update before use in production.
 
 ```bash
 kubectl apply -f infrastructure/k8s/
 ```
 
-For production, ensure the cluster is configured with persistent volumes for PostgreSQL and a secrets manager for TLS and JWT secrets.
+---
+
+For full setup instructions, see [docs/DEVELOPMENT.md](../docs/DEVELOPMENT.md).

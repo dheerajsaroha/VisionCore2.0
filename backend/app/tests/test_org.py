@@ -14,12 +14,17 @@ class MockRole:
 class MockUser:
     id = 1
     org_id = uuid.UUID("12345678-1234-4678-8234-567812345678")
+    role_id = 1
     role = MockRole()
 
 def override_get_current_active_user():
     return MockUser()
 
-app.dependency_overrides[deps.get_current_active_user] = override_get_current_active_user
+@pytest.fixture(autouse=True)
+def setup_org_overrides():
+    app.dependency_overrides[deps.get_current_active_user] = override_get_current_active_user
+    yield
+    app.dependency_overrides.pop(deps.get_current_active_user, None)
 
 @pytest.fixture
 def auth_headers():

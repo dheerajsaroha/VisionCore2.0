@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from sqlalchemy.orm import Session
 from app.core.security import get_password_hash
+from app.core.biometric_crypto import encrypt_embedding
 from app.db.models.all_models import User, FaceEmbedding, Organization, Role
 
 
@@ -74,20 +75,14 @@ class CRUDUser:
             org_id=org_id,
             role_id=role.id,
             employee_id=f"EMP-{uuid.uuid4().hex[:6].upper()}",
-<<<<<<< HEAD
-            is_active=1,
-            is_deleted=0,
-=======
             is_active=1,   # Integer column: 1=active, 0=suspended
             is_deleted=0,  # Integer column: 0=active, 1=soft-deleted
->>>>>>> refs/remotes/origin/main
         )
         db.add(db_obj)
         db.commit()
         db.refresh(db_obj)
         return db_obj
 
-<<<<<<< HEAD
     def update(self, db: Session, *, user_id: int, org_id: uuid.UUID, obj_in: dict) -> Optional[User]:
         """
         Update editable fields on a user. Scoped to org_id for tenant safety.
@@ -137,36 +132,25 @@ class CRUDUser:
         """
         Stores or replaces the face embedding for a user.
         Marks any previous embedding as inactive.
+        Stores tenant-isolated, encrypted backup of the biometric vector.
         """
-        # Deactivate previous
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise ValueError(f"User {user_id} not found")
+
         db.query(FaceEmbedding).filter(
             FaceEmbedding.user_id == user_id,
             FaceEmbedding.is_active == 1
-        ).update({"is_active": 0})
+        ).update({"is_active": 0}, synchronize_session=False)
         db.commit()
-=======
-
-    def enroll_face(self,db: Session,*,user_id: int,embedding: list,) -> FaceEmbedding:
-   
-
-        db.query(FaceEmbedding).filter(
-            FaceEmbedding.user_id == user_id,
-            FaceEmbedding.is_active == 1,
-        ).update(
-            {"is_active": 0},
-            synchronize_session=False,
-        )
->>>>>>> refs/remotes/origin/main
 
         face_obj = FaceEmbedding(
             user_id=user_id,
+            org_id=user.org_id,
             embedding=embedding,
+            encrypted_embedding=encrypt_embedding(embedding),
             model_name="face_recognition",
-<<<<<<< HEAD
             is_active=1
-=======
-            is_active=1,
->>>>>>> refs/remotes/origin/main
         )
 
         db.add(face_obj)

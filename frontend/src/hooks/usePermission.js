@@ -21,16 +21,14 @@ export function usePermission() {
   const subStore = useSubscriptionStore();
   const authStore = useAuthStore();
 
-  // Hydrate permissions + subscription on mount if not already cached
+  // Authorization is initialized by authStore after /users/me resolves. A
+  // permission hook must never start an unauthenticated or competing fetch.
   useEffect(() => {
-    if (!permStore.isCacheHydrated && !permStore.isLoading) {
-      permStore.fetchMyPermissions();
-    }
-    if (!subStore.isCacheHydrated && !subStore.isLoading) {
+    if (authStore.isAuthenticated && authStore.authorizationInitialized && !subStore.isCacheHydrated && !subStore.isLoading) {
       subStore.fetchMySubscription();
     }
   }, [
-    permStore, permStore.isCacheHydrated, permStore.isLoading, permStore.fetchMyPermissions,
+    authStore.isAuthenticated, authStore.authorizationInitialized,
     subStore, subStore.isCacheHydrated, subStore.isLoading, subStore.fetchMySubscription,
   ]);
 
@@ -176,8 +174,8 @@ export function usePermission() {
     permissions: permStore.myPermissions,
     permissionCount: permStore.myPermissionCount,
     roleName: permStore.myRoleName,
-    isLoading: permStore.isLoading && !permStore.isCacheHydrated,
-    isHydrated: permStore.isCacheHydrated,
+    isLoading: permStore.isLoading || (authStore.isAuthenticated && !permStore.authorizationInitialized),
+    isHydrated: permStore.authorizationInitialized,
     error: permStore.error,
 
     // Subscription

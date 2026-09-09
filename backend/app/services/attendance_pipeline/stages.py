@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -60,11 +61,17 @@ def match_by_vector(
     *,
     embedding: list[float],
     threshold: float,
+    org_id: UUID | None,
     attendance_repo: AttendanceRepository,
 ) -> MatchStageResult:
-    # attendance_repo currently returns user_id only.
-    # For Phase 3 end-to-end, we keep distance None until we extend the repo.
-    res = attendance_repo.find_user_by_face(db, embedding=embedding, threshold=threshold)
+    # Identification must be tenant-scoped before a user ID is selected. Do
+    # not rely on a later authorization check; privileged users could otherwise
+    # turn a cross-tenant match into an attendance record.
+    if org_id is None:
+        raise PermissionError("Organization context is required for biometric matching")
+    res = attendance_repo.find_user_by_face(
+        db, embedding=embedding, threshold=threshold, org_id=org_id
+    )
     matched_user_id = getattr(res, "user_id", None)
     import logging
     logger = logging.getLogger(__name__)
@@ -79,4 +86,3 @@ def extract_emotion(image_bytes: bytes) -> EmotionStageResult:
     # emotion analysis is best-effort; fallback handled in face_engine
     emotion = face_engine.get_emotion(image_bytes)
     return EmotionStageResult(emotion=emotion)
-

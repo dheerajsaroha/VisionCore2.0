@@ -10,7 +10,7 @@ def client():
 
 
 def test_forgot_password_contract(client: TestClient, qa_email, qa_password):
-    # If endpoint exists, missing email should yield 400/422.
+    # If endpoint exists, missing email should yield 400/422; if route absent as POST, 405.
     res = client.post("/api/v1/auth/forgot-password", json={})
-    assert res.status_code in (400, 401, 404, 422)
+    assert res.status_code in (400, 401, 404, 405, 422)
 

@@ -30,7 +30,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_active_user, require_permission
+from app.api.deps import get_db, get_current_active_user, require_permission, has_any_role
 from app.db.models.all_models import User
 from app.services.hcm_domain_service import (
     assessment_service,
@@ -295,7 +295,8 @@ class TalentMemberAdd(BaseModel):
     nomination_reason: Optional[str] = None
 
 
-_ADMIN_ROLES = ("Admin", "SuperAdmin", "OrgAdmin")
+def _is_admin(user: User) -> bool:
+    return has_any_role(user, "SuperAdmin", "OrgAdmin")
 
 
 # =============================================================================
@@ -309,7 +310,7 @@ def profile_dossier(
     current_user: User = Depends(get_current_active_user),
 ) -> Dict[str, Any]:
     """Full employee dossier: profile + education + experience + awards + licenses + emergency contacts."""
-    if user_id != current_user.id and current_user.role.name not in _ADMIN_ROLES:
+    if user_id != current_user.id and not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Cannot view another employee's dossier")
     return employee_profile_service.profile_dossier(db, current_user.org_id, user_id)
 
@@ -366,7 +367,7 @@ def list_education(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> List[Dict[str, Any]]:
-    if user_id != current_user.id and current_user.role.name not in _ADMIN_ROLES:
+    if user_id != current_user.id and not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Forbidden")
     return [_model_to_dict(e) for e in
             employee_profile_service.list_education(db, current_user.org_id, user_id)]
@@ -391,7 +392,7 @@ def list_experience(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> List[Dict[str, Any]]:
-    if user_id != current_user.id and current_user.role.name not in _ADMIN_ROLES:
+    if user_id != current_user.id and not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Forbidden")
     return [_model_to_dict(e) for e in
             employee_profile_service.list_experience(db, current_user.org_id, user_id)]
@@ -416,7 +417,7 @@ def list_awards(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> List[Dict[str, Any]]:
-    if user_id != current_user.id and current_user.role.name not in _ADMIN_ROLES:
+    if user_id != current_user.id and not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Forbidden")
     return [_model_to_dict(a) for a in
             employee_profile_service.list_awards(db, current_user.org_id, user_id)]
@@ -441,7 +442,7 @@ def list_licenses(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> List[Dict[str, Any]]:
-    if user_id != current_user.id and current_user.role.name not in _ADMIN_ROLES:
+    if user_id != current_user.id and not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Forbidden")
     return [_model_to_dict(l) for l in
             employee_profile_service.list_licenses(db, current_user.org_id, user_id)]
@@ -466,7 +467,7 @@ def list_emergency_contacts(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> List[Dict[str, Any]]:
-    if user_id != current_user.id and current_user.role.name not in _ADMIN_ROLES:
+    if user_id != current_user.id and not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Forbidden")
     return [_model_to_dict(c) for c in
             employee_profile_service.list_emergency_contacts(db, current_user.org_id, user_id)]

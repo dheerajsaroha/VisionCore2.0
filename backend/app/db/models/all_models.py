@@ -6,12 +6,12 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, time, timezone
+from datetime import date, datetime, time, timezone
 from typing import List, Optional
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import (BigInteger, Boolean, CheckConstraint, DateTime,
-                         Float, ForeignKey, Index, Integer, Numeric, String, Text, Time,
+from sqlalchemy import (BigInteger, Boolean, CheckConstraint, Date, DateTime,
+                         Float, ForeignKey, Index, Integer, LargeBinary, Numeric, String, Text, Time,
                          UniqueConstraint, text)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -55,10 +55,15 @@ class Role(Base):
                                                comment="Legacy flat permission list — use RolePermission instead")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
                                                   default=_utc_now, server_default=text("NOW()"))
-    users: Mapped[List["User"]] = relationship("User", back_populates="role")
-<<<<<<< HEAD
     role_permissions: Mapped[List["RolePermission"]] = relationship(
         "RolePermission", back_populates="role", cascade="all, delete-orphan")
+    user_roles: Mapped[List["UserRole"]] = relationship(
+        "UserRole", back_populates="role", cascade="all, delete-orphan",
+        overlaps="members,roles,user")
+    users: Mapped[List["User"]] = relationship("User", back_populates="role", foreign_keys="User.role_id")
+    members: Mapped[List["User"]] = relationship(
+        "User", secondary="user_roles", back_populates="roles",
+        overlaps="user_roles,user,role")
     __table_args__ = (
         UniqueConstraint("name", name="uq_roles_name"),
         Index("ix_roles_tier", "tier"),
@@ -71,12 +76,14 @@ class Permission(Base):
     """Granular permission definitions — the atomic unit of authorization."""
     __tablename__ = "permissions"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False, unique=True, index=True,
-                                       comment="Dot-notation: e.g. 'users.read', 'attendance.checkin'")
+    name: Mapped[str] = mapped_column(NVARCHAR(120), nullable=False, unique=True, index=True,
+                                       comment="Resource + action identifier, e.g. attendance.view | user.manage")
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True,
                                                         comment="Human-readable description")
     module: Mapped[Optional[str]] = mapped_column(NVARCHAR(50), nullable=True, index=True,
                                                    comment="Grouping: auth | users | attendance | payroll | etc")
+    category: Mapped[Optional[str]] = mapped_column(NVARCHAR(80), nullable=True,
+                                                   comment="Permission domain such as auth, attendance, analytics")
     group: Mapped[Optional[str]] = mapped_column(NVARCHAR(50), nullable=True,
                                                   comment="Sub-group within module: read | write | admin")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True,
@@ -113,6 +120,24 @@ class RolePermission(Base):
     def __repr__(self): return f"<RolePermission role={self.role_id} perm={self.permission_id}>"
 
 
+# ── UserRole ──────────────────────────────────────────────────────────────────
+class UserRole(Base):
+    __tablename__ = "user_roles"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"),
+                                          nullable=False, index=True)
+    role_id: Mapped[int] = mapped_column(Integer, ForeignKey("roles.id", ondelete="CASCADE"),
+                                          nullable=False, index=True)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
+                                                  default=_utc_now, server_default=text("NOW()"))
+    user: Mapped["User"] = relationship("User", back_populates="user_roles", overlaps="members,roles")
+    role: Mapped["Role"] = relationship("Role", back_populates="user_roles", overlaps="members,roles")
+    __table_args__ = (
+        UniqueConstraint("user_id", "role_id", name="uq_user_role"),
+    )
+    def __repr__(self): return f"<UserRole {self.user_id} {self.role_id}>"
+
+
 # ── SystemSetting ─────────────────────────────────────────────────────────────
 class SystemSetting(Base):
     """Global key-value settings that control runtime behavior."""
@@ -127,90 +152,6 @@ class SystemSetting(Base):
                                                   default=_utc_now, onupdate=_utc_now,
                                                   server_default=text("NOW()"))
     def __repr__(self): return f"<SystemSetting {self.setting_key}={self.setting_value!r}>"
-=======
-    members: Mapped[List["User"]] = relationship(
-        "User",
-        secondary="user_roles",
-        back_populates="roles",
-        collection_class=list,
-    )
-    user_roles: Mapped[List["UserRole"]] = relationship(
-        "UserRole",
-        back_populates="role",
-        cascade="all, delete-orphan",
-    )
-    role_permissions: Mapped[List["RolePermission"]] = relationship(
-        "RolePermission",
-        back_populates="role",
-        cascade="all, delete-orphan",
-    )
-    granted_permissions: Mapped[List["Permission"]] = relationship(
-        "Permission",
-        secondary="role_permissions",
-        back_populates="roles",
-        collection_class=list,
-    )
-    def __repr__(self): return f"<Role {self.id} {self.name!r}>"
->>>>>>> refs/remotes/origin/main
-
-
-class Permission(Base):
-    __tablename__ = "permissions"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    name: Mapped[str] = mapped_column(NVARCHAR(120), nullable=False, unique=True, index=True,
-                                       comment="Resource + action identifier, e.g. attendance.view | user.manage")
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    category: Mapped[Optional[str]] = mapped_column(NVARCHAR(80), nullable=True,
-                                                   comment="Permission domain such as auth, attendance, analytics")
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False,
-                                            server_default=text("TRUE"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
-                                                  default=_utc_now, server_default=text("NOW()"))
-    roles: Mapped[List["Role"]] = relationship(
-        "Role",
-        secondary="role_permissions",
-        back_populates="granted_permissions",
-    )
-    role_permissions: Mapped[List["RolePermission"]] = relationship(
-        "RolePermission",
-        back_populates="permission",
-        cascade="all, delete-orphan",
-    )
-    def __repr__(self): return f"<Permission {self.id} {self.name!r}>"
-
-
-class RolePermission(Base):
-    __tablename__ = "role_permissions"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    role_id: Mapped[int] = mapped_column(Integer, ForeignKey("roles.id", ondelete="CASCADE"),
-                                          nullable=False, index=True)
-    permission_id: Mapped[int] = mapped_column(Integer, ForeignKey("permissions.id", ondelete="CASCADE"),
-                                                nullable=False, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
-                                                  default=_utc_now, server_default=text("NOW()"))
-    role: Mapped["Role"] = relationship("Role", back_populates="role_permissions")
-    permission: Mapped["Permission"] = relationship("Permission", back_populates="role_permissions")
-    __table_args__ = (
-        UniqueConstraint("role_id", "permission_id", name="uq_role_permission"),
-    )
-    def __repr__(self): return f"<RolePermission {self.role_id} {self.permission_id}>"
-
-
-class UserRole(Base):
-    __tablename__ = "user_roles"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"),
-                                          nullable=False, index=True)
-    role_id: Mapped[int] = mapped_column(Integer, ForeignKey("roles.id", ondelete="CASCADE"),
-                                          nullable=False, index=True)
-    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
-                                                  default=_utc_now, server_default=text("NOW()"))
-    user: Mapped["User"] = relationship("User", back_populates="user_roles")
-    role: Mapped["Role"] = relationship("Role", back_populates="user_roles")
-    __table_args__ = (
-        UniqueConstraint("user_id", "role_id", name="uq_user_role"),
-    )
-    def __repr__(self): return f"<UserRole {self.user_id} {self.role_id}>"
 
 
 # ── Organization ──────────────────────────────────────────────────────────────
@@ -236,16 +177,13 @@ class Organization(Base):
                                                   default=_utc_now, server_default=text("NOW()"))
     api_keys:    Mapped[List["OrgApiKey"]]  = relationship("OrgApiKey",  back_populates="organization",
                                                             cascade="all, delete-orphan")
+    users:       Mapped[List["User"]]       = relationship("User",       back_populates="organization")
     departments: Mapped[List["Department"]] = relationship("Department", back_populates="organization")
     shifts:      Mapped[List["Shift"]]      = relationship("Shift",      back_populates="organization")
-    users:       Mapped[List["User"]]       = relationship("User",       back_populates="organization")
-<<<<<<< HEAD
     tickets:     Mapped[List["Ticket"]]     = relationship("Ticket",     back_populates="organization")
     reimbursements: Mapped[List["Reimbursement"]] = relationship("Reimbursement", back_populates="organization")
     payrolls:    Mapped[List["Payroll"]]    = relationship("Payroll",    back_populates="organization")
-=======
     reports:     Mapped[List["Report"]]     = relationship("Report",     back_populates="organization")
->>>>>>> refs/remotes/origin/main
     def __repr__(self): return f"<Organization {self.id} {self.name!r}>"
 
 
@@ -382,12 +320,14 @@ class User(Base):
     emotion_logs: Mapped[List["EmotionLog"]] = relationship("EmotionLog", back_populates="user")
     requested_reports: Mapped[List["Report"]] = relationship("Report", back_populates="requester")
     user_roles: Mapped[List["UserRole"]] = relationship(
-        "UserRole", back_populates="user", cascade="all, delete-orphan")
+        "UserRole", back_populates="user", cascade="all, delete-orphan",
+        overlaps="members,roles,role")
     roles: Mapped[List["Role"]] = relationship(
         "Role",
         secondary="user_roles",
         back_populates="members",
         collection_class=list,
+        overlaps="user_roles,user,role,members",
     )
     manual_overrides_as_target: Mapped[List["ManualOverride"]] = relationship(
         "ManualOverride", back_populates="target_user", foreign_keys="ManualOverride.target_user_id")
@@ -405,6 +345,14 @@ class User(Base):
         Index("ix_users_active_org", "org_id", postgresql_where=text("is_deleted = 0")),
         Index("ix_users_org_email", "org_id", "email"),
     )
+    @property
+    def dept_name(self) -> Optional[str]:
+        return self.department.name if self.department else None
+
+    @property
+    def org_name(self) -> Optional[str]:
+        return self.organization.name if self.organization else None
+
     def __repr__(self): return f"<User {self.id} {self.username!r} active={self.is_active}>"
 
 
@@ -466,8 +414,14 @@ class FaceEmbedding(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"),
                                           nullable=False, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True),
+                                               ForeignKey("organizations.id", ondelete="CASCADE"),
+                                               nullable=False, index=True)
     embedding: Mapped[List[float]] = mapped_column(Vector(128), nullable=False,
                                                     comment="FaceNet 128-d — pgvector VECTOR(128)")
+    encrypted_embedding: Mapped[Optional[bytes]] = mapped_column(
+        LargeBinary, nullable=True,
+        comment="AES-encrypted biometric backup — never returned in API responses")
     zkp_public_commitment: Mapped[Optional[str]] = mapped_column(
         NVARCHAR(512), nullable=True, comment="Schnorr P=x·G — no raw biometric stored")
 
@@ -496,6 +450,7 @@ class FaceEmbedding(Base):
         CheckConstraint("is_active IN (0, 1)", name="ck_face_embed_is_active"),
         Index("ix_face_embeddings_active_user", "user_id",
               postgresql_where=text("is_active = 1")),
+        Index("ix_face_embeddings_org", "org_id"),
     )
     def __repr__(self): return f"<FaceEmbedding {self.id} user={self.user_id} active={self.is_active}>"
 
@@ -677,6 +632,10 @@ class AttendanceLog(Base):
                                                 index=True)
     check_out: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True,
                                                            comment="NULL until clock-out")
+    break_start: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True,
+                                                             comment="NULL until break start")
+    break_end: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True,
+                                                           comment="NULL until break end")
     status: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False,
                                          comment="on_time|late|early|absent|excused|manual_override")
     emotion: Mapped[Optional[str]] = mapped_column(NVARCHAR(30), nullable=True)
@@ -915,7 +874,135 @@ class Payroll(Base):
     )
 
 
-<<<<<<< HEAD
+# ── Payroll Period ─────────────────────────────────────────────────────────────
+class PayrollPeriod(Base):
+    __tablename__ = "payroll_periods"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    is_closed: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+
+    __table_args__ = (
+        CheckConstraint("is_closed IN (0, 1)", name="ck_payroll_period_closed"),
+    )
+
+
+# ── Salary Component ───────────────────────────────────────────────────────────
+class SalaryComponent(Base):
+    __tablename__ = "salary_components"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    code: Mapped[str] = mapped_column(NVARCHAR(50), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False)
+    component_type: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False, comment="earning|deduction")
+    is_taxable: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+
+
+# ── Tax Configuration ─────────────────────────────────────────────────────────
+class TaxConfiguration(Base):
+    __tablename__ = "tax_configurations"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False)
+    tax_type: Mapped[str] = mapped_column(NVARCHAR(50), nullable=False, comment="income_tax|provident_fund|tax")
+    rate: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
+    effective_from: Mapped[date] = mapped_column(Date, nullable=False)
+    effective_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+
+
+# ── Expense Category ───────────────────────────────────────────────────────────
+class ExpenseCategory(Base):
+    __tablename__ = "expense_categories"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+
+
+# ── Payslip ───────────────────────────────────────────────────────────────────
+class Payslip(Base):
+    __tablename__ = "payslips"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    payroll_id: Mapped[int] = mapped_column(Integer, ForeignKey("payrolls.id", ondelete="CASCADE"), nullable=False, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    month: Mapped[int] = mapped_column(Integer, nullable=False)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    gross_salary: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    total_deductions: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    net_salary: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    pdf_path: Mapped[Optional[str]] = mapped_column(NVARCHAR(512), nullable=True)
+    is_sent: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+
+
+# ── Bank Account ──────────────────────────────────────────────────────────────
+class BankAccount(Base):
+    __tablename__ = "bank_accounts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    bank_name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False)
+    account_number: Mapped[str] = mapped_column(NVARCHAR(50), nullable=False)
+    ifsc_code: Mapped[str] = mapped_column(NVARCHAR(20), nullable=False)
+    account_holder_name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False)
+    is_primary: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    is_verified: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+
+
+# ── Payroll Settlement ────────────────────────────────────────────────────────
+class PayrollSettlement(Base):
+    __tablename__ = "payroll_settlements"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    payroll_id: Mapped[int] = mapped_column(Integer, ForeignKey("payrolls.id", ondelete="CASCADE"), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False, default="DRAFT", server_default=text("'DRAFT'"))
+    settlement_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    total_amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0.0)
+    currency: Mapped[str] = mapped_column(NVARCHAR(10), nullable=False, default="USD", server_default=text("'USD'"))
+    initiated_by_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    approved_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    settled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    idempotency_key: Mapped[Optional[str]] = mapped_column(NVARCHAR(255), nullable=True, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+
+    __table_args__ = (
+        CheckConstraint("status IN ('DRAFT','VALIDATED','APPROVED','SETTLEMENT_PENDING','SETTLEMENT_PROCESSING','SETTLED','SETTLEMENT_FAILED')", name="ck_settlement_status"),
+    )
+
+
+# ── Payroll Settlement Item ───────────────────────────────────────────────────
+class PayrollSettlementItem(Base):
+    __tablename__ = "payroll_settlement_items"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    settlement_id: Mapped[int] = mapped_column(Integer, ForeignKey("payroll_settlements.id", ondelete="CASCADE"), nullable=False, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(NVARCHAR(10), nullable=False, default="USD", server_default=text("'USD'"))
+    status: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False, default="PENDING")
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+
+    __table_args__ = (
+        CheckConstraint("status IN ('PENDING','PROCESSING','PAID','FAILED')", name="ck_settlement_item_status"),
+    )
+
+
 # =============================================================================
 #  SUBSCRIPTION & FEATURE MANAGEMENT — Sprint 2, Entity 2
 # =============================================================================
@@ -2090,6 +2177,66 @@ class PayrollAdvance(Base):
     def __repr__(self): return f"<PayrollAdvance user={self.user_id} amount={self.amount}>"
 
 
+class LoanRepayment(Base):
+    """Scheduled instalment for an approved payroll advance."""
+    __tablename__ = "loan_repayments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    advance_id: Mapped[int] = mapped_column(ForeignKey("payroll_advances.id", ondelete="CASCADE"), nullable=False, index=True)
+    payroll_id: Mapped[Optional[int]] = mapped_column(ForeignKey("payrolls.id", ondelete="SET NULL"), nullable=True, index=True)
+    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    scheduled_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending", server_default=text("'pending'"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+
+    advance: Mapped["PayrollAdvance"] = relationship("PayrollAdvance")
+    payroll: Mapped[Optional["Payroll"]] = relationship("Payroll")
+
+    def __repr__(self): return f"<LoanRepayment advance={self.advance_id} amount={self.amount}>"
+
+
+class StatutoryRule(Base):
+    """Tenant-scoped statutory configuration used by payroll calculations."""
+    __tablename__ = "statutory_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    rule_code: Mapped[str] = mapped_column(NVARCHAR(80), nullable=False)
+    rule_name: Mapped[str] = mapped_column(NVARCHAR(160), nullable=False)
+    parameter_json: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    effective_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    effective_to: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("TRUE"))
+
+
+class PayrollRun(Base):
+    """A batch calculation run; individual results remain in ``payrolls``."""
+    __tablename__ = "payroll_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    run_name: Mapped[str] = mapped_column(NVARCHAR(160), nullable=False)
+    month: Mapped[int] = mapped_column(Integer, nullable=False)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(NVARCHAR(40), nullable=False, default="draft", server_default=text("'draft'"))
+    total_gross: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0, server_default=text("0"))
+    total_deductions: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0, server_default=text("0"))
+    total_net: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0, server_default=text("0"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+
+
+class PayrollLineItem(Base):
+    """Auditable earning/deduction component for a generated payroll record."""
+    __tablename__ = "payroll_line_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    payroll_id: Mapped[int] = mapped_column(ForeignKey("payrolls.id", ondelete="CASCADE"), nullable=False, index=True)
+    component_name: Mapped[str] = mapped_column(NVARCHAR(160), nullable=False)
+    component_type: Mapped[str] = mapped_column(NVARCHAR(40), nullable=False)
+    amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
 # =============================================================================
 # SPRINT 3 — MODULE 4: RECRUITMENT & ATS
 # =============================================================================
@@ -2692,7 +2839,7 @@ class EmployeeSkill(Base):
     __tablename__ = "employee_skills"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     skill_id: Mapped[int] = mapped_column(ForeignKey("skill_master.id", ondelete="CASCADE"), nullable=False, index=True)
     proficiency_level: Mapped[str] = mapped_column(String(30), nullable=False, default="intermediate")  # beginner | intermediate | advanced | expert
@@ -3396,6 +3543,44 @@ class PolicyNotification(Base):
     def __repr__(self): return f"<PolicyNotification type={self.notification_type} user={self.user_id}>"
 
 
+# ── Notification (In-App User Notifications) ─────────────────────────────────
+class Notification(Base):
+    """Persisted in-app notifications for users in a tenant organization."""
+    __tablename__ = "notifications"
+
+    id: Mapped[str] = mapped_column(
+        NVARCHAR(64), primary_key=True, default=lambda: str(uuid.uuid4()),
+        server_default=text("uuid_generate_v4()"))
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(NVARCHAR(255), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    type: Mapped[str] = mapped_column(
+        NVARCHAR(30), nullable=False, default="info", server_default=text("'info'"),
+        comment="info | success | warning | error")
+    action_url: Mapped[Optional[str]] = mapped_column(NVARCHAR(512), nullable=True)
+    source_event: Mapped[Optional[str]] = mapped_column(NVARCHAR(100), nullable=True)
+    is_read: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("FALSE"), index=True)
+    read_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"), index=True)
+
+    user: Mapped["User"] = relationship("User")
+    organization: Mapped["Organization"] = relationship("Organization")
+
+    __table_args__ = (
+        Index("ix_notifications_user_org_read", "org_id", "user_id", "is_read"),
+        Index("ix_notifications_created", "created_at"),
+    )
+
+    def __repr__(self):
+        return f"<Notification {self.id} user={self.user_id} title={self.title!r} read={self.is_read}>"
+
+
+
 class ComplianceRule(Base):
     """Configurable compliance rules for policy adherence scoring."""
     __tablename__ = "compliance_rules"
@@ -3469,6 +3654,55 @@ class ComplianceAudit(Base):
     created_by: Mapped[Optional["User"]] = relationship("User", foreign_keys=[created_by_user_id])
 
     def __repr__(self): return f"<ComplianceAudit type={self.audit_type} doc={self.document_id}>"
+
+
+# ── Privacy Request ───────────────────────────────────────────────────────────
+class PrivacyRequest(Base):
+    __tablename__ = "privacy_requests"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    request_type: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False, comment="access|erasure|rectification|portability")
+    status: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False, default="PENDING", server_default=text("'PENDING'"))
+    reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    processed_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+
+    __table_args__ = (
+        CheckConstraint("status IN ('PENDING','APPROVED','REJECTED','COMPLETED','CANCELLED')", name="ck_privacy_request_status"),
+    )
+
+
+# ── Retention Policy ──────────────────────────────────────────────────────────
+class RetentionPolicy(Base):
+    __tablename__ = "retention_policies"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False)
+    data_type: Mapped[str] = mapped_column(NVARCHAR(50), nullable=False, comment="attendance|payroll|hcm|biometric|audit")
+    retention_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    action: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False, default="archive", server_default=text("'archive'"), comment="archive|delete|anonymize")
+    is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+
+    __table_args__ = (
+        CheckConstraint("action IN ('archive','delete','anonymize')", name="ck_retention_action"),
+    )
+
+
+# ── Legal Hold ────────────────────────────────────────────────────────────────
+class LegalHold(Base):
+    __tablename__ = "legal_holds"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    case_number: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False, unique=True, index=True)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    applied_by_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
+    released_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    released_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
 
 
 # ============================================================================
@@ -5172,7 +5406,7 @@ class EmployeeDocument(Base):
     user: Mapped["User"] = relationship("User")
 
     def __repr__(self): return f"<EmployeeDocument title='{self.title}' type='{self.document_type}'>"
-=======
+
 # ── SystemSetting ─────────────────────────────────────────────────────────────
 class AuditLog(Base):
     __tablename__ = "audit_logs"
@@ -5230,20 +5464,6 @@ class AuditLog(Base):
 
     def __repr__(self) -> str:
         return f"<AuditLog {self.id} action={self.action!r} status={self.status!r}>"
-
-
-class SystemSetting(Base):
-    """Stores global system configurations (e.g. blockchain_enabled)."""
-    __tablename__ = "system_settings"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    setting_key: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False, unique=True, index=True)
-    setting_value: Mapped[str] = mapped_column(Text, nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
-                                                  default=_utc_now, onupdate=_utc_now,
-                                                  server_default=text("NOW()"))
-    
-    def __repr__(self): return f"<SystemSetting {self.setting_key}={self.setting_value!r}>"
 
 
 # ── Attendance Corrections Workflow (Phase 4.3) ─────────────────────────────
@@ -5409,7 +5629,3 @@ class AttendanceApproval(Base):
 
     def __repr__(self) -> str:
         return f"<AttendanceApproval {self.id} request={self.attendance_request_id} status={self.approval_status!r}>"
-
->>>>>>> refs/remotes/origin/main
-
-

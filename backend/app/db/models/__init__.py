@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # =============================================================================
 #  db/models/__init__.py
 #  Re-exports all models and Base from all_models.py and base.py
@@ -86,6 +85,14 @@ from app.db.models.all_models import (
     PayGrade,
     SalaryStructure,
     PayrollAdvance,
+    PayrollPeriod,
+    SalaryComponent,
+    TaxConfiguration,
+    ExpenseCategory,
+    Payslip,
+    BankAccount,
+    PayrollSettlement,
+    PayrollSettlementItem,
     # ── Recruitment & ATS Models (Sprint 3) ──
     JobPosting,
     Candidate,
@@ -153,9 +160,13 @@ from app.db.models.all_models import (
     PolicyTemplate,
     PolicyReminder,
     PolicyNotification,
+    Notification,
     ComplianceRule,
     ComplianceRecord,
     ComplianceAudit,
+    PrivacyRequest,
+    RetentionPolicy,
+    LegalHold,
     # ── Asset & Device Management Models (Sprint 4, Entity 3) ──
     AssetCategory,
     Asset,
@@ -267,6 +278,14 @@ __all__ = [
     "PayGrade",
     "SalaryStructure",
     "PayrollAdvance",
+    "PayrollPeriod",
+    "SalaryComponent",
+    "TaxConfiguration",
+    "ExpenseCategory",
+    "Payslip",
+    "BankAccount",
+    "PayrollSettlement",
+    "PayrollSettlementItem",
     # Recruitment & ATS
     "JobPosting",
     "Candidate",
@@ -334,9 +353,13 @@ __all__ = [
     "PolicyTemplate",
     "PolicyReminder",
     "PolicyNotification",
+    "Notification",
     "ComplianceRule",
     "ComplianceRecord",
     "ComplianceAudit",
+    "PrivacyRequest",
+    "RetentionPolicy",
+    "LegalHold",
     # Asset & Device Management
     "AssetCategory",
     "Asset",
@@ -365,14 +388,7 @@ __all__ = [
     "EmployeeDocument",
 ]
 
-=======
-from app.db.models.base import Base, NVARCHAR
-
-# Load all model definitions so Base.metadata is populated.
-# IMPORTANT: import must use a single, consistent module path
-# (app.*) to avoid SQLAlchemy MetaData re-definition errors.
+# Ensure all_models is fully loaded
 import app.db.models.all_models  # noqa: F401
 
-__all__ = ["Base", "NVARCHAR"]
->>>>>>> refs/remotes/origin/main
 

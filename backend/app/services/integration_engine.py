@@ -114,12 +114,14 @@ class IntegrationEngine:
 
         return {**webhook, "secret": "***"}  # Don't expose secret in response
 
-    def update_webhook(self, webhook_id: str, config: dict) -> Optional[dict]:
+    def update_webhook(self, webhook_id: str, config: dict, org_id: Optional[str] = None) -> Optional[dict]:
         """Update an existing webhook configuration."""
         if webhook_id not in self._webhooks:
             return None
 
         webhook = self._webhooks[webhook_id]
+        if org_id is not None and webhook["organization_id"] != org_id:
+            return None
         updatable_keys = {
             "name", "url", "method", "events", "secret", "headers",
             "retry_count", "retry_delay_seconds", "timeout_seconds",
@@ -140,18 +142,18 @@ class IntegrationEngine:
         logger.info(f"Webhook updated: {webhook_id}")
         return {**webhook, "secret": "***"}
 
-    def delete_webhook(self, webhook_id: str) -> bool:
+    def delete_webhook(self, webhook_id: str, org_id: Optional[str] = None) -> bool:
         """Delete a webhook configuration."""
-        if webhook_id in self._webhooks:
+        if webhook_id in self._webhooks and (org_id is None or self._webhooks[webhook_id]["organization_id"] == org_id):
             del self._webhooks[webhook_id]
             logger.info(f"Webhook deleted: {webhook_id}")
             return True
         return False
 
-    def get_webhook(self, webhook_id: str) -> Optional[dict]:
+    def get_webhook(self, webhook_id: str, org_id: Optional[str] = None) -> Optional[dict]:
         """Get a webhook configuration by ID."""
         webhook = self._webhooks.get(webhook_id)
-        if webhook:
+        if webhook and (org_id is None or webhook["organization_id"] == org_id):
             return {**webhook, "secret": "***"}
         return None
 
@@ -195,7 +197,8 @@ class IntegrationEngine:
         )
 
         for webhook in webhooks:
-            result = self._deliver_webhook(webhook, event)
+            wh = self._webhooks.get(webhook["id"], webhook)
+            result = self._deliver_webhook(wh, event)
             results.append(result)
 
             # Log delivery
@@ -249,7 +252,8 @@ class IntegrationEngine:
                 body.encode(),
                 hashlib.sha256,
             ).hexdigest()
-            headers["X-Webhook-Signature"] = f"sha256={signature}"
+            sig_header = webhook.get("signature_header", "X-Webhook-Signature")
+            headers[sig_header] = f"sha256={signature}"
 
         # Deliver with retries
         max_retries = webhook.get("retry_count", 3)
@@ -446,10 +450,10 @@ class IntegrationEngine:
         }
 
     def exchange_oauth2_token(self, client_id_str: str, code: str,
-                              redirect_uri: str) -> Optional[dict]:
+                              redirect_uri: str, org_id: Optional[str] = None) -> Optional[dict]:
         """Exchange authorization code for tokens."""
         client = self._oauth2_clients.get(client_id_str)
-        if not client:
+        if not client or (org_id is not None and client["organization_id"] != org_id):
             return None
 
         try:
@@ -496,10 +500,10 @@ class IntegrationEngine:
             client["status"] = IntegrationStatus.ERROR.value
             return None
 
-    def refresh_oauth2_token(self, client_id_str: str) -> Optional[dict]:
+    def refresh_oauth2_token(self, client_id_str: str, org_id: Optional[str] = None) -> Optional[dict]:
         """Refresh an OAuth2 access token."""
         client = self._oauth2_clients.get(client_id_str)
-        if not client or not client.get("refresh_token"):
+        if not client or (org_id is not None and client["organization_id"] != org_id) or not client.get("refresh_token"):
             return None
 
         try:
@@ -552,9 +556,9 @@ class IntegrationEngine:
             if c["organization_id"] == org_id
         ]
 
-    def delete_oauth2_client(self, client_id_str: str) -> bool:
+    def delete_oauth2_client(self, client_id_str: str, org_id: Optional[str] = None) -> bool:
         """Delete an OAuth2 client."""
-        if client_id_str in self._oauth2_clients:
+        if client_id_str in self._oauth2_clients and (org_id is None or self._oauth2_clients[client_id_str]["organization_id"] == org_id):
             del self._oauth2_clients[client_id_str]
             return True
         return False
@@ -650,9 +654,9 @@ class IntegrationEngine:
             if ak["organization_id"] == org_id
         ]
 
-    def revoke_api_key(self, key_id: str) -> bool:
+    def revoke_api_key(self, key_id: str, org_id: Optional[str] = None) -> bool:
         """Revoke an API key."""
-        if key_id in self._api_keys:
+        if key_id in self._api_keys and (org_id is None or self._api_keys[key_id]["organization_id"] == org_id):
             self._api_keys[key_id]["is_active"] = False
             self._api_keys[key_id]["status"] = IntegrationStatus.INACTIVE.value
             logger.info(f"API key revoked: {key_id}")
@@ -697,10 +701,10 @@ class IntegrationEngine:
             "credentials": "***",
         }
 
-    def test_connector(self, connector_id: str) -> Optional[dict]:
+    def test_connector(self, connector_id: str, org_id: Optional[str] = None) -> Optional[dict]:
         """Test a connector connection."""
         connector = self._connectors.get(connector_id)
-        if not connector:
+        if not connector or (org_id is not None and connector["organization_id"] != org_id):
             return None
 
         connector_type = connector["connector_type"]
@@ -767,9 +771,9 @@ class IntegrationEngine:
             if c["organization_id"] == org_id
         ]
 
-    def delete_connector(self, connector_id: str) -> bool:
+    def delete_connector(self, connector_id: str, org_id: Optional[str] = None) -> bool:
         """Delete a connector."""
-        if connector_id in self._connectors:
+        if connector_id in self._connectors and (org_id is None or self._connectors[connector_id]["organization_id"] == org_id):
             del self._connectors[connector_id]
             return True
         return False
@@ -844,4 +848,3 @@ class IntegrationEngine:
 
 # Singleton
 integration_engine = IntegrationEngine()
-

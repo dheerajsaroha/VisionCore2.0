@@ -14,6 +14,8 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Spinner } from '../components/ui/Spinner';
 import { formatTime, formatDate, titleCase } from '../lib/utils';
+import { EmployeeDetailModal } from '../components/EmployeeDetailModal';
+
 
 export default function Attendance() {
   const webcamRef  = useRef(null);
@@ -24,7 +26,9 @@ export default function Attendance() {
   const [logs,        setLogs]        = useState([]);
   const [cameraReady, setCameraReady] = useState(false);
   const [result,      setResult]      = useState(null);
-  const [clock,       setClock]       = useState(new Date()); // ← live clock
+  const [clock,       setClock]       = useState(new Date());
+  const [selectedUserId, setSelectedUserId] = useState(null);
+
 
   const { user }  = useAuthStore();
   const toast     = useToast();
@@ -39,9 +43,8 @@ export default function Attendance() {
     try {
       const res = await attendanceService.getLogs({ limit: 12 });
       setLogs(res.data || []);
-<<<<<<< HEAD
     } catch {
-      // silent
+      /* silent */
     }
   }, []);
 
@@ -51,10 +54,6 @@ export default function Attendance() {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [fetchLogs]);
-=======
-    } catch { /* silent */ }
-  };
->>>>>>> refs/remotes/origin/main
 
   const reset = useCallback(() => {
     setStep('idle');
@@ -97,13 +96,31 @@ export default function Attendance() {
       toast({ message: msg, type: 'error' });
       timeoutRef.current = setTimeout(reset, 3000);
     }
-  }, [step, user, reset, toast]);
+  }, [step, user, reset, toast, fetchLogs]);
+
+  const handleCheckOut = useCallback(async () => {
+    try {
+      const response = await attendanceService.checkOut();
+      const data = response.data;
+      toast({
+        message: `👋 Check-out recorded for ${data.user_name || 'User'} at ${new Date(data.check_out).toLocaleTimeString()}`,
+        type: 'info',
+        duration: 4000,
+      });
+      await fetchLogs();
+    } catch (err) {
+      const msg = err?.response?.data?.detail || 'Check-out failed. Ensure you have an active check-in.';
+      toast({ message: msg, type: 'error' });
+    }
+  }, [toast, fetchLogs]);
+
 
   return (
-    <motion.div
-      className="space-y-6"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+    <>
+      <motion.div
+        className="space-y-6"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
     >
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -213,14 +230,24 @@ export default function Attendance() {
                   {cameraReady ? 'Camera ready' : 'Waiting for camera…'}
                 </div>
 
-                <Button
-                  onClick={capture}
-                  disabled={step !== 'idle' || !cameraReady}
-                  className="w-full sm:w-auto px-8 py-5 text-base font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 shadow-xl shadow-indigo-500/20 active:scale-95 transition-all"
-                >
-                  <Camera className="mr-2 h-5 w-5" />
-                  Authenticate
-                </Button>
+                <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <Button
+                    onClick={capture}
+                    disabled={step !== 'idle' || !cameraReady}
+                    className="flex-1 sm:flex-initial px-6 py-5 text-base font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 shadow-xl shadow-indigo-500/20 active:scale-95 transition-all"
+                  >
+                    <Camera className="mr-2 h-5 w-5" />
+                    Authenticate
+                  </Button>
+                  <Button
+                    onClick={handleCheckOut}
+                    variant="outline"
+                    className="flex-1 sm:flex-initial px-6 py-5 text-base font-semibold rounded-xl border-gray-700 bg-gray-800/80 hover:bg-gray-700 text-gray-200 shadow-md active:scale-95 transition-all"
+                  >
+                    <Clock className="mr-2 h-5 w-5 text-amber-400" />
+                    Clock Out
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -246,13 +273,20 @@ export default function Attendance() {
               ) : (
                 <div className="divide-y divide-gray-800/60">
                   {logs.map((log) => (
-                    <div key={log.id} className="px-4 py-3 flex items-center justify-between hover:bg-gray-800/30 transition-colors">
+                    <div
+                      key={log.id}
+                      className="px-4 py-3 flex items-center justify-between hover:bg-gray-800/30 transition-colors cursor-pointer group"
+                      onClick={() => setSelectedUserId(log.user_id)}
+                      title="Click to view employee details"
+                    >
                       <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-full bg-gray-800 text-gray-300 flex items-center justify-center text-sm font-bold shrink-0">
+                        <div className="h-9 w-9 rounded-full bg-gray-800 text-gray-300 flex items-center justify-center text-sm font-bold shrink-0 group-hover:bg-indigo-500/20 group-hover:text-indigo-400 transition-colors">
                           {(log.user_name || '?')[0].toUpperCase()}
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-white leading-tight">{log.user_name || `User #${log.user_id}`}</p>
+                          <p className="text-sm font-semibold text-white leading-tight group-hover:text-indigo-300 transition-colors">
+                            {log.user_name || `Employee #${log.user_id}`}
+                          </p>
                           <p className="text-[11px] text-gray-500 mt-0.5">{formatDate(log.check_in)}</p>
                         </div>
                       </div>
@@ -272,5 +306,12 @@ export default function Attendance() {
         </motion.div>
       </div>
     </motion.div>
+
+      <EmployeeDetailModal
+        userId={selectedUserId}
+        isOpen={!!selectedUserId}
+        onClose={() => setSelectedUserId(null)}
+      />
+    </>
   );
 }

@@ -21,6 +21,7 @@ from app.db.models.all_models import (
     AttendanceCorrection, LeaveRequest, Ticket, Payroll
 )
 from app.core.security import get_password_hash
+from app.core.biometric_crypto import encrypt_embedding
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -135,7 +136,9 @@ def seed_enterprise_v2():
                     mock_vec = [random.uniform(-0.1, 0.1) for _ in range(128)]
                     fe = FaceEmbedding(
                         user_id=u.id,
+                        org_id=u.org_id,
                         embedding=mock_vec,
+                        encrypted_embedding=encrypt_embedding(mock_vec),
                         model_name="face_recognition",
                         is_active=1
                     )

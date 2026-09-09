@@ -93,13 +93,17 @@ def enroll_face(req: EnrollRequest, db: Session = Depends(get_db)):
     # Generate mock Schnorr commitment
     schnorr_commitment = f"schnorr_P_xG_{req.enrollment_token[:16]}"
     
+    # Encrypt biometric backup
+    from app.core.biometric_crypto import encrypt_embedding
+    encrypted = encrypt_embedding(embedding)
+    
     # Store embedding
     db.execute(
         text(
-            "INSERT INTO face_embeddings (user_id, embedding, zkp_public_commitment, model_name, is_active) "
-            "VALUES (:user_id, :embedding, :zkp, 'ArcFace', 1)"
+            "INSERT INTO face_embeddings (user_id, org_id, embedding, encrypted_embedding, zkp_public_commitment, model_name, is_active) "
+            "VALUES (:user_id, :org_id, :embedding, :encrypted, :zkp, 'ArcFace', 1)"
         ),
-        {"user_id": user_id, "embedding": embedding, "zkp": schnorr_commitment}
+        {"user_id": user_id, "org_id": org_id, "embedding": embedding, "encrypted": encrypted, "zkp": schnorr_commitment}
     )
     
     # Mark token used

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,11 @@ from app.services.attendance_pipeline import stages
 logger = logging.getLogger(__name__)
 
 
+class LivenessFailedError(PermissionError):
+    def __init__(self, message="Liveness verification failed", code="LIVENESS_FAILED", score: float = 0.0):
+        super().__init__(message)
+        self.code = code
+        self.score = score
 
 
 @dataclass(frozen=True)
@@ -43,6 +49,7 @@ class FaceAttendancePipeline:
         *,
         image_bytes: bytes,
         existing_user_id: Optional[int] = None,
+        org_id: UUID | None = None,
     ) -> FacePipelineOutput:
         liveness_res = stages.extract_liveness(image_bytes)
         is_live = liveness_res.is_live
@@ -57,7 +64,7 @@ class FaceAttendancePipeline:
             if getattr(settings, "LIVENESS_STRICT_MODE", True) is False:
                 logger.warning("Liveness failed (is_live=%s) but strict mode is OFF; continuing to recognition", is_live)
             else:
-                raise PermissionError("Liveness check failed")
+                raise LivenessFailedError("Liveness check failed", score=float(is_live))
 
 
 
@@ -72,6 +79,7 @@ class FaceAttendancePipeline:
             db,
             embedding=embedding_res.embedding,
             threshold=match_cfg.threshold,
+            org_id=org_id,
             attendance_repo=self.attendance_repo,
         )
 
@@ -85,4 +93,3 @@ class FaceAttendancePipeline:
             emotion=emotion_res.emotion,
             is_live=is_live,
         )
-
