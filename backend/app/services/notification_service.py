@@ -200,7 +200,6 @@ class NotificationService:
         source_id: str = "",
         priority: NotificationPriority = NotificationPriority.NORMAL,
         action_url: str | None = None,
-        db: Session | None = None,
     ) -> Notification:
         """Send a notification through the specified channel."""
         # Resolve template if provided
@@ -216,7 +215,7 @@ class NotificationService:
         notif = Notification(
             id=self._generate_id(),
             user_id=user_id,
-            org_id=organization_id if isinstance(organization_id, uuid.UUID) else uuid.UUID(str(organization_id)),
+            organization_id=organization_id,
             channel=channel,
             priority=priority,
             title=title,
@@ -239,16 +238,6 @@ class NotificationService:
         elif channel == NotificationChannel.PUSH:
             self._send_push(notif)
 
-        # Persist to database if session provided
-        if db is not None:
-            try:
-                db.add(notif)
-                db.flush()
-            except Exception:
-                if db.is_active:
-                    db.rollback()
-                raise
-
         # Record history
         self._record_history(notif)
 
@@ -265,7 +254,6 @@ class NotificationService:
         source_module: str = "",
         source_event: str = "",
         source_id: str = "",
-        db: Session | None = None,
     ) -> Notification:
         """Send a notification using a template."""
         return self.send(
@@ -278,7 +266,6 @@ class NotificationService:
             source_event=source_event,
             source_id=source_id,
             priority=priority,
-            db=db,
         )
 
     def broadcast(
@@ -290,7 +277,6 @@ class NotificationService:
         channel: NotificationChannel = NotificationChannel.IN_APP,
         source_module: str = "",
         source_event: str = "",
-        db: Session | None = None,
     ) -> list[Notification]:
         """Send the same notification to multiple users."""
         notifications = []
@@ -303,65 +289,9 @@ class NotificationService:
                 message=message,
                 source_module=source_module,
                 source_event=source_event,
-                db=db,
             )
             notifications.append(notif)
         return notifications
-
-    def notify(
-        self,
-        user_id: int,
-        title: str,
-        message: str,
-        category: str = "general",
-        db: Session | None = None,
-    ) -> Notification:
-        """Convenience wrapper around send()."""
-        return self.send(
-            user_id=user_id,
-            organization_id="",
-            channel=NotificationChannel.IN_APP,
-            title=title,
-            message=message,
-            source_module=category,
-            db=db,
-        )
-
-    def notify_admins(
-        self,
-        db: Session,
-        org_id: Any,
-        title: str,
-        message: str,
-        notification_type: str = "info",
-    ) -> None:
-        """Send a notification to all admins in an organization."""
-        from app.db.models.all_models import User, Role
-        parsed_org_id = uuid.UUID(str(org_id)) if isinstance(org_id, str) else org_id
-        try:
-            managers = (
-                db.query(User)
-                .filter(
-                    User.org_id == parsed_org_id,
-                    User.is_active == 1,
-                    User.is_deleted == 0,
-                )
-                .join(User.role)
-                .filter(Role.name.in_(["Admin", "SuperAdmin", "OrgAdmin", "Manager", "OrgManager"]))
-                .all()
-            )
-            for m in managers:
-                self.send(
-                    user_id=m.id,
-                    organization_id=str(parsed_org_id),
-                    channel=NotificationChannel.IN_APP,
-                    title=title,
-                    message=message,
-                    source_module=notification_type,
-                    db=db,
-                )
-        except Exception as e:
-            logger.error(f"Failed to notify admins for org {org_id}: {e}")
 
     # ------------------------------------------------------------------
     #  Channel Implementations
