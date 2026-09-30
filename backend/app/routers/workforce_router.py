@@ -32,7 +32,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_active_user, has_any_role
+from app.api.deps import get_db, get_current_active_user
 from app.db.models.all_models import (
     AttendanceCorrection,
     AttendanceDevice,
@@ -302,18 +302,13 @@ class AccrualRunIn(BaseModel):
     year: Optional[int] = None
 
 
-# Admin role helper — delegates to canonical role normalization in deps.py.
+# Admin role helper
+_ADMIN_ROLES = ("Admin", "SuperAdmin", "OrgAdmin")
+
+
 def _require_admin(user: User) -> None:
-    if not has_any_role(user, "SuperAdmin", "OrgAdmin"):
+    if user.role.name not in _ADMIN_ROLES:
         raise HTTPException(status_code=403, detail="Administrator role required")
-
-
-def _is_manager_or_admin(user: User) -> bool:
-    return has_any_role(user, "SuperAdmin", "OrgAdmin", "OrgManager")
-
-
-def _is_leave_approver(user: User) -> bool:
-    return has_any_role(user, "SuperAdmin", "OrgAdmin", "OrgManager", "OrgDepartmentHead")
 
 
 def _model_to_dict(obj: Any) -> Dict[str, Any]:
@@ -382,7 +377,7 @@ def list_attendance_sessions(
 ) -> List[Dict[str, Any]]:
     """List attendance sessions with optional filters."""
     target_user_id = user_id
-    if not _is_manager_or_admin(current_user) and user_id is None:
+    if current_user.role.name not in _ADMIN_ROLES + ("Manager",) and user_id is None:
         target_user_id = current_user.id
     sessions = attendance_service.get_sessions(
         db, current_user.org_id, user_id=target_user_id,
@@ -400,7 +395,7 @@ def get_attendance_timeline(
     current_user: User = Depends(get_current_active_user),
 ) -> List[Dict[str, Any]]:
     """Per-employee day-view timeline of attendance sessions."""
-    if user_id != current_user.id and not _is_manager_or_admin(current_user):
+    if user_id != current_user.id and current_user.role.name not in _ADMIN_ROLES + ("Manager",):
         raise HTTPException(status_code=403, detail="Cannot view another user's timeline")
     sessions = attendance_service.get_timeline(db, current_user.org_id, user_id, limit=limit)
     return [_model_to_dict(s) for s in sessions]
@@ -415,7 +410,7 @@ def get_attendance_summary(
 ) -> Any:
     """Attendance KPI summary for a user over a period."""
     target_user_id = user_id or current_user.id
-    if target_user_id != current_user.id and not _is_manager_or_admin(current_user):
+    if target_user_id != current_user.id and current_user.role.name not in _ADMIN_ROLES + ("Manager",):
         raise HTTPException(status_code=403, detail="Cannot view another user's summary")
     return attendance_service.get_summary(db, current_user.org_id, target_user_id, period)
 
@@ -636,7 +631,7 @@ def approve_leave_request(
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """Approve a pending leave request (Admin/Manager)."""
-    if not _is_leave_approver(current_user):
+    if current_user.role.name not in _ADMIN_ROLES + ("Manager", "DeptHead"):
         raise HTTPException(status_code=403, detail="Unauthorized to approve leave requests")
     try:
         req = leave_service.approve_leave(
@@ -655,7 +650,7 @@ def reject_leave_request(
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """Reject a pending leave request (Admin/Manager)."""
-    if not _is_leave_approver(current_user):
+    if current_user.role.name not in _ADMIN_ROLES + ("Manager", "DeptHead"):
         raise HTTPException(status_code=403, detail="Unauthorized to reject leave requests")
     try:
         req = leave_service.reject_leave(
@@ -693,7 +688,7 @@ def list_leave_requests(
 ) -> List[Dict[str, Any]]:
     """List leave requests with optional user/status filters."""
     target_user_id = user_id
-    if not _is_leave_approver(current_user) and user_id is None:
+    if current_user.role.name not in _ADMIN_ROLES + ("Manager", "DeptHead") and user_id is None:
         target_user_id = current_user.id
     requests = leave_service.list_requests(
         db, current_user.org_id, user_id=target_user_id, status_filter=status_filter,
@@ -710,7 +705,7 @@ def get_leave_balance(
 ) -> Any:
     """Get leave balances for current (or targeted) user."""
     target_user_id = user_id or current_user.id
-    if target_user_id != current_user.id and not _is_manager_or_admin(current_user):
+    if target_user_id != current_user.id and current_user.role.name not in _ADMIN_ROLES + ("Manager",):
         raise HTTPException(status_code=403, detail="Cannot view another user's balance")
     return leave_service.get_balances(db, current_user.org_id, target_user_id)
 
@@ -1151,7 +1146,7 @@ def approve_overtime(
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """Approve an overtime record (Admin/Manager)."""
-    if not _is_leave_approver(current_user):
+    if current_user.role.name not in _ADMIN_ROLES + ("Manager", "DeptHead"):
         raise HTTPException(status_code=403, detail="Unauthorized to approve overtime")
     try:
         ot = overtime_service.approve_overtime(
@@ -1267,9 +1262,9 @@ def list_corrections(
 ) -> List[Dict[str, Any]]:
     q = db.query(AttendanceCorrection).filter(AttendanceCorrection.organization_id == current_user.org_id)
     target_user_id = user_id or current_user.id
-    if not _is_manager_or_admin(current_user) and user_id is None:
+    if current_user.role.name not in _ADMIN_ROLES + ("Manager",) and user_id is None:
         target_user_id = current_user.id
-    if target_user_id and not _is_manager_or_admin(current_user):
+    if target_user_id and current_user.role.name not in _ADMIN_ROLES + ("Manager",):
         q = q.filter(AttendanceCorrection.user_id == target_user_id)
     elif user_id:
         q = q.filter(AttendanceCorrection.user_id == user_id)
@@ -1305,7 +1300,7 @@ def review_correction(
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """Review an attendance correction request (Admin/Manager)."""
-    if not _is_leave_approver(current_user):
+    if current_user.role.name not in _ADMIN_ROLES + ("Manager", "DeptHead"):
         raise HTTPException(status_code=403, detail="Unauthorized to review corrections")
     correction = (
         db.query(AttendanceCorrection)

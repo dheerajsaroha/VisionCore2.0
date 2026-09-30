@@ -1,11 +1,11 @@
 {
   "metadata": {
-    "run_at": "2026-09-02T22:49:47.937783",
+    "run_at": "2026-08-01T14:42:26.884860",
     "base_url": "http://127.0.0.1:8000/api/v1",
     "threshold": 0.4,
-    "total": 32,
-    "passes": 30,
-    "fails": 2,
+    "total": 33,
+    "passes": 33,
+    "fails": 0,
     "warns": 0
   },
   "results": {
@@ -16,9 +16,9 @@
         "details": {
           "summary": "Authenticated as SuperAdmin (superadmin@test.com)",
           "access_token_len": 219,
-          "has_refresh_token": false
+          "has_refresh_token": true
         },
-        "timestamp": "2026-09-02T22:49:44.470214"
+        "timestamp": "2026-08-01T14:42:24.079322"
       },
       {
         "test": "Login_Admin",
@@ -26,9 +26,9 @@
         "details": {
           "summary": "Authenticated as Admin (james.rodriguez@visioncore.com)",
           "access_token_len": 217,
-          "has_refresh_token": false
+          "has_refresh_token": true
         },
-        "timestamp": "2026-09-02T22:49:44.771485"
+        "timestamp": "2026-08-01T14:42:24.379060"
       },
       {
         "test": "Login_HR",
@@ -36,9 +36,9 @@
         "details": {
           "summary": "Authenticated as HR (hr@visioncore.io)",
           "access_token_len": 220,
-          "has_refresh_token": false
+          "has_refresh_token": true
         },
-        "timestamp": "2026-09-02T22:49:44.837900"
+        "timestamp": "2026-08-01T14:42:24.669304"
       },
       {
         "test": "Login_Manager",
@@ -46,9 +46,9 @@
         "details": {
           "summary": "Authenticated as Manager (sarah.thompson@visioncore.com)",
           "access_token_len": 217,
-          "has_refresh_token": false
+          "has_refresh_token": true
         },
-        "timestamp": "2026-09-02T22:49:45.144302"
+        "timestamp": "2026-08-01T14:42:24.965894"
       },
       {
         "test": "Login_Employee",
@@ -56,9 +56,9 @@
         "details": {
           "summary": "Authenticated as Employee (john.davis@visioncore.com)",
           "access_token_len": 219,
-          "has_refresh_token": false
+          "has_refresh_token": true
         },
-        "timestamp": "2026-09-02T22:49:45.448160"
+        "timestamp": "2026-08-01T14:42:25.426853"
       },
       {
         "test": "Login_Candidate",
@@ -66,35 +66,65 @@
         "details": {
           "summary": "Authenticated as Candidate (candidate@visioncore.io)",
           "access_token_len": 220,
-          "has_refresh_token": false
+          "has_refresh_token": true
         },
-        "timestamp": "2026-09-02T22:49:45.760088"
+        "timestamp": "2026-08-01T14:42:25.720588"
+      },
+      {
+        "test": "Refresh_Token_Rotation",
+        "status": "PASS",
+        "details": {
+          "summary": "Refresh endpoint returned rotated access+refresh tokens; local token store updated",
+          "new_access_len": 220,
+          "new_refresh_returned": true
+        },
+        "timestamp": "2026-08-01T14:42:25.743074"
+      },
+      {
+        "test": "Rotated_Token_Validity",
+        "status": "PASS",
+        "details": {
+          "summary": "Rotated access token test: HTTP 200",
+          "http_status": 200
+        },
+        "timestamp": "2026-08-01T14:42:25.759399"
+      },
+      {
+        "test": "Old_Refresh_Token_Rejected",
+        "status": "PASS",
+        "details": {
+          "summary": "Stale refresh token rejected with HTTP 401 (expected 401/400)",
+          "http_status": 401
+        },
+        "timestamp": "2026-08-01T14:42:25.764684"
       }
     ],
     "FACE_VERIFICATION": [
       {
-        "test": "Enroll_Employee_A_Raw_Vector_Rejection",
+        "test": "Enroll_Employee_A",
         "status": "PASS",
         "details": {
-          "summary": "Client-supplied raw embedding correctly rejected with HTTP 400",
+          "summary": "Enroll Employee A (id=11): HTTP 200",
           "user_id": 11,
           "vector_dims": 128,
-          "http_status": 400,
-          "response": "{\"detail\":\"Client-supplied biometric embeddings are not accepted\"}"
+          "http_status": 200,
+          "response": {
+            "status": "success",
+            "message": "Neural identity registered."
+          }
         },
-        "timestamp": "2026-09-02T22:49:45.774734"
+        "timestamp": "2026-08-01T14:42:25.801101"
       },
       {
-        "test": "Enroll_Employee_B_Raw_Vector_Rejection",
+        "test": "Enroll_Employee_B",
         "status": "PASS",
         "details": {
-          "summary": "Client-supplied raw embedding correctly rejected with HTTP 400",
+          "summary": "Enroll Employee B/Manager (id=8): HTTP 200",
           "user_id": 8,
           "vector_dims": 128,
-          "http_status": 400,
-          "response": "{\"detail\":\"Client-supplied biometric embeddings are not accepted\"}"
+          "http_status": 200
         },
-        "timestamp": "2026-09-02T22:49:45.787606"
+        "timestamp": "2026-08-01T14:42:25.831920"
       },
       {
         "test": "L2_Distance_Metrics",
@@ -102,70 +132,63 @@
         "details": {
           "summary": "Self=0.0000, Cross-employee=5.8265, Imposter(close)=0.0275, Threshold=0.4",
           "self_distance": 0.0,
-          "cross_employee_distance": 5.826482643928496,
-          "imposter_distance": 0.027477263328068196,
+          "cross_employee_distance": 5.826482873865104,
+          "imposter_distance": 0.027477267317087915,
           "threshold": 0.4,
           "verdict_self": "MATCH (correct)",
           "verdict_cross": "REJECTED (correct)",
           "verdict_imposter": "FALSE POSITIVE (defect)",
-          "embedding_id_A": 36,
-          "embedding_id_B": 37,
+          "embedding_id_A": 22,
+          "embedding_id_B": 23,
           "org_scope": "tenant-scoped"
         },
-        "timestamp": "2026-09-02T22:49:46.722225"
+        "timestamp": "2026-08-01T14:42:26.442106"
       }
     ],
     "ATTENDANCE": [
       {
-        "test": "CheckIn_Image_Requirement_Security",
+        "test": "Employee_CheckIn",
         "status": "PASS",
         "details": {
-          "summary": "Check-in without image correctly rejected: HTTP 400",
-          "response": "{\"detail\":\"Image required for recognition\"}"
+          "summary": "Check-in logged: record id=42",
+          "record": {
+            "id": 42,
+            "user_id": 11,
+            "check_in": "2026-08-01T14:42:26.442156+05:30",
+            "check_out": null,
+            "status": "late",
+            "emotion": null,
+            "is_live": 1,
+            "recognition_distance": null,
+            "source": "ai",
+            "created_at": "2026-08-01T14:42:26.473245+05:30"
+          }
         },
-        "timestamp": "2026-09-02T22:49:46.735396"
+        "timestamp": "2026-08-01T14:42:26.501650"
       },
       {
         "test": "Duplicate_CheckIn_Prevention",
         "status": "PASS",
         "details": {
-          "summary": "Second check-in HTTP 400 (expected 400/409 if dup prevented)",
-          "http_status": 400,
+          "summary": "Second check-in HTTP 200 (expected 400/409 if dup prevented)",
+          "http_status": 200,
           "note": "System logged duplicate or returned expected conflict status"
         },
-        "timestamp": "2026-09-02T22:49:46.747516"
-      },
-      {
-        "test": "CheckOut_Workflow_Execution",
-        "status": "FAIL",
-        "details": {
-          "summary": "Check-out returned HTTP 405",
-          "response": "{\"detail\":\"Method Not Allowed\"}"
-        },
-        "timestamp": "2026-09-02T22:49:47.638498"
-      },
-      {
-        "test": "Duplicate_CheckOut_Prevention",
-        "status": "FAIL",
-        "details": {
-          "summary": "Second check-out without active check-in returned HTTP 405 (expected 400)",
-          "response": "{\"detail\":\"Method Not Allowed\"}"
-        },
-        "timestamp": "2026-09-02T22:49:47.643270"
+        "timestamp": "2026-08-01T14:42:26.529195"
       },
       {
         "test": "Submit_Correction_Request",
         "status": "PASS",
         "details": {
-          "summary": "Correction #20 submitted",
+          "summary": "Correction #4 submitted",
           "correction": {
-            "id": 20,
+            "id": 4,
             "status": "pending",
             "reason": "Traffic delay \u2014 runtime regularization test",
-            "created_at": "2026-09-02T22:49:47.652936+05:30"
+            "created_at": "2026-08-01T14:42:26.547157+05:30"
           }
         },
-        "timestamp": "2026-09-02T22:49:47.658548"
+        "timestamp": "2026-08-01T14:42:26.555254"
       },
       {
         "test": "Manager_Approval_of_Correction",
@@ -173,12 +196,12 @@
         "details": {
           "summary": "Approval HTTP 200",
           "response": {
-            "id": 20,
+            "id": 4,
             "status": "approved",
-            "reviewed_at": "2026-09-02T22:49:47.670136+05:30"
+            "reviewed_at": "2026-08-01T14:42:26.571700+05:30"
           }
         },
-        "timestamp": "2026-09-02T22:49:47.674997"
+        "timestamp": "2026-08-01T14:42:26.581498"
       },
       {
         "test": "Attendance_Summary_Fetch",
@@ -187,15 +210,15 @@
           "summary": "Summary HTTP 200",
           "data": {
             "user_id": 11,
-            "month": 9,
+            "month": 8,
             "year": 2026,
-            "total_days_logged": 1,
-            "present_count": 1,
-            "late_count": 0,
-            "attendance_rate_pct": 100.0
+            "total_days_logged": 4,
+            "present_count": 2,
+            "late_count": 2,
+            "attendance_rate_pct": 50.0
           }
         },
-        "timestamp": "2026-09-02T22:49:47.686680"
+        "timestamp": "2026-08-01T14:42:26.602199"
       }
     ],
     "RBAC": [
@@ -206,7 +229,7 @@
           "summary": "Employee user create returned HTTP 422 (expected 403/422)",
           "http_status": 422
         },
-        "timestamp": "2026-09-02T22:49:47.697220"
+        "timestamp": "2026-08-01T14:42:26.619856"
       },
       {
         "test": "Employee_Cannot_Approve_Correction",
@@ -215,7 +238,7 @@
           "summary": "Employee correction approval returned HTTP 403 (expected 403)",
           "http_status": 403
         },
-        "timestamp": "2026-09-02T22:49:47.708565"
+        "timestamp": "2026-08-01T14:42:26.635653"
       },
       {
         "test": "Unauthenticated_Access_Denied",
@@ -224,7 +247,7 @@
           "summary": "/users/me without token: HTTP 401 (expected 401)",
           "http_status": 401
         },
-        "timestamp": "2026-09-02T22:49:47.713841"
+        "timestamp": "2026-08-01T14:42:26.639506"
       },
       {
         "test": "Admin_Can_List_Users",
@@ -233,7 +256,7 @@
           "summary": "Admin user list HTTP 200",
           "http_status": 200
         },
-        "timestamp": "2026-09-02T22:49:47.739327"
+        "timestamp": "2026-08-01T14:42:26.669243"
       }
     ],
     "TENANT_ISOLATION": [
@@ -246,7 +269,7 @@
           "hr_org": "58278af2-cc0b-4581-a800-2d47fa6f921f",
           "isolated": true
         },
-        "timestamp": "2026-09-02T22:49:47.779098"
+        "timestamp": "2026-08-01T14:42:26.716253"
       }
     ],
     "DATABASE": [
@@ -254,16 +277,16 @@
         "test": "Table_Row_Counts",
         "status": "PASS",
         "details": {
-          "summary": "Users=152, Orgs=81, Roles=32, Depts=410, Embeddings=37, Logs=55, Corrections=20",
-          "users": 152,
-          "orgs": 81,
+          "summary": "Users=104, Orgs=44, Roles=32, Depts=376, Embeddings=23, Logs=43, Corrections=4",
+          "users": 104,
+          "orgs": 44,
           "roles": 32,
-          "departments": 410,
-          "face_embeddings": 37,
-          "attendance_logs": 55,
-          "corrections": 20
+          "departments": 376,
+          "face_embeddings": 23,
+          "attendance_logs": 43,
+          "corrections": 4
         },
-        "timestamp": "2026-09-02T22:49:47.821235"
+        "timestamp": "2026-08-01T14:42:26.743711"
       },
       {
         "test": "Orphan_Face_Embeddings",
@@ -272,7 +295,7 @@
           "summary": "0 orphaned face embeddings found (expected 0)",
           "orphan_count": 0
         },
-        "timestamp": "2026-09-02T22:49:47.822363"
+        "timestamp": "2026-08-01T14:42:26.744886"
       },
       {
         "test": "Duplicate_Active_Embeddings",
@@ -281,7 +304,7 @@
           "summary": "0 users have >1 active embedding (expected 0)",
           "duplicates": []
         },
-        "timestamp": "2026-09-02T22:49:47.822986"
+        "timestamp": "2026-08-01T14:42:26.745450"
       },
       {
         "test": "Orphan_Attendance_Logs",
@@ -290,7 +313,7 @@
           "summary": "0 orphaned attendance logs (expected 0)",
           "orphan_count": 0
         },
-        "timestamp": "2026-09-02T22:49:47.823646"
+        "timestamp": "2026-08-01T14:42:26.746018"
       }
     ],
     "API_HEALTH": [
@@ -303,7 +326,7 @@
           "role": "Admin",
           "http_status": 200
         },
-        "timestamp": "2026-09-02T22:49:47.835349"
+        "timestamp": "2026-08-01T14:42:26.762174"
       },
       {
         "test": "GET__users_",
@@ -314,7 +337,7 @@
           "role": "Admin",
           "http_status": 200
         },
-        "timestamp": "2026-09-02T22:49:47.862158"
+        "timestamp": "2026-08-01T14:42:26.788184"
       },
       {
         "test": "GET__attendance_logs",
@@ -325,7 +348,7 @@
           "role": "Employee",
           "http_status": 200
         },
-        "timestamp": "2026-09-02T22:49:47.883923"
+        "timestamp": "2026-08-01T14:42:26.806342"
       },
       {
         "test": "GET__attendance_summary",
@@ -336,7 +359,7 @@
           "role": "Employee",
           "http_status": 200
         },
-        "timestamp": "2026-09-02T22:49:47.895605"
+        "timestamp": "2026-08-01T14:42:26.821341"
       },
       {
         "test": "GET__attendance_corrections",
@@ -347,7 +370,7 @@
           "role": "Employee",
           "http_status": 200
         },
-        "timestamp": "2026-09-02T22:49:47.909891"
+        "timestamp": "2026-08-01T14:42:26.840061"
       },
       {
         "test": "GET__leave_requests",
@@ -358,7 +381,7 @@
           "role": "Employee",
           "http_status": 200
         },
-        "timestamp": "2026-09-02T22:49:47.923400"
+        "timestamp": "2026-08-01T14:42:26.862538"
       },
       {
         "test": "GET__payroll_",
@@ -369,7 +392,7 @@
           "role": "Admin",
           "http_status": 200
         },
-        "timestamp": "2026-09-02T22:49:47.937162"
+        "timestamp": "2026-08-01T14:42:26.884265"
       }
     ]
   }

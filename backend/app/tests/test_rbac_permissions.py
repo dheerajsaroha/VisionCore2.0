@@ -38,9 +38,6 @@ class DummyQuery:
     def filter_by(self, **kwargs):
         return self
 
-    def join(self, *args, **kwargs):
-        return self
-
     def first(self):
         return self._result
 
@@ -70,8 +67,102 @@ class DummyDB:
 
 
 @pytest.fixture(autouse=True)
-def scoped_stubs():
-    pass
+def scoped_stubs(monkeypatch):
+    """Scope imports for require_permission so tests don't hit the real DB.
+
+    We patch only what deps.py uses at import/runtime.
+    """
+    # Stub fastapi.security module (duck-typed)
+    fastapi_security_mod = types.ModuleType("fastapi.security")
+
+    class OAuth2PasswordBearer:  # pragma: no cover
+        def __init__(self, tokenUrl):
+            self.tokenUrl = tokenUrl
+
+    monkeypatch.setattr(fastapi_security_mod, "OAuth2PasswordBearer", OAuth2PasswordBearer, raising=False)
+    monkeypatch.setitem(sys.modules, "fastapi.security", fastapi_security_mod)
+
+    # Stub jose
+    jose_mod = types.ModuleType("jose")
+
+    class JWTError(Exception):
+        pass
+
+    monkeypatch.setattr(jose_mod, "JWTError", JWTError, raising=False)
+    jwt_stub = types.SimpleNamespace(decode=lambda *a, **k: {})
+    monkeypatch.setitem(sys.modules, "jose", jose_mod)
+    monkeypatch.setitem(sys.modules, "jose.jwt", jwt_stub)
+
+    # Stub pydantic ValidationError
+    pydantic_mod = types.ModuleType("pydantic")
+
+    class ValidationError(Exception):
+        pass
+
+    monkeypatch.setattr(pydantic_mod, "ValidationError", ValidationError, raising=False)
+    monkeypatch.setitem(sys.modules, "pydantic", pydantic_mod)
+
+    # Minimal app.core.config
+    app_core_config = types.ModuleType("app.core.config")
+    settings = types.SimpleNamespace(API_V1_STR="/api/v1", SECRET_KEY="x" * 32, ALGORITHM="HS256")
+    monkeypatch.setattr(app_core_config, "settings", settings, raising=False)
+    monkeypatch.setitem(sys.modules, "app.core.config", app_core_config)
+
+    # Minimal app.core.security
+    app_core_security = types.ModuleType("app.core.security")
+
+    async def is_token_blacklisted(token):
+        return False
+
+    monkeypatch.setattr(app_core_security, "is_token_blacklisted", is_token_blacklisted, raising=False)
+    monkeypatch.setitem(sys.modules, "app.core.security", app_core_security)
+
+    # Minimal app.db.database
+    app_db_database = types.ModuleType("app.db.database")
+    monkeypatch.setattr(app_db_database, "SessionLocal", lambda: None, raising=False)
+    monkeypatch.setitem(sys.modules, "app.db.database", app_db_database)
+
+    # Minimal models
+    app_db_models = types.ModuleType("app.db.models.all_models")
+
+    class User:  # pragma: no cover
+        pass
+
+    class Permission:  # pragma: no cover
+        name = None
+        is_active = True
+
+    class RolePermission:  # pragma: no cover
+        class _Inable:
+            def in_(self, vals):
+                return self
+
+        permission_id = None
+        role_id = _Inable()
+
+    class UserRole:  # pragma: no cover
+        user_id = None
+        role_id = None
+
+    class Role:  # pragma: no cover
+        pass
+
+    monkeypatch.setattr(app_db_models, "User", User, raising=False)
+    monkeypatch.setattr(app_db_models, "Permission", Permission, raising=False)
+    monkeypatch.setattr(app_db_models, "RolePermission", RolePermission, raising=False)
+    monkeypatch.setattr(app_db_models, "UserRole", UserRole, raising=False)
+    monkeypatch.setattr(app_db_models, "Role", Role, raising=False)
+    monkeypatch.setitem(sys.modules, "app.db.models.all_models", app_db_models)
+
+    # Minimal TokenPayload schema
+    app_schema_token = types.ModuleType("app.schema.token")
+
+    class TokenPayload:  # pragma: no cover
+        def __init__(self, **kwargs):
+            self.__dict__.update(kwargs)
+
+    monkeypatch.setattr(app_schema_token, "TokenPayload", TokenPayload, raising=False)
+    monkeypatch.setitem(sys.modules, "app.schema.token", app_schema_token)
 
 
 
@@ -92,12 +183,16 @@ def asyncio_run(coro):
 
 
 def test_permission_allowed_via_role_json_permissions():
+    """SECURITY: The role.permissions JSON column is NO LONGER a source of
+    authorization truth. Only the RolePermission DB table grants permissions."""
     user = DummyUser(role=DummyRole('Employee', permissions=['users.view']))
     dep = deps.require_permission('users.view')
 
-    db = DummyDB(permission_exists=True)
-    result = asyncio_run(dep(current_user=user, db=db))
-    assert result is user
+    db = DummyDB(permission_exists=False)
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio_run(dep(current_user=user, db=db))
+    assert exc.value.status_code == 403
 
 
 def test_permission_denied_when_not_in_role_json_and_mapping_absent():
