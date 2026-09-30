@@ -76,8 +76,32 @@ class AttendancePolicyService:
         """Evaluate an attendance policy evaluation context against the active org policy."""
         policy = self.get_policy(db, org_id)
         if not policy:
-            # Default safe policy when none configured
-            policy = AttendancePolicy(org_id=org_id, name="__default__")
+            # Default safe policy when none configured. Populate with the same
+            # defaults declared on the AttendancePolicy model so the in-memory
+            # fallback behaves identically to a freshly-persisted policy (the
+            # database server_defaults below are only applied on INSERT, so an
+            # un-flushed instance would otherwise leave numeric fields as None,
+            # breaking threshold comparisons — see P6 defect at line ~138).
+            policy = AttendancePolicy(
+                org_id=org_id,
+                name="__default__",
+                grace_period_mins=5,
+                late_threshold_mins=15,
+                half_day_hours=4.0,
+                overtime_trigger_mins=60,
+                overtime_rate_multiplier=1.50,
+                geofence_radius_meters=200,
+                allow_gps=True,
+                allow_face=True,
+                allow_qr=True,
+                allow_ble=False,
+                allow_nfc=False,
+                allow_wifi=True,
+                allow_kiosk=True,
+                allow_manual=True,
+                ip_whitelist=[],
+                is_active=True,
+            )
 
         check_in = context.get("check_in")
         shift_start = context.get("shift_start")

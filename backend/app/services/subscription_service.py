@@ -262,6 +262,38 @@ class SubscriptionService:
         logger.info("Subscription renewed for org %s by user %s", org_id, actor_user_id)
         return result
 
+    # ── Plan Resolution ────────────────────────────────────────────────────
+
+    @staticmethod
+    def _resolve_plan_for_org(db: Session, org_id: UUID) -> Optional[SubscriptionPlan]:
+        """Resolve the plan whose entitlements apply to an org.
+
+        Prefers the org's active subscription. When there is none — a tenant
+        provisioned before subscription enforcement existed, or one mid-signup —
+        falls back to the configured default plan so the org receives free-tier
+        entitlements instead of being locked out of every feature. Denying
+        outright here would turn enforcement into a total outage for any org
+        missing a row.
+
+        Returns None only when no plan exists at all (unseeded install).
+        """
+        sub = org_subscription_crud.get_active_by_org(db, org_id)
+        if sub and sub.plan:
+            return sub.plan
+
+        from app.core.config import settings
+
+        plan = subscription_plan_crud.get_by_code(db, settings.DEFAULT_PLAN_CODE)
+        if plan:
+            return plan
+
+        return (
+            db.query(SubscriptionPlan)
+            .filter(SubscriptionPlan.is_active == True)  # noqa: E712
+            .order_by(SubscriptionPlan.tier.asc(), SubscriptionPlan.id.asc())
+            .first()
+        )
+
     # ── Feature Resolution ──────────────────────────────────────────────────
 
     @staticmethod
@@ -277,12 +309,13 @@ class SubscriptionService:
         4. Filter by feature dependency satisfaction
         """
         sub = org_subscription_crud.get_active_by_org(db, org_id)
-        if not sub:
-            logger.warning("No active subscription for org %s", org_id)
+        plan = SubscriptionService._resolve_plan_for_org(db, org_id)
+        if not plan:
+            logger.warning("No subscription and no default plan available for org %s", org_id)
             return []
 
         # Features from plan
-        plan_features = feature_crud.get_by_plan_id(db, sub.subscription_plan_id)
+        plan_features = feature_crud.get_by_plan_id(db, plan.id)
         feature_map = {f.code: f for f in plan_features}
 
         # Per-org feature flag overrides
@@ -342,12 +375,12 @@ class SubscriptionService:
         """
         result = {"allowed": False, "reason": None, "limit_warning": None, "plan_name": None}
 
-        sub = org_subscription_crud.get_active_by_org(db, org_id)
-        if not sub:
+        plan = SubscriptionService._resolve_plan_for_org(db, org_id)
+        if not plan:
             result["reason"] = "No active subscription"
             return result
 
-        result["plan_name"] = sub.plan.name if sub.plan else None
+        result["plan_name"] = plan.name
 
         # Check if feature is in plan
         feature = feature_crud.get_by_code(db, feature_code)
@@ -359,7 +392,7 @@ class SubscriptionService:
         plan_feature = (
             db.query(PlanFeature)
             .filter(
-                PlanFeature.plan_id == sub.subscription_plan_id,
+                PlanFeature.plan_id == plan.id,
                 PlanFeature.feature_id == feature.id,
                 PlanFeature.enabled == True,
             )
@@ -371,8 +404,7 @@ class SubscriptionService:
             flag = feature_flag_crud.get_by_org_and_feature(db, org_id, feature.id)
             if not flag or not flag.enabled:
                 result["reason"] = (
-                    f"Feature '{feature_code}' not available on "
-                    f"{sub.plan.name if sub.plan else 'current'} plan"
+                    f"Feature '{feature_code}' not available on {plan.name} plan"
                 )
                 return result
 
@@ -426,15 +458,14 @@ class SubscriptionService:
             "hard_limit": 0,
         }
 
-        sub = org_subscription_crud.get_active_by_org(db, org_id)
-        if not sub:
+        plan = SubscriptionService._resolve_plan_for_org(db, org_id)
+        if not plan:
             result["allowed"] = False
             result["warning"] = "No active subscription"
             return result
 
-        plan_id = sub.subscription_plan_id
         limit = licensing_limit_crud.get_by_plan_and_type(
-            db, plan_id, limit_type
+            db, plan.id, limit_type
         )
         if not limit:
             return result  # No limit defined = allowed
@@ -467,7 +498,8 @@ class SubscriptionService:
         from app.db.models.all_models import User, Department
 
         sub = org_subscription_crud.get_active_by_org(db, org_id)
-        if not sub:
+        plan = SubscriptionService._resolve_plan_for_org(db, org_id)
+        if not plan:
             return {"status": "no_subscription", "warnings": [], "blocks": []}
 
         # Compute current usage
@@ -495,13 +527,13 @@ class SubscriptionService:
             elif check["warning"]:
                 warnings.append(check["warning"])
 
-        limits = licensing_limit_crud.get_by_plan(db, sub.subscription_plan_id)
+        limits = licensing_limit_crud.get_by_plan(db, plan.id)
 
         return {
             "org_id": str(org_id),
-            "plan_name": sub.plan.name if sub.plan else "Unknown",
-            "plan_tier": sub.plan.tier if sub.plan else 0,
-            "status": sub.status,
+            "plan_name": plan.name,
+            "plan_tier": plan.tier,
+            "status": sub.status if sub else "default_plan",
             "limits": [
                 {
                     "limit_type": l.limit_type,
@@ -528,6 +560,120 @@ class SubscriptionService:
         stats = seed_subscription_data(db)
         logger.info("=== Subscription Seeding Complete ===")
         return stats
+
+    # ── Default Provisioning ───────────────────────────────────────────────
+
+    @staticmethod
+    def ensure_default_subscription(db: Session, org_id: UUID) -> Optional[OrganizationSubscription]:
+        """Guarantee an org has an active subscription, provisioning the default
+        plan when it has none.
+
+        Called at tenant provisioning time. Without this, an org with no
+        subscription fails every feature check with "No active subscription",
+        which turns enforcement into a total lockout rather than a paid upgrade.
+        Idempotent: returns the existing subscription when one is already active.
+        """
+        existing = org_subscription_crud.get_active_by_org(db, org_id)
+        if existing:
+            return existing
+
+        from app.core.config import settings
+
+        plan = subscription_plan_crud.get_by_code(db, settings.DEFAULT_PLAN_CODE)
+        if not plan:
+            # Fall back to the lowest active tier so provisioning never hard-fails.
+            plan = (
+                db.query(SubscriptionPlan)
+                .filter(SubscriptionPlan.is_active == True)  # noqa: E712
+                .order_by(SubscriptionPlan.tier.asc(), SubscriptionPlan.id.asc())
+                .first()
+            )
+        if not plan:
+            logger.error("No active subscription plan available for org %s", org_id)
+            return None
+
+        now = datetime.now(timezone.utc)
+        sub = OrganizationSubscription(
+            organization_id=org_id,
+            subscription_plan_id=plan.id,
+            status="active",
+            billing_cycle="monthly",
+            start_date=now,
+            trial_end=now + timedelta(days=plan.trial_days or settings.DEFAULT_TRIAL_DAYS),
+            next_renewal=now + timedelta(days=30),
+            auto_renew=True,
+        )
+        db.add(sub)
+        db.commit()
+        db.refresh(sub)
+        logger.info("Provisioned default plan '%s' for org %s", plan.code, org_id)
+        return sub
+
+    # ── Public Catalog ─────────────────────────────────────────────────────
+
+    @staticmethod
+    def get_public_plans(db: Session) -> List[Dict[str, Any]]:
+        """Return the sellable plan catalog for public pricing surfaces.
+
+        Restricted to PUBLIC_PLAN_CODES and is_active plans. Returns only
+        non-deprecated features, so features that are catalogued but not
+        implemented are never advertised.
+        """
+        from app.core.config import settings
+
+        codes = [c.strip() for c in settings.PUBLIC_PLAN_CODES.split(",") if c.strip()]
+        if not codes:
+            return []
+
+        plans = (
+            db.query(SubscriptionPlan)
+            .filter(
+                SubscriptionPlan.code.in_(codes),
+                SubscriptionPlan.is_active == True,  # noqa: E712
+            )
+            .order_by(SubscriptionPlan.tier.asc(), SubscriptionPlan.display_order.asc())
+            .all()
+        )
+
+        catalog: List[Dict[str, Any]] = []
+        for plan in plans:
+            features = feature_crud.get_by_plan_id(db, plan.id)
+            limits = licensing_limit_crud.get_by_plan(db, plan.id)
+
+            limit_map = {limit.limit_type: limit for limit in limits}
+            employees = limit_map.get("employees")
+
+            catalog.append(
+                {
+                    "code": plan.code,
+                    "name": plan.name,
+                    "description": plan.description,
+                    "tier": plan.tier,
+                    "monthly_price": float(plan.monthly_price or 0),
+                    "yearly_price": float(plan.yearly_price or 0),
+                    "currency": plan.currency,
+                    "trial_days": plan.trial_days,
+                    "features": sorted(
+                        f.code for f in features if not f.deprecated
+                    ),
+                    "limits": {
+                        limit_type: (
+                            None
+                            if limit.is_unlimited
+                            else {
+                                "soft": limit.soft_limit,
+                                "hard": limit.hard_limit,
+                            }
+                        )
+                        for limit_type, limit in limit_map.items()
+                        if not limit.limit_type.startswith("test_")
+                    },
+                    "is_unlimited_seats": bool(
+                        employees and employees.is_unlimited
+                    ),
+                }
+            )
+        return catalog
 
     # ── Module Summary ─────────────────────────────────────────────────────
 

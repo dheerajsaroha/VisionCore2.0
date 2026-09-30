@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 
+from app.api import deps
 from app.api.deps import get_db, get_current_active_user
 from app.api.eaac_deps import require_eaac_authorization
 from app.db.models.all_models import (
@@ -50,7 +51,7 @@ from app.services.asset_engine import (
     asset_compliance_engine, asset_report_engine
 )
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(deps.require_feature("assets"))])
 
 
 # ============================================================================

@@ -96,7 +96,7 @@ def seed_comprehensive():
             shift_ids[name] = shift.id
 
         # 5. Create Roles
-        roles_data = ["Super Admin", "Admin", "Manager", "Employee"]
+        roles_data = ["SuperAdmin", "OrgAdmin", "OrgManager", "OrgEmployee"]
         role_ids = {}
         for role_name in roles_data:
             role = db.query(Role).filter(Role.name == role_name).first()
@@ -110,23 +110,23 @@ def seed_comprehensive():
 
         # 6. Create Users (3 per role + edge cases)
         users_data = {
-            "Super Admin": [
+            "SuperAdmin": [
                 ("Dr. Elena Vasquez", "elena.vasquez@visioncore.com", "SuperE1!2024"),
                 ("Marcus Chen", "marcus.chen@visioncore.com", "SuperM2#2024"),
                 ("Dr. Sophia Patel", "sophia.patel@visioncore.com", "SuperS3@2024"),
                 ("Dheeraj Saroha","btcl220010159010gjust@visioncore.com","Dheeraj@1907")
             ],
-            "Admin": [
+            "OrgAdmin": [
                 ("James Rodriguez", "james.rodriguez@visioncore.com", "AdminJ1!2024"),
                 ("Lisa Nguyen", "lisa.nguyen@visioncore.com", "AdminL2#2024"),
                 ("David Kim", "david.kim@visioncore.com", "AdminD3@2024")
             ],
-            "Manager": [
+            "OrgManager": [
                 ("Sarah Thompson", "sarah.thompson@visioncore.com", "MgrS1!2024"),
                 ("Michael Brown", "michael.brown@visioncore.com", "MgrM2#2024"),
                 ("Emma Wilson", "emma.wilson@visioncore.com", "MgrE3@2024")
             ],
-            "Employee": [
+            "OrgEmployee": [
                 ("John Davis", "john.davis@visioncore.com", "EmpJ1!2024"),
                 ("Maria Garcia", "maria.garcia@visioncore.com", "EmpM2#2024"),
                 ("Robert Johnson", "robert.johnson@visioncore.com", "EmpR3@2024")
@@ -136,7 +136,7 @@ def seed_comprehensive():
         created_users = []
         for role_name, users in users_data.items():
             role_id = role_ids[role_name]
-            dept_id = dept_ids.get("Management" if role_name in ["Super Admin", "Admin"] else "Engineering", None)
+            dept_id = dept_ids.get("Management" if role_name in ["SuperAdmin", "OrgAdmin"] else "Engineering", None)
             shift_id = shift_ids["Morning"]
             
             for full_name, email, password in users:
@@ -182,7 +182,7 @@ def seed_comprehensive():
         if not existing_inactive:
             deactivated_user = User(
                 org_id=org.id,
-                role_id=role_ids["Employee"],
+                role_id=role_ids["OrgEmployee"],
                 dept_id=dept_ids["Engineering"],
                 shift_id=shift_ids["Morning"],
                 full_name="Inactive Test User",
@@ -197,7 +197,7 @@ def seed_comprehensive():
             created_users.append({
                 "email": "inactive.test@visioncore.com",
                 "password": "Inactive1!2024",
-                "role": "Employee (DEACTIVATED)",
+                "role": "OrgEmployee (DEACTIVATED)",
                 "employee_id": "EMP-INACT"
             })
         else:
@@ -210,7 +210,7 @@ def seed_comprehensive():
         if not existing_incomplete:
             incomplete_user = User(
                 org_id=org.id,
-                role_id=role_ids["Employee"],
+                role_id=role_ids["OrgEmployee"],
                 full_name="John Doe",  # Incomplete name
                 username="john.doe.incomplete",
                 email="john.doe.incomplete@visioncore.com",
@@ -223,7 +223,7 @@ def seed_comprehensive():
             created_users.append({
                 "email": "john.doe.incomplete@visioncore.com",
                 "password": "Incomplete1!2024",
-                "role": "Employee (INCOMPLETE)",
+                "role": "OrgEmployee (INCOMPLETE)",
                 "employee_id": "EMP-INCMP"
             })
         else:

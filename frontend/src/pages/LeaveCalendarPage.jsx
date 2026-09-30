@@ -3,9 +3,16 @@ import {
   Calendar, RefreshCw, ChevronLeft, ChevronRight,
   Clock, User, Loader2
 } from 'lucide-react';
-import { workforceService } from '../services/workforceService';
+import { leaveService } from '../services/leaveService';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import { useAuthStore } from '../store/authStore';
+import { usePermission } from '../hooks/usePermission';
+
+// The API returns lowercase statuses; normalise on the way in so these
+// uppercase-keyed maps stay correct. Comparing raw values against uppercase
+// literals silently matched nothing, leaving the calendar empty.
+const normalizeStatus = (value) => String(value ?? '').toUpperCase();
 
 const STATUS_COLORS = {
   PENDING: '#f59e0b',
@@ -26,7 +33,7 @@ function MonthCalendar({ year, month, requests }) {
 
   const requestsByDay = {};
   requests.forEach(r => {
-    if (r.status !== 'APPROVED') return;
+    if (normalizeStatus(r.status) !== 'APPROVED') return;
     const start = new Date(r.start_date);
     const end = new Date(r.end_date);
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
@@ -84,11 +91,16 @@ export default function LeaveCalendarPage() {
   const [error, setError] = useState('');
   const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState(new Date().getMonth());
+  const { user } = useAuthStore();
+  const { hasPermission } = usePermission();
+
+  const canViewTeam = hasPermission('leave.view_team');
+  const canViewOrg = hasPermission('leave.view_org');
 
   const refresh = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const res = await workforceService.leave.requests({ limit: 500 });
+      const res = await leaveService.getRequests({ limit: 500 });
       setRequests(Array.isArray(res.data) ? res.data : (res.data?.items || []));
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to load leave calendar');
@@ -110,7 +122,18 @@ export default function LeaveCalendarPage() {
 
   const monthName = new Date(year, month).toLocaleString('default', { month: 'long', year: 'numeric' });
 
-  const monthRequests = requests.filter(r => {
+  // Filter requests based on user permissions
+  const visibleRequests = requests.filter(r => {
+    // Always allow viewing own requests
+    if (r.user_id === user?.id) return true;
+    // Allow viewing team requests if user has leave.view_team permission
+    if (canViewTeam && r.dept_id && r.dept_id === user?.dept_id) return true;
+    // Allow viewing all org requests if user has leave.view_org permission
+    if (canViewOrg) return true;
+    return false;
+  });
+
+  const monthRequests = visibleRequests.filter(r => {
     const start = new Date(r.start_date);
     const end = new Date(r.end_date);
     const monthStart = new Date(year, month, 1);
@@ -118,7 +141,7 @@ export default function LeaveCalendarPage() {
     return start <= monthEnd && end >= monthStart;
   });
 
-  const statusSummary = requests.reduce((acc, r) => {
+  const statusSummary = visibleRequests.reduce((acc, r) => {
     acc[r.status] = (acc[r.status] || 0) + 1;
     return acc;
   }, {});
@@ -182,7 +205,7 @@ export default function LeaveCalendarPage() {
               <Loader2 className="h-8 w-8 animate-spin text-indigo-400" />
             </div>
           ) : (
-            <MonthCalendar year={year} month={month} requests={requests} />
+            <MonthCalendar year={year} month={month} requests={visibleRequests} />
           )}
         </CardContent>
       </Card>

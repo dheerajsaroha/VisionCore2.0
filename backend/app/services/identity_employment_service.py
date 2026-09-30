@@ -40,6 +40,10 @@ VALID_EMPLOYMENT_TYPES = {
 }
 
 VALID_IDENTITY_STATUSES = {
+    # A hire approved by HR whose onboarding invite has not been accepted yet.
+    # The slot is held, so it counts against the position's headcount, but the
+    # person has no User account and must not appear as an active employee.
+    "PENDING_ONBOARDING",
     "PROBATION",
     "ACTIVE",
     "NOTICE_PERIOD",

@@ -115,10 +115,30 @@ class AuditService:
         severity: str = "info",
         ip_address: str = "",
         user_agent: str = "",
+        # Backward compatibility aliases
+        actor_id: Any = None,
+        target_type: str = "",
+        target_id: str = "",
+        before_state: dict | None = None,
+        after_state: dict | None = None,
+        **kwargs: Any,
     ) -> AuditEntry:
         """Record an immutable audit entry enforcing the 13 canonical fields."""
         resolved_tenant_id = tenant_id or organization_id
         resolved_source_service = source_service or module or "platform"
+
+        if actor_user_id is None and actor_id is not None:
+            if isinstance(actor_id, int):
+                actor_user_id = actor_id
+            elif isinstance(actor_id, str) and actor_id.isdigit():
+                actor_user_id = int(actor_id)
+            elif isinstance(actor_id, str) and not actor_email and "@" in actor_id:
+                actor_email = actor_id
+
+        resolved_entity_type = entity_type or target_type
+        resolved_entity_id = entity_id or target_id
+        resolved_old = old_values if old_values is not None else (before_state or {})
+        resolved_new = new_values if new_values is not None else (after_state or {})
 
         entry = AuditEntry(
             id=self._generate_id(),
@@ -126,17 +146,17 @@ class AuditService:
             organization_id=organization_id or resolved_tenant_id,
             actor_user_id=actor_user_id,
             action=action,
-            entity_type=entity_type,
-            entity_id=entity_id,
+            entity_type=resolved_entity_type,
+            entity_id=resolved_entity_id,
             timestamp=datetime.now(timezone.utc).isoformat(),
             correlation_id=correlation_id,
             ip_address=ip_address,
             user_agent=user_agent,
-            old_values=old_values or {},
-            new_values=new_values or {},
+            old_values=resolved_old,
+            new_values=resolved_new,
             source_service=resolved_source_service,
             actor_email=actor_email,
-            summary=summary or f"{action} on {entity_type}:{entity_id}",
+            summary=summary or f"{action} on {resolved_entity_type}:{resolved_entity_id}",
             details=details or {},
             severity=severity,
         )

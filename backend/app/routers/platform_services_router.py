@@ -24,6 +24,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from app.api.deps import get_current_user
+from app.db.database import get_db
 from app.services.search_service import search_service, SearchDocument
 from app.services.file_service import file_service
 from app.services.event_bus import event_bus
@@ -103,7 +104,7 @@ def platform_search(
     request: SearchRequest,
     current_user=Depends(get_current_user),
 ):
-    org_id = str(getattr(current_user, "organization_id", "") or "")
+    org_id = str(current_user.org_id or "")
     result = search_service.search(
         query=request.query,
         organization_id=org_id,
@@ -141,7 +142,7 @@ def search_autocomplete(
     prefix: str = Query(..., min_length=1),
     current_user=Depends(get_current_user),
 ):
-    org_id = str(getattr(current_user, "organization_id", "") or "")
+    org_id = str(current_user.org_id or "")
     suggestions = search_service.autocomplete(prefix, org_id)
     return {"success": True, "data": {"suggestions": suggestions}}
 
@@ -151,7 +152,7 @@ def index_document(
     request: IndexDocumentRequest,
     current_user=Depends(get_current_user),
 ):
-    org_id = str(getattr(current_user, "organization_id", "") or "")
+    org_id = str(current_user.org_id or "")
     doc = SearchDocument(
         id=request.id,
         entity_type=request.entity_type,
@@ -174,7 +175,7 @@ async def upload_file(
     file: UploadFile = File(...),
     current_user=Depends(get_current_user),
 ):
-    org_id = str(getattr(current_user, "organization_id", "") or "")
+    org_id = str(current_user.org_id or "")
     content = await file.read()
     meta = file_service.upload_file(
         filename=file.filename,
@@ -227,7 +228,7 @@ def enqueue_job(
     request: EnqueueJobRequest,
     current_user=Depends(get_current_user),
 ):
-    org_id = str(getattr(current_user, "organization_id", "") or "")
+    org_id = str(current_user.org_id or "")
     priority_map = {
         "LOW": JobPriority.LOW, "NORMAL": JobPriority.NORMAL,
         "HIGH": JobPriority.HIGH, "CRITICAL": JobPriority.CRITICAL,
@@ -292,7 +293,7 @@ def count_working_days(
     end_date: str = Query(...),
     current_user=Depends(get_current_user),
 ):
-    org_id = str(getattr(current_user, "organization_id", "") or "")
+    org_id = str(current_user.org_id or "")
     try:
         start = date.fromisoformat(start_date)
         end = date.fromisoformat(end_date)
@@ -307,7 +308,7 @@ def get_holidays(
     year: Optional[int] = Query(None),
     current_user=Depends(get_current_user),
 ):
-    org_id = str(getattr(current_user, "organization_id", "") or "")
+    org_id = str(current_user.org_id or "")
     holidays = business_calendar_service.get_holidays(org_id, year=year)
     return {
         "success": True,
@@ -319,7 +320,7 @@ def get_holidays(
 
 @router.post("/calendar/holidays", summary="Add a holiday to organization calendar")
 def add_holiday(request: AddHolidayRequest, current_user=Depends(get_current_user)):
-    org_id = str(getattr(current_user, "organization_id", "") or "")
+    org_id = str(current_user.org_id or "")
     entry = HolidayEntry(
         date=request.date,
         name=request.name,
@@ -336,7 +337,7 @@ def get_fiscal_year(
     for_date: Optional[str] = Query(None),
     current_user=Depends(get_current_user),
 ):
-    org_id = str(getattr(current_user, "organization_id", "") or "")
+    org_id = str(current_user.org_id or "")
     d = date.fromisoformat(for_date) if for_date else date.today()
     fy = business_calendar_service.get_fiscal_year(d, org_id)
     quarter = business_calendar_service.get_fiscal_quarter(d, org_id)
@@ -349,7 +350,7 @@ def get_fiscal_year(
 
 @router.post("/i18n/translate", summary="Translate a platform string key")
 def translate_key(request: TranslateRequest, current_user=Depends(get_current_user)):
-    org_id = str(getattr(current_user, "organization_id", "") or "")
+    org_id = str(current_user.org_id or "")
     result = localization_service.translate(
         key=request.key,
         locale=request.locale,
@@ -376,7 +377,7 @@ async def import_csv(
     file: UploadFile = File(...),
     current_user=Depends(get_current_user),
 ):
-    org_id = str(getattr(current_user, "organization_id", "") or "")
+    org_id = str(current_user.org_id or "")
     content = await file.read()
     result = import_export_engine.import_csv(
         content=content,
@@ -399,15 +400,156 @@ async def import_csv(
     }
 
 
-@router.get("/export/csv", summary="Export data as CSV")
+def _export_employees(db, org_id) -> List[Dict[str, Any]]:
+    from app.db.models.all_models import User
+
+    rows = (
+        db.query(User)
+        .filter(User.org_id == org_id)
+        .order_by(User.id)
+        .limit(EXPORT_ROW_LIMIT)
+        .all()
+    )
+    return [
+        {
+            "employee_id": u.employee_id or "",
+            "username": u.username or "",
+            "full_name": u.full_name or "",
+            "email": u.email or "",
+            "phone": u.phone or "",
+            "gender": u.gender or "",
+            "is_active": u.is_active,
+        }
+        for u in rows
+    ]
+
+
+def _export_attendance(db, org_id) -> List[Dict[str, Any]]:
+    from app.db.models.all_models import AttendanceSession
+
+    rows = (
+        db.query(AttendanceSession)
+        .filter(AttendanceSession.organization_id == org_id)
+        .order_by(AttendanceSession.id.desc())
+        .limit(EXPORT_ROW_LIMIT)
+        .all()
+    )
+    return [
+        {
+            "session_id": s.id,
+            "user_id": s.user_id,
+            "session_date": s.session_date.isoformat() if s.session_date else "",
+            "check_in": s.check_in_time.isoformat() if s.check_in_time else "",
+            "check_out": s.check_out_time.isoformat() if s.check_out_time else "",
+            "status": s.status or "",
+        }
+        for s in rows
+    ]
+
+
+def _export_leave(db, org_id) -> List[Dict[str, Any]]:
+    from app.db.models.all_models import LeaveRequest
+
+    rows = (
+        db.query(LeaveRequest)
+        .filter(LeaveRequest.organization_id == org_id)
+        .order_by(LeaveRequest.id.desc())
+        .limit(EXPORT_ROW_LIMIT)
+        .all()
+    )
+    return [
+        {
+            "request_id": r.id,
+            "user_id": r.user_id,
+            "start_date": r.start_date.isoformat() if r.start_date else "",
+            "end_date": r.end_date.isoformat() if r.end_date else "",
+            "total_days": r.total_days,
+            "status": r.status or "",
+        }
+        for r in rows
+    ]
+
+
+def _export_payroll(db, org_id) -> List[Dict[str, Any]]:
+    from app.db.models.all_models import Payroll
+
+    rows = (
+        db.query(Payroll)
+        .filter(Payroll.org_id == org_id)
+        .order_by(Payroll.id.desc())
+        .limit(EXPORT_ROW_LIMIT)
+        .all()
+    )
+    return [
+        {
+            "payroll_id": p.id,
+            "user_id": p.user_id,
+            "year": p.year,
+            "month": p.month,
+            "base_salary": p.base_salary,
+            "deductions": p.deductions,
+            "reimbursements_total": p.reimbursements_total,
+            "total_salary": p.total_salary,
+            "status": p.status,
+            "currency": p.currency,
+        }
+        for p in rows
+    ]
+
+
+# schema_name -> (loader, permission required).
+#
+# These endpoints previously ignored the tenant and the `schema_name` argument and
+# returned a single hardcoded `Demo User` row, so an export produced a file that
+# looked like employee data and contained none. An export that silently returns
+# invented rows is worse than one that fails.
+EXPORT_SCHEMAS = {
+    "employees": (_export_employees, "reports.employee.export"),
+    "attendance": (_export_attendance, "reports.attendance.export"),
+    "leave": (_export_leave, "reports.employee.export"),
+    "payroll": (_export_payroll, "reports.payroll.export"),
+}
+
+EXPORT_ROW_LIMIT = 10000
+
+
+def _resolve_export_schema(db, schema_name: str, current_user) -> List[Dict[str, Any]]:
+    """Validate the schema, check permission, and load the caller's own tenant."""
+    entry = EXPORT_SCHEMAS.get((schema_name or "").strip().lower())
+    if entry is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unknown export schema '{schema_name}'. "
+                f"Available: {', '.join(sorted(EXPORT_SCHEMAS))}."
+            ),
+        )
+
+    loader, permission = entry
+    from app.api import deps
+    from app.services.permission_service import PermissionService
+
+    if not PermissionService.has_any_permission(db, current_user, [permission]):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Exporting '{schema_name}' requires the '{permission}' permission.",
+        )
+
+    if not current_user.org_id:
+        raise HTTPException(status_code=400, detail="User does not belong to an organization.")
+
+    return loader(db, current_user.org_id)
+
+
+@router.get("/export/csv", summary="Export organization data as CSV")
 def export_csv(
     schema_name: str = Query(...),
+    db=Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    # Placeholder: real endpoint would accept filter params & fetch data from DB
-    sample_data = [{"employee_id": "EMP001", "full_name": "Demo User", "email": "demo@example.com", "status": "active"}]
-    org_id = str(getattr(current_user, "organization_id", "") or "")
-    result = import_export_engine.export_csv(sample_data, schema_name, org_id, current_user.id)
+    data = _resolve_export_schema(db, schema_name, current_user)
+    org_id = str(current_user.org_id or "")
+    result = import_export_engine.export_csv(data, schema_name, org_id, current_user.id)
     return Response(
         content=result.content,
         media_type=result.mime_type,
@@ -415,14 +557,15 @@ def export_csv(
     )
 
 
-@router.get("/export/json", summary="Export data as JSON")
+@router.get("/export/json", summary="Export organization data as JSON")
 def export_json(
     schema_name: str = Query(...),
+    db=Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    sample_data = [{"employee_id": "EMP001", "full_name": "Demo User", "email": "demo@example.com"}]
-    org_id = str(getattr(current_user, "organization_id", "") or "")
-    result = import_export_engine.export_json(sample_data, schema_name, org_id, current_user.id)
+    data = _resolve_export_schema(db, schema_name, current_user)
+    org_id = str(current_user.org_id or "")
+    result = import_export_engine.export_json(data, schema_name, org_id, current_user.id)
     return Response(
         content=result.content,
         media_type=result.mime_type,
@@ -436,7 +579,7 @@ def export_json(
 
 @router.post("/rules/evaluate", summary="Evaluate a rule set against a context")
 def evaluate_rules(request: RuleEvaluateRequest, current_user=Depends(get_current_user)):
-    org_id = str(getattr(current_user, "organization_id", "") or "")
+    org_id = str(current_user.org_id or "")
     report = business_rules_engine.evaluate(
         rule_set=request.rule_set,
         context=request.context,
@@ -470,7 +613,7 @@ def list_rules(
     rule_set: str = Query(...),
     current_user=Depends(get_current_user),
 ):
-    org_id = str(getattr(current_user, "organization_id", "") or "")
+    org_id = str(current_user.org_id or "")
     rules = business_rules_engine.get_rules_for_set(rule_set, org_id)
     return {
         "success": True,
@@ -497,7 +640,7 @@ def list_rules(
 
 @router.get("/plugins", summary="List all registered platform plugins")
 def list_plugins(current_user=Depends(get_current_user)):
-    org_id = str(getattr(current_user, "organization_id", "") or "")
+    org_id = str(current_user.org_id or "")
     plugins = extension_manager.list_plugins()
     return {
         "success": True,
@@ -525,7 +668,7 @@ def list_hooks(current_user=Depends(get_current_user)):
 
 @router.post("/plugins/{plugin_id}/activate", summary="Activate a plugin for this organization")
 def activate_plugin(plugin_id: str, current_user=Depends(get_current_user)):
-    org_id = str(getattr(current_user, "organization_id", "") or "")
+    org_id = str(current_user.org_id or "")
     try:
         record = extension_manager.activate_plugin(plugin_id, organization_id=org_id, user_id=current_user.id)
         return {"success": True, "data": {"plugin_id": plugin_id, "status": record.status.value}}
@@ -535,6 +678,6 @@ def activate_plugin(plugin_id: str, current_user=Depends(get_current_user)):
 
 @router.post("/plugins/{plugin_id}/deactivate", summary="Deactivate a plugin for this organization")
 def deactivate_plugin(plugin_id: str, current_user=Depends(get_current_user)):
-    org_id = str(getattr(current_user, "organization_id", "") or "")
+    org_id = str(current_user.org_id or "")
     result = extension_manager.deactivate_plugin(plugin_id, organization_id=org_id, user_id=current_user.id)
     return {"success": True, "data": {"deactivated": result}}

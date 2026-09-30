@@ -11,8 +11,10 @@ from sqlalchemy.orm import Session
 from app.crud import crud_dynamic_role
 from app.db.models.all_models import (
     DynamicRole, RoleTemplate, RoleInheritance, RoleVersion,
-    UserRoleAssignment, RoleAssignmentHistory, RoleAudit, User
+    UserRoleAssignment, RoleAssignmentHistory, RoleAudit, User,
+    Permission, RolePermission
 )
+from app.api.deps import normalize_role_name
 from app.services.subscription_service import SubscriptionService
 
 
@@ -167,21 +169,18 @@ class EffectivePermissionResolver:
     def resolve_effective_permissions(db: Session, user_id: int, organization_id: UUID) -> Dict[str, Any]:
         user_assignments = crud_dynamic_role.get_user_role_assignments(db, user_id, organization_id)
         if not user_assignments:
-            # Fallback to base User.role if no dynamic role assigned
-            usr = db.query(User).filter(User.id == user_id).first()
-            if usr and usr.role and usr.role.name == "SuperAdmin":
-                return {
-                    "user_id": user_id, "organization_id": organization_id,
-                    "primary_role_code": "SuperAdmin", "assigned_roles": ["SuperAdmin"],
-                    "effective_permissions": ["*"], "effective_data_scopes": {"all": "global"},
-                    "effective_approval_rights": ["*"], "effective_features": ["*"]
-                }
-            return {
-                "user_id": user_id, "organization_id": organization_id,
-                "primary_role_code": None, "assigned_roles": [],
-                "effective_permissions": [], "effective_data_scopes": {},
-                "effective_approval_rights": [], "effective_features": []
-            }
+            # No dynamic role assigned: fall back to the static RBAC role.
+            #
+            # Dynamic roles are an *overlay*, not the only source of authority.
+            # The whole application authorises through `RolePermission` via
+            # `deps.require_permission`; this resolver previously consulted only
+            # `UserRoleAssignment`, so a user whose authority came from their
+            # static role resolved to an empty permission set. That denied
+            # every EAAC-guarded endpoint to everyone except a base SuperAdmin
+            # -- including an OrgAdmin holding all of their static grants.
+            return EffectivePermissionResolver._from_static_role(
+                db, user_id, organization_id
+            )
 
         role_ids = [a.role_id for a in user_assignments]
         primary_asgn = next((a for a in user_assignments if a.is_primary), user_assignments[0])
@@ -231,6 +230,70 @@ class EffectivePermissionResolver:
             "effective_approval_rights": sorted(list(eff_approval)),
             "effective_features": bounded_features,
             "subscription_unlocked_features": unlocked_features
+        }
+
+    @staticmethod
+    def _from_static_role(db: Session, user_id: int, organization_id: UUID) -> Dict[str, Any]:
+        """
+        Resolve authority from the static `RolePermission` grants on the user's
+        base role.
+
+        Mirrors `deps.require_permission` deliberately: the same table, the same
+        `is_active` filter, and the same rule that only SuperAdmin holds
+        implicit everything. Two authorisation systems that disagree about who
+        may do what is the bug this exists to remove, so the fallback has to
+        read the same source of truth rather than a parallel copy of it.
+        """
+        usr = db.query(User).filter(User.id == user_id).first()
+        role_code = usr.role.name if (usr and usr.role) else None
+
+        if role_code and normalize_role_name(role_code) == "SuperAdmin":
+            return {
+                "user_id": user_id, "organization_id": organization_id,
+                "primary_role_code": "SuperAdmin", "assigned_roles": ["SuperAdmin"],
+                "effective_permissions": ["*"],
+                "effective_data_scopes": {"all": "global"},
+                "effective_approval_rights": ["*"], "effective_features": ["*"],
+                "subscription_unlocked_features": ["*"],
+                "resolution_source": "static_role",
+            }
+
+        if not usr or not usr.role_id:
+            return {
+                "user_id": user_id, "organization_id": organization_id,
+                "primary_role_code": None, "assigned_roles": [],
+                "effective_permissions": [], "effective_data_scopes": {},
+                "effective_approval_rights": [], "effective_features": [],
+                "subscription_unlocked_features": [],
+                "resolution_source": "none",
+            }
+
+        granted = {
+            row[0]
+            for row in db.query(Permission.name)
+            .join(RolePermission, RolePermission.permission_id == Permission.id)
+            .filter(
+                RolePermission.role_id == usr.role_id,
+                Permission.is_active.is_(True),
+            )
+            .all()
+        }
+
+        return {
+            "user_id": user_id, "organization_id": organization_id,
+            "primary_role_code": role_code, "assigned_roles": [],
+            "effective_permissions": sorted(granted),
+            # No scope restriction: the static roles already encode their own
+            # boundaries, and inventing a narrower one here would deny access
+            # the rest of the application grants.
+            "effective_data_scopes": {},
+            "effective_approval_rights": [],
+            # Left empty so Stage 3 stays the subscription's decision. The
+            # dynamic-role path intersects features with the plan; for a static
+            # role the plan gate is enforced separately by `require_feature`.
+            "effective_features": [],
+            "subscription_unlocked_features": [],
+            "resolution_source": "static_role",
         }
 
 

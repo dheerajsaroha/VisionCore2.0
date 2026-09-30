@@ -146,7 +146,14 @@ class PredictiveService:
             raise ValueError(f"Model {model.name} does not support forecasting")
 
         logger.info(f"Generating forecast: {model.name} ({days_ahead} steps)")
-        result = await model.forecast(params, days_ahead)
+        try:
+            result = await model.forecast(params, days_ahead)
+        except NotImplementedError as exc:
+            # The base class defines forecast() but raises NotImplementedError,
+            # so the hasattr guard above can never fire and this escaped to the
+            # router's generic handler as a 500. "This model cannot forecast" is
+            # a bad-request condition, not a server fault.
+            raise ValueError(f"Model {model.name} does not support forecasting") from exc
 
         # Audit
         audit_service.record(

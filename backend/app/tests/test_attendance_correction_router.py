@@ -22,6 +22,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
+import types
 
 import pytest
 from fastapi.testclient import TestClient
@@ -52,12 +53,18 @@ class _User:
         self.is_active = True
 
 
-def _make_db() -> MagicMock:
+def _make_db(permissions_map=None) -> MagicMock:
     """Return a plain MagicMock whose query/filter/all/first chain safely.
 
     Must NOT use spec or spec_set — those cause SQLAlchemy to treat the mock
     as a real Session (binding Query to it), which triggers real DB connections.
+    
+    Args:
+        permissions_map: Dict mapping permission names to bool indicating if the permission exists in RolePermission table
     """
+    if permissions_map is None:
+        permissions_map = {}
+    
     db = MagicMock()
     q = MagicMock()
     q.filter.return_value = q
@@ -67,6 +74,41 @@ def _make_db() -> MagicMock:
     q.first.return_value = None
     q.all.return_value = []
     db.query.return_value = q
+    
+    # Override query to handle Permission and RolePermission models
+    original_query = db.query
+    def query_side_effect(model):
+        name = getattr(model, '__name__', '')
+        if name == 'Permission':
+            # Return a mock query that returns a permission object for any name in permissions_map
+            perm_q = MagicMock()
+            perm_q.filter.return_value = perm_q
+            perm_q.filter_by.return_value = perm_q
+            perm_q.join.return_value = perm_q
+            def perm_first():
+                # Check if any permission in permissions_map is active
+                # The query uses Permission.name.in_(perm_list) so we just need one match
+                for perm_name in permissions_map:
+                    if permissions_map[perm_name]:
+                        return types.SimpleNamespace(id=1, is_active=True)
+                return None
+            perm_q.first = perm_first
+            return perm_q
+        elif name == 'RolePermission':
+            # Return a mock query that returns a RolePermission for permissions in permissions_map
+            rp_q = MagicMock()
+            rp_q.filter.return_value = rp_q
+            rp_q.filter_by.return_value = rp_q
+            rp_q.join.return_value = rp_q
+            def rp_first():
+                for perm_name in permissions_map:
+                    if permissions_map[perm_name]:
+                        return types.SimpleNamespace(id=1)
+                return None
+            rp_q.first = rp_first
+            return rp_q
+        return original_query(model)
+    db.query.side_effect = query_side_effect
     return db
 
 
@@ -92,7 +134,9 @@ def _override(user: _User) -> MagicMock:
     - router_get_db  : used by Depends(get_db) in each route handler
     - deps_get_db    : used by Depends(get_db) inside require_permission._dependency
     """
-    db = _make_db()
+    # Create permissions_map from user's role.permissions
+    permissions_map = {p: True for p in (user.role.permissions if user.role and user.role.permissions else [])}
+    db = _make_db(permissions_map)
     app.dependency_overrides[router_get_db] = lambda: db
     app.dependency_overrides[deps_get_db] = lambda: db
     app.dependency_overrides[get_current_active_user] = lambda: user

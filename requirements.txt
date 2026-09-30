@@ -13,3 +13,4 @@ python-jose[cryptography]
 python-multipart
 Pillow
 numpy
+reportlab>=4.0.0

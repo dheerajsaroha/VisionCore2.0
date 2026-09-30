@@ -62,6 +62,7 @@ def setup_biometrics_overrides():
 # =====================================================
 
 from app.core import rate_limit
+_ORIGINAL_GET_REDIS = rate_limit._get_redis
 
 
 class MockPipeline:
@@ -86,14 +87,12 @@ class MockRedisClient:
         return MockPipeline()
 
 
-rate_limit.redis_client = MockRedisClient()
-
-
 # =====================================================
 # ATTENDANCE CONTROLLER MOCK
 # =====================================================
 
 from app.services.attendance_controller import attendance_controller
+from app.repositories.attendance_repo import attendance_repo
 
 
 class MockAttendanceLog:
@@ -109,9 +108,33 @@ class MockAttendanceLog:
     created_at = datetime.now(timezone.utc)
 
 
-attendance_controller.log_check_in = MagicMock(
+_ORIGINAL_CONTROLLER_LOG_CHECK_IN = attendance_controller.log_check_in
+_MODULE_CONTROLLER_LOG_CHECK_IN = MagicMock(
     return_value=MockAttendanceLog()
 )
+
+_BASELINE_BIOMETRIC_STATE = {
+    "liveness_detect": liveness_service.detect_liveness,
+    "face_embedding": face_engine.get_embedding,
+    "face_emotion": face_engine.get_emotion,
+    "repo_find_user": attendance_repo.find_user_by_face,
+    "controller_log_check_in": _ORIGINAL_CONTROLLER_LOG_CHECK_IN,
+}
+
+
+@pytest.fixture(autouse=True)
+def restore_biometric_state():
+    # The client is now resolved per event loop, so patch the
+    # resolver rather than a cached client object.
+    rate_limit._get_redis = lambda: MockRedisClient()
+    attendance_controller.log_check_in = _MODULE_CONTROLLER_LOG_CHECK_IN
+    yield
+    rate_limit._get_redis = _ORIGINAL_GET_REDIS
+    liveness_service.detect_liveness = _BASELINE_BIOMETRIC_STATE["liveness_detect"]
+    face_engine.get_embedding = _BASELINE_BIOMETRIC_STATE["face_embedding"]
+    face_engine.get_emotion = _BASELINE_BIOMETRIC_STATE["face_emotion"]
+    attendance_repo.find_user_by_face = _BASELINE_BIOMETRIC_STATE["repo_find_user"]
+    attendance_controller.log_check_in = _BASELINE_BIOMETRIC_STATE["controller_log_check_in"]
 
 
 # =====================================================
@@ -246,4 +269,3 @@ def test_checkin_unknown_face():
     )
 
     assert response.status_code in [400, 404]
-

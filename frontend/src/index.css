@@ -4,11 +4,17 @@
 /* Tailwind CSS v4 */
 @import "tailwindcss";
 
-/* Dark mode variant — triggered by .dark class on html/body */
-@custom-variant dark (&:is(.dark *));
+/* Dark mode & Theme variants
+   `dark` must also match the two other dark themes, otherwise every `dark:`
+   utility silently turns off on midnight/nordic and dark-on-dark content
+   disappears. `light` is the only theme that inverts the neutral scale. */
+@custom-variant dark (&:is(.dark *, .midnight *, .nordic *));
+@custom-variant light (&:is(.light *));
+@custom-variant midnight (&:is(.midnight *));
+@custom-variant nordic (&:is(.nordic *));
 
 @theme {
-  /* Primary — Indigo */
+  /* Core Color System — Indigo Primary */
   --color-primary-50: #eef2ff;
   --color-primary-100: #e0e7ff;
   --color-primary-200: #c7d2fe;
@@ -73,45 +79,173 @@
   --color-info-900: #0c4a6e;
   --color-info-950: #082f49;
 
-  /* Gray — Slate */
-  --color-gray-50: #f8fafc;
-  --color-gray-100: #f1f5f9;
-  --color-gray-200: #e2e8f0;
-  --color-gray-300: #cbd5e1;
-  --color-gray-400: #94a3b8;
-  --color-gray-500: #64748b;
-  --color-gray-600: #475569;
-  --color-gray-700: #334155;
-  --color-gray-800: #1e293b;
-  --color-gray-900: #0f172a;
-  --color-gray-950: #020617;
+  /* Semantic Theme Gray Palette */
+  --color-gray-50: var(--gray-50);
+  --color-gray-100: var(--gray-100);
+  --color-gray-200: var(--gray-200);
+  --color-gray-300: var(--gray-300);
+  --color-gray-400: var(--gray-400);
+  --color-gray-500: var(--gray-500);
+  --color-gray-600: var(--gray-600);
+  --color-gray-700: var(--gray-700);
+  --color-gray-800: var(--gray-800);
+  --color-gray-900: var(--gray-900);
+  --color-gray-950: var(--gray-950);
 
-  /* Font */
+  /* Slate is the secondary neutral ramp used by the dashboard modules. It is
+     driven by the same theme switch so those panels track the active theme. */
+  --color-slate-50: var(--slate-50);
+  --color-slate-100: var(--slate-100);
+  --color-slate-200: var(--slate-200);
+  --color-slate-300: var(--slate-300);
+  --color-slate-400: var(--slate-400);
+  --color-slate-500: var(--slate-500);
+  --color-slate-600: var(--slate-600);
+  --color-slate-700: var(--slate-700);
+  --color-slate-800: var(--slate-800);
+  --color-slate-900: var(--slate-900);
+  --color-slate-950: var(--slate-950);
+
+  /* Fonts */
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  /* Animations */
-  --animate-fade-in: fadeIn 0.5s ease-out forwards;
-  --animate-slide-up: slideUp 0.5s ease-out forwards;
+  /* Elevation Shadows */
+  --shadow-glow-indigo: 0 0 25px rgba(99, 102, 241, 0.25);
+  --shadow-glow-purple: 0 0 25px rgba(168, 85, 247, 0.25);
+  --shadow-glow-emerald: 0 0 25px rgba(16, 185, 129, 0.25);
 
-  @keyframes fadeIn {
-    0% { opacity: 0; }
-    100% { opacity: 1; }
-  }
-  @keyframes slideUp {
-    0% { opacity: 0; transform: translateY(20px); }
-    100% { opacity: 1; transform: translateY(0); }
-  }
+  /* Animations */
+  --animate-fade-in: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-slide-up: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
 @layer base {
   :root {
-    --glass-bg: rgba(15, 23, 42, 0.65);
+    /* Theme 1: Default Dark Mode (Deep Slate / Indigo) */
+    --gray-50: #f8fafc;
+    --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;
+    --gray-300: #cbd5e1;
+    --gray-400: #94a3b8;
+    --gray-500: #64748b;
+    --gray-600: #475569;
+    --gray-700: #334155;
+    --gray-800: #1e293b;
+    --gray-900: #0f172a;
+    --gray-950: #020617;
+
+    --slate-50: #f8fafc;
+    --slate-100: #f1f5f9;
+    --slate-200: #e2e8f0;
+    --slate-300: #cbd5e1;
+    --slate-400: #94a3b8;
+    --slate-500: #64748b;
+    --slate-600: #475569;
+    --slate-700: #334155;
+    --slate-800: #1e293b;
+    --slate-900: #0f172a;
+    --slate-950: #020617;
+
+    --glass-bg: rgba(15, 23, 42, 0.75);
     --glass-border: rgba(255, 255, 255, 0.1);
   }
 
-  html {
+  /* Theme 2: Light Mode (Crisp White / Slate / Indigo) */
+  html.light {
+    color-scheme: light;
+    --gray-50: #020617;
+    --gray-100: #0f172a;
+    --gray-200: #1e293b;
+    --gray-300: #334155;
+    --gray-400: #475569;
+    --gray-500: #64748b;
+    --gray-600: #94a3b8;
+    --gray-700: #cbd5e1;
+    --gray-800: #e2e8f0;
+    --gray-900: #f1f5f9;
+    --gray-950: #f8fafc;
+
+    --slate-50: #020617;
+    --slate-100: #0f172a;
+    --slate-200: #1e293b;
+    --slate-300: #334155;
+    --slate-400: #475569;
+    --slate-500: #64748b;
+    --slate-600: #94a3b8;
+    --slate-700: #cbd5e1;
+    --slate-800: #e2e8f0;
+    --slate-900: #f1f5f9;
+    --slate-950: #f8fafc;
+
+    --glass-bg: rgba(255, 255, 255, 0.85);
+    --glass-border: rgba(0, 0, 0, 0.08);
+  }
+
+  /* Theme 3: Midnight Neon (Obsidian Black / Neon Purple & Cyan) */
+  html.midnight {
     color-scheme: dark;
+    --gray-50: #ffffff;
+    --gray-100: #f0ecfc;
+    --gray-200: #d6ccfa;
+    --gray-300: #a792f5;
+    --gray-400: #8b72f5;
+    --gray-500: #7b5af3;
+    --gray-600: #3b1fa6;
+    --gray-700: #251373;
+    --gray-800: #180942;
+    --gray-900: #0d0426;
+    --gray-950: #050112;
+
+    --slate-50: #ffffff;
+    --slate-100: #f0ecfc;
+    --slate-200: #d6ccfa;
+    --slate-300: #a792f5;
+    --slate-400: #8b72f5;
+    --slate-500: #7b5af3;
+    --slate-600: #3b1fa6;
+    --slate-700: #251373;
+    --slate-800: #180942;
+    --slate-900: #0d0426;
+    --slate-950: #050112;
+
+    --glass-bg: rgba(13, 4, 38, 0.8);
+    --glass-border: rgba(167, 146, 245, 0.2);
+  }
+
+  /* Theme 4: Nordic Frost (Deep Arctic Navy / Cool Teal & Emerald) */
+  html.nordic {
+    color-scheme: dark;
+    --gray-50: #f0fdfa;
+    --gray-100: #ccfbf1;
+    --gray-200: #99f6e4;
+    --gray-300: #5eead4;
+    --gray-400: #2dd4bf;
+    --gray-500: #14b8a6;
+    --gray-600: #0f766e;
+    --gray-700: #115e59;
+    --gray-800: #134e4a;
+    --gray-900: #042f2e;
+    --gray-950: #021a1a;
+
+    --slate-50: #f0fdfa;
+    --slate-100: #ccfbf1;
+    --slate-200: #99f6e4;
+    --slate-300: #5eead4;
+    --slate-400: #2dd4bf;
+    --slate-500: #14b8a6;
+    --slate-600: #0f766e;
+    --slate-700: #115e59;
+    --slate-800: #134e4a;
+    --slate-900: #042f2e;
+    --slate-950: #021a1a;
+
+    --glass-bg: rgba(4, 47, 46, 0.8);
+    --glass-border: rgba(94, 234, 212, 0.2);
+  }
+
+  html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     scroll-behavior: smooth;
@@ -119,8 +253,8 @@
 
   body {
     font-family: var(--font-sans);
-    background-color: #020617;
-    color: #e2e8f0;
+    background-color: var(--gray-950);
+    color: var(--gray-100);
     line-height: 1.5;
     min-height: 100vh;
     overflow-x: hidden;
@@ -128,18 +262,50 @@
 }
 
 @layer components {
+  /* Glass Surface Primitives */
   .glass {
     background: var(--glass-bg);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--glass-border);
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
   }
 
+  /* Text Balance Utility */
   .text-balance {
     text-wrap: balance;
   }
 
+  /* Background Engine Systems */
+  .bg-solid {
+    background-color: var(--gray-950);
+  }
+
+  .bg-gradient-mesh {
+    background: radial-gradient(circle at 50% 0%, var(--gray-900) 0%, var(--gray-950) 100%);
+  }
+
+  .bg-grid-pattern {
+    background-image: radial-gradient(var(--gray-800) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .bg-aurora-glow {
+    position: relative;
+    overflow: hidden;
+  }
+  .bg-aurora-glow::before {
+    content: '';
+    position: absolute;
+    top: -20%;
+    left: 20%;
+    width: 60%;
+    height: 60%;
+    background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+    filter: blur(80px);
+    pointer-events: none;
+  }
+
+  /* Scrollbar hiding */
   .hide-scrollbar::-webkit-scrollbar {
     display: none;
   }
@@ -149,73 +315,32 @@
   }
 }
 
-/* ── Light theme ────────────────────────────────────────────────────
-   Applied when <html class="light"> is set by useTheme hook.
-   Overrides structural surface colors so the app reads on white.
-   Components using hardcoded dark Tailwind classes are addressed here
-   through CSS custom property overrides read at the :root level.
-─────────────────────────────────────────────────────────────────── */
-html.light {
-  color-scheme: light;
-
-  /* Glass surface — white frosted */
-  --glass-bg: rgba(255, 255, 255, 0.75);
-  --glass-border: rgba(0, 0, 0, 0.1);
-
-  /* Page-level surface and text */
-  --vc-bg: #f1f5f9;
-  --vc-surface: #ffffff;
-  --vc-surface-2: #f8fafc;
-  --vc-border: #e2e8f0;
-  --vc-text: #0f172a;
-  --vc-text-muted: #64748b;
-  --vc-text-subtle: #94a3b8;
-}
-
-html.light body {
-  background-color: #f1f5f9;
-  color: #0f172a;
-}
-
-html.light ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-}
-html.light ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-/* Animations */
+/* Keyframe Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes slideInRight {
-  from { opacity: 0; transform: translateX(16px); }
-  to { opacity: 1; transform: translateX(0); }
+.animate-slide-up {
+  animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-.animate-slide-in-right {
-  animation: slideInRight 0.3s ease-out forwards;
-}
-
-/* Focus Visible */
+/* Global Focus Ring Standards */
 :focus-visible {
-  outline: 2px solid #6366f1;
+  outline: 2px solid var(--color-primary-500);
   outline-offset: 2px;
 }
 
-/* Selection */
-::selection {
-  background-color: #c7d2fe;
-  color: #312e81;
-}
-
-/* Custom Scrollbar */
+/* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -224,10 +349,51 @@ html.light ::-webkit-scrollbar-thumb:hover {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: var(--gray-700);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: var(--gray-600);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Light-theme foreground correction
+   The neutral scale is inverted in the light theme: gray/slate 900, 800, 700
+   and 600 become *light* surfaces while gray-100/slate-100 become the dark ink.
+   Literal `text-white` cannot follow that inversion, so white text on a neutral
+   surface would render white-on-white.
+
+   Scope: an element with no background of its own, or one whose background is
+   a neutral themed step. Text on a saturated accent (buttons, chips, gradient
+   or black scrims) keeps true white, which is already legible there. Anything
+   that needs an explicit opt-out carries `.on-accent`.
+   Unlayered on purpose so these outrank generated Tailwind utilities.
+   ──────────────────────────────────────────────────────────────────────────── */
+.on-accent {
+  color: #ffffff;
+}
+
+html.light .text-white:not(.on-accent):is(
+    :not([class*='bg-']),
+    [class~='bg-transparent'],
+    [class*='bg-gray-6'], [class*='bg-gray-7'], [class*='bg-gray-8'], [class*='bg-gray-9'],
+    [class*='bg-slate-6'], [class*='bg-slate-7'], [class*='bg-slate-8'], [class*='bg-slate-9']
+  ) {
+  color: var(--gray-100);
+}
+
+html.light .hover\:text-white:not(.on-accent):is(
+    :not([class*='bg-']),
+    [class~='bg-transparent'],
+    [class*='bg-gray-6'], [class*='bg-gray-7'], [class*='bg-gray-8'], [class*='bg-gray-9'],
+    [class*='bg-slate-6'], [class*='bg-slate-7'], [class*='bg-slate-8'], [class*='bg-slate-9']
+  ):hover,
+html.light .group:hover .group-hover\:text-white:not(.on-accent):is(
+    :not([class*='bg-']),
+    [class~='bg-transparent'],
+    [class*='bg-gray-6'], [class*='bg-gray-7'], [class*='bg-gray-8'], [class*='bg-gray-9'],
+    [class*='bg-slate-6'], [class*='bg-slate-7'], [class*='bg-slate-8'], [class*='bg-slate-9']
+  ) {
+  color: var(--gray-100);
 }
 

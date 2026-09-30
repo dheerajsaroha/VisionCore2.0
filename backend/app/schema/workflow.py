@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, List, Optional
 from uuid import UUID
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── Approver Schemas ──
@@ -29,6 +29,51 @@ class ApproverResponse(ApproverBase):
         from_attributes = True
 
 
+class ConditionCreate(BaseModel):
+    """A conditional routing rule attached to a stage.
+
+    Exposed on the API so a chain can actually be built as the module describes
+    ("if the expense is over $1,000, also require Finance"). The evaluator in
+    `workflow_engine.ConditionEvaluator` reads rows of this shape; without them
+    the rules could exist in the database but no administrator could enter one.
+    """
+    condition_type: str = Field(
+        "skip_stage", description="skip_stage|auto_approve|require_stage"
+    )
+    field_name: str = Field(..., min_length=1, max_length=100)
+    operator: str = Field(
+        "equals", description="equals|not_equals|greater_than|less_than|in|contains"
+    )
+    value: str = Field(..., min_length=1)
+
+    @field_validator("condition_type")
+    @classmethod
+    def _valid_type(cls, v: str) -> str:
+        allowed = {"skip_stage", "auto_approve", "require_stage"}
+        if v not in allowed:
+            raise ValueError(f"condition_type must be one of {sorted(allowed)}")
+        return v
+
+    @field_validator("operator")
+    @classmethod
+    def _valid_operator(cls, v: str) -> str:
+        allowed = {
+            "equals", "not_equals", "greater_than", "less_than", "in", "contains",
+        }
+        if v not in allowed:
+            raise ValueError(f"operator must be one of {sorted(allowed)}")
+        return v
+
+
+class ConditionResponse(ConditionCreate):
+    id: int
+    stage_id: Optional[int] = None
+    workflow_id: Optional[int] = None
+
+    class Config:
+        from_attributes = True
+
+
 # ── Stage Schemas ──
 class StageBase(BaseModel):
     stage_order: int = Field(1, ge=1)
@@ -42,6 +87,7 @@ class StageBase(BaseModel):
 
 class StageCreate(StageBase):
     approvers: List[ApproverCreate] = Field(default_factory=list)
+    conditions: List[ConditionCreate] = Field(default_factory=list)
 
 class StageUpdate(BaseModel):
     name: Optional[str] = None
@@ -56,6 +102,7 @@ class StageResponse(StageBase):
     id: int
     workflow_id: int
     approvers: List[ApproverResponse] = Field(default_factory=list)
+    conditions: List[ConditionResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 

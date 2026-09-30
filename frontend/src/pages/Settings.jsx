@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../store/authStore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
@@ -15,20 +15,28 @@ import { useTheme } from '../hooks/useTheme';
 
 import {
   Bell, Shield, User, Building, Moon, Sun, Key, Plus, Trash2,
-  Zap, ZapOff, Save, RefreshCw, Loader2,
+  Zap, ZapOff, Save, RefreshCw, Loader2, CheckCircle2, Circle,
 } from 'lucide-react';
+import { authService } from '../services/authService';
+import { checkPassword } from '../utils/passwordPolicy';
+
+const adaptiveText = 'text-gray-100';
+const adaptiveTextMuted = 'text-gray-400';
+const adaptiveBg = 'bg-gray-800';
+const adaptiveBgHover = 'hover:bg-gray-700';
+const adaptiveBorder = 'border-gray-700';
 
 const Section = ({ title, description, icon: Icon, children }) => (
   <Card>
-    <CardHeader className="border-b border-gray-800/50 pb-4">
+    <CardHeader className={`border-b ${adaptiveBorder}/50 pb-4`}>
       <div className="flex items-center gap-3">
         <div className="h-9 w-9 rounded-xl bg-indigo-500/10 flex items-center justify-center">
           <Icon className="h-5 w-5 text-indigo-400" />
         </div>
         <div>
-          <CardTitle className="text-white text-base">{title}</CardTitle>
+          <CardTitle className={`text-base ${adaptiveText}`}>{title}</CardTitle>
           {description && (
-            <CardDescription className="text-gray-500 text-xs mt-0.5">{description}</CardDescription>
+            <CardDescription className={`text-xs mt-0.5 ${adaptiveTextMuted}`}>{description}</CardDescription>
           )}
         </div>
       </div>
@@ -56,6 +64,144 @@ const Toggle = ({ enabled, onToggle, loading, disabled }) => (
     </span>
   </button>
 );
+
+const ChangePasswordCard = () => {
+  const toast = useToast();
+  const logout = useAuthStore((s) => s.logout);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const checks = useMemo(
+    () => checkPassword(newPassword),
+    [newPassword]
+  );
+  const unmet = checks.filter((c) => !c.ok);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setDone(false);
+    if (newPassword !== confirmPassword) {
+      setError('The new passwords do not match.');
+      return;
+    }
+    if (unmet.length) {
+      setError(`Password is missing: ${unmet.map((u) => u.label.toLowerCase()).join(', ')}.`);
+      return;
+    }
+    setLoading(true);
+    try {
+      await authService.changePassword(currentPassword, newPassword);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setDone(true);
+      // The server revokes every session on success, so the stored session
+      // is already dead. Send the user back to login rather than leaving
+      // them on a page whose next request will 401.
+      toast({
+        title: 'Password changed',
+        description: 'You have been signed out of all devices. Please sign in again.',
+        variant: 'success',
+      });
+      setTimeout(() => {
+        logout?.();
+        window.location.href = '/login';
+      }, 1500);    } catch (err) {
+      setError(
+        err.response?.data?.detail ||
+          'Unable to change your password. Please try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className={`border-b ${adaptiveBorder}/50 pb-4`}>
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+            <Shield className="h-5 w-5 text-indigo-400" />
+          </div>
+          <div>
+            <CardTitle className={`text-base ${adaptiveText}`}>Change password</CardTitle>
+            <CardDescription className={`text-xs mt-0.5 ${adaptiveTextMuted}`}>
+              Changing your password signs you out on every device.
+            </CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-5">
+        <form onSubmit={submit} className="space-y-4 max-w-md">
+          <Input
+            label="Current password"
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            required
+          />
+          <Input
+            label="New password"
+            type="password"
+            autoComplete="new-password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            required
+          />
+          <Input
+            label="Confirm new password"
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            required
+          />
+
+          {newPassword && (
+            <ul className="space-y-1" aria-live="polite">
+              {checks.map((c) => (
+                <li
+                  key={c.id}
+                  className={`flex items-center gap-2 text-xs ${
+                    c.ok ? 'text-emerald-400' : 'text-gray-500'
+                  }`}
+                >
+                  {c.ok ? (
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  ) : (
+                    <Circle className="h-3.5 w-3.5" />
+                  )}
+                  {c.label}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {error && (
+            <p className="text-xs text-red-400 font-medium" role="alert">
+              {error}
+            </p>
+          )}
+          {done && !error && (
+            <p className="text-xs text-emerald-400 font-medium" role="status">
+              Password updated.
+            </p>
+          )}
+
+          <Button type="submit" disabled={loading || !currentPassword || unmet.length > 0}>
+            {loading ? 'Updating...' : 'Update password'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+};
 
 export default function Settings() {
   const { user, refreshProfile } = useAuthStore();
@@ -218,7 +364,7 @@ export default function Settings() {
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
       <div>
-        <h1 className="text-2xl font-bold text-white">Settings</h1>
+        <h1 className="text-2xl font-bold text-gray-100">Settings</h1>
         <p className="text-sm text-gray-400 mt-1">Manage your account, preferences, and organization settings.</p>
       </div>
 
@@ -233,7 +379,7 @@ export default function Settings() {
         <TabsContent value="profile" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-white">
+              <CardTitle className="flex items-center gap-2 text-gray-100">
                 <User className="h-5 w-5 text-indigo-400" />
                 Profile
               </CardTitle>
@@ -242,7 +388,7 @@ export default function Settings() {
               <div className="flex items-center gap-4">
                 <Avatar name={user?.full_name} size="lg" />
                 <div>
-                  <p className="text-base font-semibold text-white">{user?.full_name}</p>
+                  <p className="text-base font-semibold text-gray-100">{user?.full_name}</p>
                   <p className="text-sm text-gray-400">{user?.email}</p>
                   <Badge variant="primary" className="mt-1">{user?.role?.name || user?.role}</Badge>
                 </div>
@@ -281,26 +427,13 @@ export default function Settings() {
 
 
         <TabsContent value="security" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-white">
-                <Shield className="h-5 w-5 text-indigo-400" />
-                Security
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Input label="Current password" type="password" />
-              <Input label="New password" type="password" />
-              <Input label="Confirm new password" type="password" />
-              <Button>Update password</Button>
-            </CardContent>
-          </Card>
+          <ChangePasswordCard />
         </TabsContent>
 
         <TabsContent value="appearance" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-white">
+              <CardTitle className="flex items-center gap-2 text-gray-100">
                 <Moon className="h-5 w-5 text-indigo-400" />
                 Appearance
               </CardTitle>
@@ -308,20 +441,20 @@ export default function Settings() {
             <CardContent>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-white">Interface theme</p>
+                  <p className="text-sm font-medium text-gray-100">Interface theme</p>
                   <p className="text-xs text-gray-400">Choose between light and dark mode</p>
                 </div>
                 <div className="flex bg-gray-800 rounded-lg p-1">
                   <button
                     onClick={() => setTheme('light')}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-200 ${theme === 'light' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-200 ${theme === 'light' ? 'bg-gray-700 text-gray-100 shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                   >
                     <Sun className="h-4 w-4" />
                     Light
                   </button>
                   <button
                     onClick={() => setTheme('dark')}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-200 ${theme === 'dark' ? 'bg-gray-700 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors duration-200 ${theme === 'dark' ? 'bg-gray-700 text-gray-100 shadow-sm' : 'text-gray-400 hover:text-gray-200'}`}
                   >
                     <Moon className="h-4 w-4" />
                     Dark
@@ -336,7 +469,7 @@ export default function Settings() {
           <TabsContent value="organization" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-white">
+                <CardTitle className="flex items-center gap-2 text-gray-100">
                   <Building className="h-5 w-5 text-indigo-400" />
                   Branding & Config
                 </CardTitle>
@@ -365,7 +498,7 @@ export default function Settings() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2 text-white">
+                  <CardTitle className="flex items-center gap-2 text-gray-100">
                     <Key className="h-5 w-5 text-indigo-400" />
                     API Keys
                   </CardTitle>
@@ -386,12 +519,12 @@ export default function Settings() {
                 {apiKeys.length === 0 ? (
                   <p className="text-sm text-gray-400">No API keys generated yet.</p>
                 ) : (
-                  <div className="divide-y divide-gray-800">
+                  <div className="divide-y divide-gray-700">
                     {apiKeys.map(key => (
                       <div key={key.id} className="py-4 flex items-center justify-between">
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-white font-medium text-sm">Key ID: {key.id}</span>
+                            <span className="text-sm font-medium text-gray-100">Key ID: {key.id}</span>
                             {key.is_revoked ? (
                               <Badge variant="destructive">Revoked</Badge>
                             ) : (

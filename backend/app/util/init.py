@@ -28,3 +28,27 @@ def create_tables():
             print("HNSW index enabled.")
     except Exception as e:
         print(f"Warning: Could not create HNSW index automatically. Ensure it is enabled manually. {e}")
+
+    _load_business_calendar()
+
+
+def _load_business_calendar():
+    """
+    Populate the working-day calendar from the database.
+
+    The calendar service keeps its holidays in process memory, so without this
+    every holiday created through the API disappeared on restart and was
+    invisible to any other worker.
+    """
+    try:
+        from sqlalchemy.orm import sessionmaker
+
+        from app.services.business_calendar_service import business_calendar_service
+
+        session = sessionmaker(bind=engine)()
+        try:
+            business_calendar_service.load_from_db(session)
+        finally:
+            session.close()
+    except Exception as e:
+        print(f"Warning: Could not load holiday calendars. {e}")

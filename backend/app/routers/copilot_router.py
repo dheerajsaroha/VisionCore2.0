@@ -30,7 +30,7 @@ from app.services.ai.copilot_orchestrator import copilot_orchestrator
 from app.services.ai.copilot_tools import list_tools
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(deps.require_feature("ai_chat"))])
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────

@@ -31,6 +31,58 @@ router = APIRouter()
 analytics_platform = AnalyticsPlatform()
 
 
+# The executive dashboard, the metric registry and the snapshot history are
+# organization-wide workforce data. The registry's per-metric rules are applied
+# in `_require_metric_permission`; these gates cover the aggregate surfaces.
+_can_read_analytics = deps.require_permission("analytics.read")
+
+
+def _holds(db: Session, user: User, permission_name: str) -> bool:
+    """Whether `user` holds `permission_name`.
+
+    Only SuperAdmin is treated as holding everything, matching
+    `require_permission`.
+    """
+    from app.api.deps import normalize_role_name
+    from app.services.permission_service import PermissionService
+
+    if user.role and normalize_role_name(user.role.name) == "SuperAdmin":
+        return True
+    return PermissionService.has_any_permission(db, user, [permission_name])
+
+
+def _require_metric_permission(
+    db: Session, user: User, metric_key: str, required: str
+) -> None:
+    """Enforce the permission a metric declares for itself.
+
+    `MetricDefinition.required_permission` was seeded per metric and never read
+    by anything, so `payroll_monthly_cost` and `security_login_failures` were
+    reachable by any active session. The column describes the access rule that
+    was always intended; this applies it.
+
+    A metric whose required permission does not exist in the RBAC catalog fails
+    closed rather than open — an unrecognised rule is a configuration error, and
+    treating it as "no restriction" would re-open the hole this closes.
+    """
+    if not _holds(db, user, required):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Metric '{metric_key}' requires the '{required}' permission.",
+        )
+
+
+def _require_metric_key_permission(db: Session, user: User, metric_key: str) -> None:
+    """Apply the declared permission for a metric identified only by key."""
+    defn = metric_registry_service.get_metric_definition(db, metric_key)
+    if not defn:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Metric key '{metric_key}' not found in registry.",
+        )
+    _require_metric_permission(db, user, metric_key, defn.required_permission)
+
+
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class MetricDefinitionResponse(BaseModel):
@@ -81,7 +133,7 @@ class MetricValueResponse(BaseModel):
     tags=["analytics"],
 )
 async def get_executive_dashboard(
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(_can_read_analytics),
     db: Session = Depends(deps.get_db),
 ):
     """
@@ -103,7 +155,7 @@ async def get_executive_dashboard(
 )
 async def list_metrics(
     category: Optional[str] = Query(None, description="Optional category filter (e.g. workforce, attendance, payroll)"),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(_can_read_analytics),
     db: Session = Depends(deps.get_db),
 ):
     """Lists registered metric definitions from Metric Registry."""
@@ -135,6 +187,7 @@ async def get_metric_value(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Metric key '{metric_key}' not found in registry.",
         )
+    _require_metric_permission(db, current_user, metric_key, defn.required_permission)
     val = metric_registry_service.calculate_metric(db, current_user.org_id, metric_key)
     return MetricValueResponse(
         metric_key=metric_key,
@@ -151,7 +204,7 @@ async def get_metric_value(
 )
 async def record_snapshot(
     body: SnapshotCreateRequest,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(_can_read_analytics),
     db: Session = Depends(deps.get_db),
 ):
     """Records a metric snapshot for historical analytics and trend tracking."""
@@ -185,7 +238,7 @@ async def record_snapshot(
 async def get_snapshots(
     metric_key: Optional[str] = Query(None, description="Metric key filter"),
     limit: int = Query(50, ge=1, le=500),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(_can_read_analytics),
     db: Session = Depends(deps.get_db),
 ):
     """Retrieves historical metric snapshots for tenant."""
@@ -194,6 +247,7 @@ async def get_snapshots(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User does not belong to an organization.",
         )
+    _require_metric_key_permission(db, current_user, metric_key)
     snapshots = metric_registry_service.get_snapshots(
         db=db,
         org_id=current_user.org_id,
@@ -221,7 +275,7 @@ async def get_snapshots(
 async def get_trend_analysis(
     metric_key: str = Query(..., description="Metric key to analyze"),
     days: int = Query(30, ge=1, le=365),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(_can_read_analytics),
     db: Session = Depends(deps.get_db),
 ):
     """Calculates trend direction and historical data points for metric."""
@@ -230,6 +284,7 @@ async def get_trend_analysis(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="User does not belong to an organization.",
         )
+    _require_metric_key_permission(db, current_user, metric_key)
     snapshots = metric_registry_service.get_snapshots(
         db=db,
         org_id=current_user.org_id,

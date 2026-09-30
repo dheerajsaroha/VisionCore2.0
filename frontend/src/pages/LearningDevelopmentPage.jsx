@@ -4,8 +4,13 @@ import {
   TrendingUp, Users, Plus, Play, RefreshCw, BarChart2, Layers, Search
 } from 'lucide-react';
 import { learningService } from '../services/learningService';
+import { useAuthStore } from '../store/authStore';
+import { usePermission } from '../hooks/usePermission';
 
 export default function LearningDevelopmentPage() {
+  const { user } = useAuthStore();
+  const { hasPermission } = usePermission();
+  
   const [activeTab, setActiveTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState(null);
@@ -23,42 +28,70 @@ export default function LearningDevelopmentPage() {
 
   const fetchData = async () => {
     setLoading(true);
-    try {
-      const [anRes, cRes, eRes, sRes, qRes, skRes, certRes, bRes] = await Promise.all([
-        learningService.getAnalytics(),
-        learningService.getCourses(),
-        learningService.getEnrollments(),
-        learningService.getSessions(),
-        learningService.getQuizzes(),
-        learningService.getSkills(),
-        learningService.getCertificates(),
-        learningService.getBudget(),
-      ]);
-      setAnalytics(anRes.data);
-      setCourses(cRes.data);
-      setEnrollments(eRes.data);
-      setSessions(sRes.data);
-      setQuizzes(qRes.data);
-      setSkills(skRes.data);
-      setCertificates(certRes.data);
-      setBudgets(bRes.data);
-    } catch (err) {
-      console.error('Error loading L&D data:', err);
-    } finally {
-      setLoading(false);
+
+    // Analytics and budget are organization-wide and need `learning.view_org`,
+    // which an ordinary employee deliberately does not hold. Requesting them
+    // anyway is not merely wasteful: a 403 from either rejected the shared
+    // `Promise.all` below, so the courses, sessions, quizzes, skills and
+    // certificates the employee *is* entitled to never rendered at all.
+    const canViewOrg = hasPermission('learning.view_org');
+
+    const [anRes, cRes, eRes, sRes, qRes, skRes, certRes, bRes] = await Promise.allSettled([
+      canViewOrg ? learningService.getAnalytics() : Promise.resolve({ data: null }),
+      learningService.getCourses(),
+      learningService.getEnrollments(),
+      learningService.getSessions(),
+      learningService.getQuizzes(),
+      learningService.getSkills(),
+      learningService.getCertificates(),
+      canViewOrg ? learningService.getBudget() : Promise.resolve({ data: null }),
+    ]);
+
+    // A single failed call must not blank the sections that did succeed.
+    const ok = (r, fallback) => (r.status === 'fulfilled' ? r.value?.data ?? fallback : fallback);
+
+    setAnalytics(ok(anRes, null));
+    setCourses(ok(cRes, []));
+    setEnrollments(ok(eRes, []));
+    setSessions(ok(sRes, []));
+    setQuizzes(ok(qRes, []));
+    setSkills(ok(skRes, []));
+    setCertificates(ok(certRes, []));
+    setBudgets(ok(bRes, []));
+
+    const failed = [anRes, cRes, eRes, sRes, qRes, skRes, certRes, bRes].filter(
+      (r) => r.status === 'rejected'
+    );
+    if (failed.length) {
+      console.error('Some L&D data failed to load:', failed.map((f) => f.reason?.message));
     }
+    setLoading(false);
   };
 
-  const tabs = [
-    { id: 'dashboard', label: 'Overview Dashboard', icon: BarChart2 },
-    { id: 'catalog', label: 'Course Catalog', icon: BookOpen },
-    { id: 'my-learning', label: 'My Learning', icon: Layers },
-    { id: 'sessions', label: 'Training Sessions', icon: Video },
-    { id: 'assessments', label: 'Assessments & Quizzes', icon: CheckCircle },
-    { id: 'skills', label: 'Skill Matrix', icon: TrendingUp },
-    { id: 'certificates', label: 'Certifications', icon: CertIcon },
-    { id: 'budget', label: 'Budget & Spend', icon: DollarSign }
+  // Filter tabs based on user permissions
+  const allTabs = [
+    // The overview is built entirely from organization-wide analytics, so it is
+    // gated on `learning.view_org`. An employee landing on it saw a page of
+    // zeros, which reads as a broken feature rather than a lack of entitlement.
+    { id: 'dashboard', label: 'Overview Dashboard', icon: BarChart2, permission: 'learning.view_org' },
+    { id: 'catalog', label: 'Course Catalog', icon: BookOpen, permission: 'learning.view' },
+    { id: 'my-learning', label: 'My Learning', icon: Layers, permission: 'learning.view' },
+    { id: 'sessions', label: 'Training Sessions', icon: Video, permission: 'learning.view' },
+    { id: 'assessments', label: 'Assessments & Quizzes', icon: CheckCircle, permission: 'learning.view' },
+    { id: 'skills', label: 'Skill Matrix', icon: TrendingUp, permission: 'learning.view' },
+    { id: 'certificates', label: 'Certifications', icon: CertIcon, permission: 'learning.view' },
+    { id: 'budget', label: 'Budget & Spend', icon: DollarSign, permission: 'learning.view_org' }
   ];
+
+  const tabs = allTabs.filter(tab => hasPermission(tab.permission));
+
+  // `activeTab` defaults to the overview, which an employee cannot see. Without
+  // this the tab strip renders with nothing selected and no content at all.
+  useEffect(() => {
+    if (tabs.length && !tabs.some(t => t.id === activeTab)) {
+      setActiveTab(tabs[0].id);
+    }
+  }, [tabs, activeTab]);
 
   return (
     <div className="min-h-screen bg-slate-900 text-white p-6 space-y-6">

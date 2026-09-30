@@ -49,16 +49,10 @@ export const workforceService = {
   },
 
   // ──────────────────────────────────────────────────────────────
-  // LEAVE
+  // LEAVE (workforce-specific: accrual, encashment)
+  // Basic leave operations (apply, approve, requests, balances, types) are in leaveService.js
   // ──────────────────────────────────────────────────────────────
   leave: {
-    apply: (data) => api.post('/workforce/leave/apply', data),
-    approve: (id, note) => api.post(`/workforce/leave/requests/${id}/approve`, { note }),
-    reject: (id, note) => api.post(`/workforce/leave/requests/${id}/reject`, { note }),
-    cancel: (id) => api.post(`/workforce/leave/requests/${id}/cancel`),
-    requests: (params = {}) => api.get('/workforce/leave/requests', { params }),
-    balances: (params = {}) => api.get('/workforce/leave/balance', { params }),
-    types: (params = {}) => api.get('/workforce/leave/types', { params }),
     runAccrual: (data) => api.post('/workforce/leave/accrual/run', data),
     calculateEncashment: (data) => api.post('/workforce/leave/encashment/calculate', data),
   },
@@ -74,9 +68,9 @@ export const workforceService = {
     createLegacy: (data) => api.post('/workforce/shifts/legacy', data),
     assignments: (params = {}) => api.get('/workforce/shifts/assignments', { params }),
     assign: (data) => api.post('/workforce/shifts/assignments', data),
-    swaps: (params = {}) => api.get('/workforce/shift-swaps', { params }),
-    createSwap: (data) => api.post('/workforce/shift-swaps', data),
-    resolveSwap: (id, data) => api.post(`/workforce/shift-swaps/${id}/resolve`, data),
+    swaps: (params = {}) => api.get('/workforce/shifts/swaps', { params }),
+    createSwap: (data) => api.post('/workforce/shifts/swaps', data),
+    resolveSwap: (id, data) => api.post(`/workforce/shifts/swaps/${id}/resolve`, data),
   },
 
   // ──────────────────────────────────────────────────────────────
@@ -132,17 +126,28 @@ export const workforceService = {
     calendars: () => api.get('/workforce/holidays/calendars'),
     createCalendar: (data) => api.post('/workforce/holidays/calendars', data),
     entries: (params = {}) => api.get('/workforce/holidays/entries', { params }),
-    addEntry: (calendarId, data) => api.post(`/workforce/holidays/calendars/${calendarId}/entries`, data),
+    // The backend route is POST /workforce/holidays/entries; the target
+    // calendar travels in the body. The old path
+    // (/holidays/calendars/{id}/entries) matched no route, so adding a holiday
+    // always 404'd.
+    addEntry: (data) => api.post('/workforce/holidays/entries', data),
   },
 
   // ──────────────────────────────────────────────────────────────
   // ATTENDANCE CORRECTIONS
   // ──────────────────────────────────────────────────────────────
   corrections: {
-    list: (params = {}) => api.get('/workforce/corrections', { params }),
-    create: (data) => api.post('/workforce/corrections', data),
-    approve: (id, note) => api.post(`/workforce/corrections/${id}/approve`, { note }),
-    reject: (id, note) => api.post(`/workforce/corrections/${id}/reject`, { note }),
+    listMine: (params = {}) => api.get('/attendance-corrections/my', { params }),
+    listPending: (params = {}) => api.get('/attendance-corrections/pending', { params }),
+    get: (id) => api.get(`/attendance-corrections/${id}`),
+    create: (data) => api.post('/attendance-corrections', data),
+    approve: (id, decisionNotes) => api.post(`/attendance-corrections/${id}/approve`, {
+      decision_notes: decisionNotes || undefined,
+    }),
+    reject: (id, decisionNotes) => api.post(`/attendance-corrections/${id}/reject`, {
+      decision_notes: decisionNotes || undefined,
+    }),
+    timeline: (id) => api.get(`/attendance-corrections/${id}/timeline`),
   },
 
   // ──────────────────────────────────────────────────────────────

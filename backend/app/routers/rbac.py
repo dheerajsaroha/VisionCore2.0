@@ -436,7 +436,10 @@ def get_user_effective_permissions(
     """Get all effective permissions for a user based on their role.
     SuperAdmin returns ALL active permissions.
     Requires roles.view permission."""
-    target_user = db.query(User).filter(User.id == user_id, User.is_deleted == 0).first()
+    query = db.query(User).filter(User.id == user_id, User.is_deleted == 0)
+    if not (current_user.role and deps.normalize_role_name(current_user.role.name) == "SuperAdmin"):
+        query = query.filter(User.org_id == current_user.org_id)
+    target_user = query.first()
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
 

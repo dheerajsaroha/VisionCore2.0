@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import logging
 import math
-import random
 import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
@@ -104,10 +103,10 @@ class AttritionModel(PredictiveModel):
                 "key_factors": features,
                 "recommendation": self._get_recommendation(risk_score),
             },
-            confidence_score=round(0.7 + random.uniform(-0.1, 0.1), 2),
+            confidence_score=0.7,
             explanation=explanation,
             features_used=features,
-            data_points=1000,
+            data_points=len(params),
         )
 
     def _get_recommendation(self, risk_score: float) -> str:
@@ -130,7 +129,7 @@ class LeaveForecastModel(PredictiveModel):
         dept_size = params.get("department_size", 50)
         season_factor = params.get("season_factor", 1.0)
 
-        predicted_leave = historical * season_factor * (1 + random.uniform(-0.1, 0.1))
+        predicted_leave = historical * season_factor
 
         return PredictionResult(
             id=str(uuid.uuid4()),
@@ -141,11 +140,11 @@ class LeaveForecastModel(PredictiveModel):
                 "seasonal_factor": season_factor,
                 "department_headcount": dept_size,
             },
-            confidence_score=round(0.75 + random.uniform(-0.1, 0.1), 2),
+            confidence_score=0.75,
             explanation=f"Predicted leave based on historical average ({historical} days) "
                        f"adjusted for seasonal factor ({season_factor}).",
             features_used=features,
-            data_points=5000,
+            data_points=len(params),
         )
 
     async def forecast(self, params: dict, days_ahead: int = 30) -> ForecastResult:
@@ -155,22 +154,23 @@ class LeaveForecastModel(PredictiveModel):
         for i in range(days_ahead):
             day = now + timedelta(days=i)
             daily_rate = base * (1 + math.sin(i * math.pi / 7) * 0.3)
-            lower = daily_rate * 0.7
-            upper = daily_rate * 1.3
             datapoints.append(ForecastDatapoint(
                 date=day.strftime("%Y-%m-%d"),
                 value=round(daily_rate, 2),
-                lower_bound=round(lower, 2),
-                upper_bound=round(upper, 2),
+                # Fixed +-30% presented as a 95% interval. No interval is
+                # claimed, because none is computed.
+                lower_bound=None,
+                upper_bound=None,
             ))
 
         return ForecastResult(
             id=str(uuid.uuid4()),
             model_type=self.model_type,
             forecast=datapoints,
-            confidence_interval=0.95,
+            confidence_interval=0.0,
             seasonality="weekly",
             trend="stable",
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
 
 
@@ -205,11 +205,11 @@ class AttendanceAnomalyModel(PredictiveModel):
                     "absences": absences,
                 },
             },
-            confidence_score=round(0.8 + random.uniform(-0.1, 0.1), 2),
+            confidence_score=0.8,
             explanation=f"Attendance pattern analysis reveals {late_count} late arrivals, "
                        f"{early_departure} early departures, {absences} absences.",
             features_used=features,
-            data_points=2000,
+            data_points=len(params),
         )
 
 
@@ -245,10 +245,10 @@ class PayrollAnomalyModel(PredictiveModel):
                     "amount_variance_pct": round(variance * 100, 1),
                 },
             },
-            confidence_score=round(0.85 + random.uniform(-0.1, 0.1), 2),
+            confidence_score=0.85,
             explanation=f"Payroll reviewed: amount ${amount}, overtime {overtime}h, deductions ${deductions}.",
             features_used=features,
-            data_points=3000,
+            data_points=len(params),
         )
 
 
@@ -280,11 +280,11 @@ class PerformanceTrendModel(PredictiveModel):
                 "predicted_next_rating": round(predicted_next, 2),
                 "goal_completion_rate": goals,
             },
-            confidence_score=round(0.7 + random.uniform(-0.1, 0.1), 2),
+            confidence_score=0.7,
             explanation=f"Performance trend from {previous} to {current}. "
                        f"Goal completion at {goals:.0%}. Training: {training}h.",
             features_used=features,
-            data_points=1500,
+            data_points=len(params),
         )
 
     async def forecast(self, params: dict, days_ahead: int = 90) -> ForecastResult:
@@ -297,15 +297,18 @@ class PerformanceTrendModel(PredictiveModel):
             datapoints.append(ForecastDatapoint(
                 date=(now + timedelta(days=i)).strftime("%Y-%m-%d"),
                 value=round(projected, 2),
-                lower_bound=round(projected - 0.5, 2),
-                upper_bound=round(projected + 0.5, 2),
+                # A fixed +-0.5 band presented as a 0.8 interval is not a
+                # computed error estimate, so no interval is claimed.
+                lower_bound=None,
+                upper_bound=None,
             ))
         return ForecastResult(
             id=str(uuid.uuid4()),
             model_type=self.model_type,
             forecast=datapoints,
-            confidence_interval=0.8,
+            confidence_interval=0.0,
             trend="stable",
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
 
 
@@ -336,11 +339,11 @@ class PromotionReadinessModel(PredictiveModel):
                 "strengths": ["performance", "tenure"] if perf > 4.0 else ["tenure"],
                 "development_areas": ["leadership"] if leadership < 3.5 else [],
             },
-            confidence_score=round(0.75 + random.uniform(-0.1, 0.1), 2),
+            confidence_score=0.75,
             explanation=f"Promotion readiness assessed: tenure {tenure}mo, "
                        f"performance {perf}/5, leadership {leadership}/5.",
             features_used=features,
-            data_points=800,
+            data_points=len(params),
         )
 
 
@@ -376,11 +379,11 @@ class AssetFailureModel(PredictiveModel):
                 "estimated_remaining_life_days": round(1825 - age),
                 "recommended_action": "Schedule maintenance" if failure_risk > 0.5 else "Continue monitoring",
             },
-            confidence_score=round(0.7 + random.uniform(-0.1, 0.1), 2),
+            confidence_score=0.7,
             explanation=f"Asset age: {age} days, last maintenance: {last_maint} days ago, "
                        f"usage: {usage}h, maintenance count: {maintenance}.",
             features_used=features,
-            data_points=1200,
+            data_points=len(params),
         )
 
 
@@ -413,11 +416,11 @@ class CapacityForecastModel(PredictiveModel):
                 "net_change": round(projected - headcount),
                 "capacity_utilization": round(headcount / (headcount * 1.1), 2),
             },
-            confidence_score=round(0.8 + random.uniform(-0.1, 0.1), 2),
+            confidence_score=0.8,
             explanation=f"Capacity forecast: {headcount} current, {projected:.0f} projected. "
                        f"Growth {growth:.0%}, attrition {attrition:.0%}, hires {hires}.",
             features_used=features,
-            data_points=500,
+            data_points=len(params),
         )
 
     async def forecast(self, params: dict, months_ahead: int = 12) -> ForecastResult:
@@ -435,16 +438,22 @@ class CapacityForecastModel(PredictiveModel):
             datapoints.append(ForecastDatapoint(
                 date=date.strftime("%Y-%m-%d"),
                 value=round(projected),
-                lower_bound=round(projected * 0.9),
-                upper_bound=round(projected * 1.1),
+                # No error estimate is computed for a rule-based
+                # projection, so no confidence interval is claimed. These
+                # were previously a flat +-10% band presented as a 90%
+                # interval, which is a statistical claim the model does not
+                # support.
+                lower_bound=None,
+                upper_bound=None,
             ))
 
         return ForecastResult(
             id=str(uuid.uuid4()),
             model_type=self.model_type,
             forecast=datapoints,
-            confidence_interval=0.9,
+            confidence_interval=0.0,
             seasonality=None,
             trend="increasing" if datapoints[-1].value > headcount else "decreasing",
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
 

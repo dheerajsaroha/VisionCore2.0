@@ -51,7 +51,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-XSS-Protection"] = "1; mode=block"
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        # `self` allows this origin to use the camera and geolocation, while
+        # still denying both to any third party that embeds the app. The
+        # previous `geolocation=(), camera=()` used an empty allowlist, which
+        # denies the feature outright — blocking browser geolocation for every
+        # page, and the webcam that biometric clock-in depends on.
+        response.headers["Permissions-Policy"] = (
+            "geolocation=(self), camera=(self), microphone=(self)"
+        )
         return response
 
 

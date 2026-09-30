@@ -50,7 +50,7 @@ from app.schema.ai import (
 from app.services.ai_provider_manager import ai_provider_manager
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(deps.require_feature("ai_face_recognition"))])
 
 
 # =============================================================================

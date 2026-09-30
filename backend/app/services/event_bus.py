@@ -112,22 +112,46 @@ class EventBus:
 
     def publish(
         self,
-        event_name: str,
-        tenant_id: str,
-        payload: Dict[str, Any],
+        event_name: Any,
+        tenant_id: Any = "",
+        payload: Optional[Dict[str, Any]] = None,
         actor_id: Optional[int] = None,
         correlation_id: str = "",
         headers: Optional[Dict[str, str]] = None,
     ) -> EventMessage:
         """Publish a domain event envelope across the platform."""
+        # 1. Single argument: EventMessage or domain event object
+        if isinstance(event_name, EventMessage):
+            self._history.append(event_name)
+            self._broker.publish(event_name.event_name, event_name)
+            return event_name
+
+        if payload is None and not isinstance(tenant_id, (str, bytes)) and not isinstance(tenant_id, dict):
+            event_obj = event_name
+            name = getattr(event_obj, "event_name", None) or type(event_obj).__name__
+            t_id = str(getattr(event_obj, "tenant_id", None) or getattr(event_obj, "organization_id", None) or "")
+            a_id = getattr(event_obj, "actor_id", None) or getattr(event_obj, "actor_user_id", None)
+            c_id = getattr(event_obj, "correlation_id", "")
+            p_load = getattr(event_obj, "payload", None) or (event_obj.__dict__ if hasattr(event_obj, "__dict__") else {})
+            return self.publish(name, t_id, p_load, actor_id=a_id, correlation_id=c_id)
+
+        # 2. Two arguments: event_name, payload dict
+        if isinstance(tenant_id, dict) and payload is None:
+            payload = tenant_id
+            tenant_id = str(payload.get("org_id") or payload.get("tenant_id") or "")
+
+        resolved_payload = payload if payload is not None else {}
+        resolved_tenant_id = str(tenant_id)
+        resolved_event_name = str(event_name)
+
         event_id = f"evt-{uuid.uuid4().hex[:16]}"
         msg = EventMessage(
             event_id=event_id,
-            event_name=event_name,
-            tenant_id=tenant_id,
+            event_name=resolved_event_name,
+            tenant_id=resolved_tenant_id,
             actor_id=actor_id,
             correlation_id=correlation_id or event_id,
-            payload=payload,
+            payload=resolved_payload,
             headers=headers or {},
         )
 
@@ -137,9 +161,9 @@ class EventBus:
             self._history = self._history[-self._max_history:]
 
         # Publish to event_name topic and wildcard
-        self._broker.publish(event_name, msg)
+        self._broker.publish(resolved_event_name, msg)
 
-        logger.info(f"Published Domain Event '{event_name}' ({event_id}) for tenant {tenant_id}")
+        logger.info(f"Published Domain Event '{resolved_event_name}' ({event_id}) for tenant {resolved_tenant_id}")
 
         # Audit Event Log Integration
         try:

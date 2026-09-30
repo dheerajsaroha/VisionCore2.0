@@ -125,8 +125,38 @@ class CRUDOrganizationSubscription(
         ).order_by(OrganizationSubscription.created_at.desc()).first()
 
     def get_active_by_org(self, db: Session, org_id: UUID) -> Optional[OrganizationSubscription]:
-        """Get the active subscription for an organization."""
+        """Get the active subscription for an organization.
+
+        Nothing in the codebase ever transitioned a subscription to `expired`, so
+        a row whose `end_date` had passed kept `status = 'active'` indefinitely.
+        The date filter below was the only thing honouring it, which meant feature
+        enforcement quietly fell back to the default plan while every screen that
+        read `status` still reported the organization as active and on its paid
+        plan — the appearance of a paid account that had silently lost access.
+
+        The stale rows are transitioned here, at the one place that already
+        decides what "active" means, so the stored status cannot disagree with
+        the answer being acted on.
+        """
         now = datetime.now(timezone.utc)
+
+        stale = (
+            db.query(OrganizationSubscription)
+            .filter(
+                OrganizationSubscription.organization_id == org_id,
+                OrganizationSubscription.status == "active",
+                OrganizationSubscription.end_date.isnot(None),
+                OrganizationSubscription.end_date < now,
+            )
+            .all()
+        )
+        for row in stale:
+            row.status = "expired"
+        if stale:
+            db.commit()
+            for row in stale:
+                db.refresh(row)
+
         return db.query(OrganizationSubscription).options(
             joinedload(OrganizationSubscription.plan)
         ).filter(

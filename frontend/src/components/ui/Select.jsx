@@ -23,7 +23,7 @@ export const Select = React.forwardRef(
             id={id}
             ref={ref}
             className={cn(
-              'flex w-full appearance-none rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 pr-10 text-sm text-white shadow-sm transition-all duration-200',
+              'flex w-full appearance-none rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 pr-10 text-sm text-gray-100 shadow-sm transition-all duration-200',
               'focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500',
               'disabled:cursor-not-allowed disabled:bg-gray-900 disabled:text-gray-500',
               error && 'border-red-500 focus:border-red-500 focus:ring-red-500',

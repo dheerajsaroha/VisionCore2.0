@@ -129,6 +129,49 @@ class AttendanceCorrectionService:
                 f"Invalid workflow transition from '{current_status}' to '{target_status}'"
             )
 
+    def _apply_correction_to_log(
+        self,
+        db: Session,
+        *,
+        request: AttendanceRequest,
+        org_id: uuid.UUID,
+    ) -> None:
+        """Apply the validated requested times to the tenant-scoped attendance log."""
+        if request.attendance_log_id is None:
+            return
+
+        log = (
+            db.query(AttendanceLog)
+            .filter(
+                AttendanceLog.id == request.attendance_log_id,
+                AttendanceLog.is_deleted == 0,
+            )
+            .first()
+        )
+        if not log:
+            raise ValidationError(
+                f"Attendance log with ID {request.attendance_log_id} not found."
+            )
+        if self._normalize_uuid(log.user.org_id) != org_id:
+            raise CrossTenantAccessError("Attendance record does not belong to this tenant.")
+        if log.user_id != request.employee_user_id:
+            raise ValidationError("Attendance record does not belong to the requesting employee.")
+
+        payload = request.request_payload or {}
+        for field in ("requested_clock_in", "requested_clock_out"):
+            value = payload.get(field)
+            if value is None:
+                continue
+            if not isinstance(value, datetime):
+                try:
+                    value = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                except (TypeError, ValueError) as exc:
+                    raise ValidationError(f"{field} must be a valid ISO timestamp.") from exc
+            setattr(log, "check_in" if field.endswith("in") else "check_out", value)
+
+        log.status = "manual_override"
+        db.add(log)
+
     # ---------------------------------------------------------------------------
     # Service Operations
     # ---------------------------------------------------------------------------
@@ -256,6 +299,11 @@ class AttendanceCorrectionService:
 
         # 3. Process approval atomically
         with self._transaction_context(db):
+            self._apply_correction_to_log(
+                db,
+                request=req,
+                org_id=norm_org_id,
+            )
             approval = self.repository.approve_request(
                 db,
                 org_id=norm_org_id,

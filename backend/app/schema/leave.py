@@ -77,7 +77,12 @@ class LeaveRequestCreate(BaseModel):
     leave_type_id: int
     start_date: datetime
     end_date: datetime
-    total_days: float = Field(..., gt=0, description="Total requested leave days")
+    # Optional: the server derives the day count from the date range and the
+    # half-day flag, so a client cannot ask for an arbitrary number of days.
+    # A supplied value is still accepted for callers that already computed it.
+    total_days: Optional[float] = Field(
+        default=None, gt=0, description="Leave days; derived from the date range when omitted"
+    )
     is_half_day: bool = False
     half_day_period: Optional[str] = None  # "morning" | "afternoon"
     reason: Optional[str] = None
@@ -147,3 +152,20 @@ class LeaveSummaryResponse(BaseModel):
     approved_requests_count: int
     rejected_requests_count: int
     upcoming_leaves_count: int
+
+
+class LeavePolicyUpsert(BaseModel):
+    """Organization-level leave rules. Every field is optional so a partial
+    update keeps the values the organization already saved."""
+    year: Optional[int] = None
+    name: Optional[str] = None
+    accrual_type: Optional[str] = Field(
+        default=None,
+        description="annual_grant | monthly_accrual | per_payroll | unlimited",
+    )
+    allow_negative_balance: Optional[bool] = None
+    auto_approve_after_days: Optional[int] = Field(
+        default=None,
+        description="Auto-approve requests up to this many days. None leaves it manual.",
+    )
+    policy_config: Optional[Dict[str, Any]] = None

@@ -3,11 +3,16 @@ import {
   Calendar, Plus, RefreshCw, CheckCircle2, XCircle, Clock,
   User, Check, X, AlertTriangle, FileText
 } from 'lucide-react';
-import { workforceService } from '../services/workforceService';
+import { leaveService } from '../services/leaveService';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
+import { usePermission } from '../hooks/usePermission';
+
+// The API returns lowercase statuses; normalise on the way in so these
+// uppercase-keyed maps stay correct.
+const normalizeStatus = (value) => String(value ?? '').toUpperCase();
 
 const STATUS_STYLES = {
   PENDING: { color: '#f59e0b', label: 'Pending' },
@@ -31,7 +36,7 @@ function ApplyLeaveModal({ isOpen, onClose, onSuccess, leaveTypes = [] }) {
     e.preventDefault();
     setLoading(true); setError('');
     try {
-      await workforceService.leave.apply({
+      await leaveService.submitRequest({
         leave_type_id: parseInt(form.leave_type_id) || 1,
         start_date: form.start_date,
         end_date: form.end_date,
@@ -130,14 +135,17 @@ export default function LeaveRequestsPage() {
   const [error, setError] = useState('');
   const [applyOpen, setApplyOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState({});
+  const { hasPermission } = usePermission();
+
+  const canApprove = hasPermission('leave.approve');
 
   const refresh = useCallback(async () => {
     setLoading(true); setError('');
     try {
       const [reqRes, balRes, typesRes] = await Promise.all([
-        workforceService.leave.requests({ limit: 100 }),
-        workforceService.leave.balances().catch(() => ({ data: [] })),
-        workforceService.leave.types().catch(() => ({ data: [] })),
+        leaveService.getRequests({ limit: 100 }),
+        leaveService.getBalances().catch(() => ({ data: [] })),
+        leaveService.getLeaveTypes().catch(() => ({ data: [] })),
       ]);
       setRequests(Array.isArray(reqRes.data) ? reqRes.data : (reqRes.data?.items || []));
       setBalances(Array.isArray(balRes.data) ? balRes.data : []);
@@ -154,7 +162,7 @@ export default function LeaveRequestsPage() {
   const handleApprove = async (id) => {
     setActionLoading(prev => ({ ...prev, [id]: true }));
     try {
-      await workforceService.leave.approve(id, 'Approved via dashboard');
+      await leaveService.approveRequest(id, 'approved', 'Approved via dashboard');
       refresh();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to approve request');
@@ -166,7 +174,7 @@ export default function LeaveRequestsPage() {
   const handleReject = async (id) => {
     setActionLoading(prev => ({ ...prev, [id]: true }));
     try {
-      await workforceService.leave.reject(id, 'Rejected via dashboard');
+      await leaveService.approveRequest(id, 'rejected', 'Rejected via dashboard');
       refresh();
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to reject request');
@@ -175,8 +183,8 @@ export default function LeaveRequestsPage() {
     }
   };
 
-  const pendingCount = requests.filter(r => r.status === 'PENDING').length;
-  const approvedCount = requests.filter(r => r.status === 'APPROVED').length;
+  const pendingCount = requests.filter(r => normalizeStatus(r.status) === 'PENDING').length;
+  const approvedCount = requests.filter(r => normalizeStatus(r.status) === 'APPROVED').length;
 
   return (
     <div className="space-y-6">
@@ -255,7 +263,7 @@ export default function LeaveRequestsPage() {
               </thead>
               <tbody className="divide-y divide-gray-800">
                 {requests.map(r => {
-                  const style = STATUS_STYLES[r.status] || STATUS_STYLES.PENDING;
+                  const style = STATUS_STYLES[normalizeStatus(r.status)] || STATUS_STYLES.PENDING;
                   return (
                     <tr key={r.id} className="hover:bg-gray-800/40 transition-colors">
                       <td className="px-6 py-4 font-medium text-white">
@@ -276,7 +284,7 @@ export default function LeaveRequestsPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        {r.status === 'PENDING' && (
+                        {normalizeStatus(r.status) === 'PENDING' && canApprove && (
                           <div className="flex gap-2">
                             <button
                               onClick={() => handleApprove(r.id)}

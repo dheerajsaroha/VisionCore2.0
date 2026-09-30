@@ -1,11 +1,17 @@
-import React, { Suspense, lazy, useEffect } from 'react';
+import React, { Suspense, lazy, useEffect, useCallback } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from './store/authStore';
+import { usePermissionStore } from './store/permissionStore';
+import { useSubscriptionStore } from './store/subscriptionStore';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import DashboardLayout from './layouts/DashboardLayout';
 import { Spinner } from './components/ui/Spinner';
 import { useTheme } from './hooks/useTheme';
 import { useToast } from './components/ui/Toast';
+
+// How often to re-check permissions and plan entitlements while the app is
+// open, so an administrator's grant takes effect without a re-login.
+const ACCESS_REFRESH_INTERVAL_MS = 120000;
 
 const ScrollToTop = () => {
   const { pathname } = useLocation();
@@ -19,6 +25,7 @@ const ScrollToTop = () => {
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const SignupPage = lazy(() => import('./pages/SignupPage'));
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const AccessDeniedPage = lazy(() => import('./pages/AccessDeniedPage'));
@@ -29,6 +36,7 @@ const Reports = lazy(() => import('./pages/Reports'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Ticketing = lazy(() => import('./pages/Ticketing'));
 const Payroll = lazy(() => import('./pages/Payroll'));
+const MyPayslipsPage = lazy(() => import('./pages/MyPayslipsPage'));
 const Reimbursements = lazy(() => import('./pages/Reimbursements'));
 const PermissionManagement = lazy(() => import('./pages/PermissionManagement'));
 const ScopeOwnershipPage = lazy(() => import('./pages/ScopeOwnershipPage'));
@@ -89,13 +97,57 @@ const LoadingFallback = () => (
 
 const AppRoutes = () => {
   const toast = useToast();
+  const { fetchMyPermissions, myPermissions } = usePermissionStore();
+  const refreshSubscription = useSubscriptionStore((s) => s.fetchMySubscription);
+
   useEffect(() => {
     const handler = (e) => {
-      toast?.({ message: e.detail || 'You do not have permission to access this resource.', type: 'error', duration: 5000 });
+      const detail = e.detail;
+      const message = typeof detail === 'string'
+        ? detail
+        : detail?.message || 'You do not have permission to access this resource.';
+      toast?.({ message, type: 'error', duration: 5000 });
     };
     window.addEventListener('app:forbidden', handler);
     return () => window.removeEventListener('app:forbidden', handler);
   }, [toast]);
+
+  // ── Access changes picked up without a re-login ─────────────────────
+  //
+  // Permissions and plan entitlements are granted by other people: an
+  // administrator edits a role, or upgrades the plan. Without this the user
+  // would keep the module hidden until they signed out and back in, so a grant
+  // would look like it had not taken effect.
+  //
+  // Refetching only when the answers actually differ keeps this cheap: the
+  // sidebar re-evaluates on the new state, so newly-granted modules appear and
+  // revoked ones disappear on the next render.
+  const permissionKey = myPermissions.join('|');
+
+  const syncAccess = useCallback(async () => {
+    const before = permissionKey;
+    // `silent` keeps the last known-good permissions rendered, so polling never
+    // flashes the UI into an unresolved state.
+    await Promise.allSettled([fetchMyPermissions({ silent: true }), refreshSubscription?.()]);
+    const after = usePermissionStore.getState().myPermissions.join('|');
+    if (after && after !== before) {
+      toast?.({ message: 'Your access has been updated.', type: 'success', duration: 4000 });
+    }
+  }, [permissionKey, fetchMyPermissions, refreshSubscription, toast]);
+
+  useEffect(() => {
+    const onFocus = () => { syncAccess(); };
+    window.addEventListener('focus', onFocus);
+
+    // And periodically, for a user who keeps the tab focused while an admin
+    // changes their role on another screen.
+    const timer = setInterval(syncAccess, ACCESS_REFRESH_INTERVAL_MS);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      clearInterval(timer);
+    };
+  }, [syncAccess]);
 
   const location = useLocation();
 
@@ -105,6 +157,7 @@ const AppRoutes = () => {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
+      <Route path="/onboarding" element={<OnboardingPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/403" element={<AccessDeniedPage />} />
@@ -143,6 +196,14 @@ const AppRoutes = () => {
       <Route path="/dashboard/payroll" element={
         <ProtectedRoute requiredPermission="payroll.generate">
           <DashboardLayout><Payroll /></DashboardLayout>
+        </ProtectedRoute>
+      } />
+      {/* Self-service payslips: available to every signed-in employee, so it
+          deliberately sits outside the payroll.generate permission gate that
+          guards the admin run page. */}
+      <Route path="/dashboard/my-payslips" element={
+        <ProtectedRoute>
+          <DashboardLayout><MyPayslipsPage /></DashboardLayout>
         </ProtectedRoute>
       } />
       <Route path="/dashboard/reimbursements" element={

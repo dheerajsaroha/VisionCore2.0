@@ -26,14 +26,8 @@ def test_require_admin_allows_superadmin(monkeypatch):
     async def run():
         return await deps.require_admin(user)  # type: ignore[arg-type]
 
-    loop = asyncio.get_event_loop()
-    if loop.is_running():
-        result = loop.create_task(run())
-        loop.run_until_complete(result)
-        return result.result()
-    result = loop.run_until_complete(run())
+    result = asyncio.run(run())
     assert result is user
-
 
 
 def test_require_admin_rejects_employee(monkeypatch):
@@ -46,9 +40,7 @@ def test_require_admin_rejects_employee(monkeypatch):
         return await deps.require_admin(user)  # type: ignore[arg-type]
 
     with pytest.raises(HTTPException) as excinfo:
-        asyncio.get_event_loop().run_until_complete(run())
-
-
+        asyncio.run(run())
 
     assert excinfo.value.status_code == 403
 

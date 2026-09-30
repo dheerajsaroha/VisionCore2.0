@@ -31,7 +31,7 @@ export const Input = React.forwardRef(
             type={type}
             ref={ref}
             className={cn(
-              'flex w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-sm text-white shadow-sm transition-all duration-200',
+              'flex w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2.5 text-sm text-gray-100 shadow-sm transition-all duration-200',
               'placeholder:text-gray-500',
               'focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500',
               'disabled:cursor-not-allowed disabled:bg-gray-900 disabled:text-gray-500',
@@ -46,7 +46,7 @@ export const Input = React.forwardRef(
           <p className="mt-1.5 text-xs font-medium text-red-400">{error}</p>
         )}
         {helperText && !error && (
-          <p className="mt-1.5 text-xs text-gray-500">{helperText}</p>
+          <p className="mt-1.5 text-xs text-gray-400">{helperText}</p>
         )}
       </div>
     );

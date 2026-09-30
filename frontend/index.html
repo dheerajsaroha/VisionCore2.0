@@ -7,7 +7,13 @@
     <title>VISIONCORE // Biometric Intelligence</title>
 
   </head>
-  <body class="dark">
+  <!-- No class here on purpose. The active theme class is owned solely by
+       useTheme, which applies it to <html>. A hardcoded class="dark" on <body>
+       left the `dark:` Tailwind variant permanently active (its selector is
+       `.dark *`, i.e. descendants) regardless of the selected theme, so
+       dark-only utilities kept applying in light/midnight/nordic. The dark
+       palette still applies pre-hydration because it is the :root default. -->
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -6,10 +6,13 @@ import {
 } from 'lucide-react';
 import { leaveService } from '../services/leaveService';
 import { useAuthStore } from '../store/authStore';
+import { usePermission } from '../hooks/usePermission';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Spinner } from '../components/ui/Spinner';
+import { LeaveTemplatePicker } from '../components/leave/LeaveTemplatePicker';
+import { LeavePolicyEditor } from '../components/leave/LeavePolicyEditor';
 import { formatDate, titleCase } from '../lib/utils';
 
 export default function LeaveManagementPage() {
@@ -22,6 +25,7 @@ export default function LeaveManagementPage() {
   const [actionSuccess, setActionSuccess] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const { user } = useAuthStore();
+  const { hasPermission } = usePermission();
 
   // Apply Form State
   const [applyForm, setApplyForm] = useState({
@@ -43,6 +47,10 @@ export default function LeaveManagementPage() {
     max_days_per_request: 30,
     is_paid: true,
   });
+
+  const canApprove = hasPermission('leave.approve');
+  const canManage = hasPermission('leave.manage');
+  const canViewTeam = hasPermission('leave.view_team') || hasPermission('leave.view_org');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -66,6 +74,15 @@ export default function LeaveManagementPage() {
       setLoading(false);
     }
   }, [statusFilter]);
+
+  const refreshLeaveTypes = useCallback(async () => {
+    try {
+      const typeRes = await leaveService.getLeaveTypes();
+      setLeaveTypes(typeRes.data || []);
+    } catch {
+      // The list stays as-is; the tab will surface its own error state.
+    }
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -127,8 +144,6 @@ export default function LeaveManagementPage() {
     }
   };
 
-  const isAdmin = ['Admin', 'SuperAdmin', 'OrgAdmin', 'Manager'].includes(user?.role?.name || '');
-
   return (
     <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 p-1 sm:p-2">
       {/* Header Banner */}
@@ -163,7 +178,7 @@ export default function LeaveManagementPage() {
             { id: 'balances', label: 'My Balances', icon: Clock },
             { id: 'apply', label: 'Apply Leave', icon: Plus },
             { id: 'requests', label: 'Requests & Approvals', icon: FileText },
-            ...(isAdmin ? [{ id: 'config', label: 'Leave Types (Admin)', icon: Layers }] : []),
+            ...(canManage ? [{ id: 'config', label: 'Leave Types (Admin)', icon: Layers }] : []),
           ].map((tab) => {
             const Icon = tab.icon;
             return (
@@ -416,7 +431,7 @@ export default function LeaveManagementPage() {
                           </Badge>
                         </td>
                         <td className="p-4 text-right space-x-2">
-                          {req.status === 'pending' && isAdmin && req.user_id !== user?.id && (
+                          {req.status === 'pending' && canApprove && req.user_id !== user?.id && (
                             <>
                               <Button size="xs" onClick={() => handleApprove(req.id, 'approved')} className="bg-emerald-600 hover:bg-emerald-500 text-white">
                                 <Check className="h-3.5 w-3.5 mr-1" /> Approve
@@ -426,7 +441,7 @@ export default function LeaveManagementPage() {
                               </Button>
                             </>
                           )}
-                          {['pending', 'approved'].includes(req.status) && (req.user_id === user?.id || isAdmin) && (
+                          {['pending', 'approved'].includes(req.status) && (req.user_id === user?.id || canApprove) && (
                             <Button size="xs" variant="secondary" onClick={() => handleCancel(req.id)} className="bg-slate-800 hover:bg-slate-700 text-slate-300">
                               Cancel
                             </Button>
@@ -443,7 +458,7 @@ export default function LeaveManagementPage() {
       )}
 
       {/* TAB 4: CONFIG (ADMIN ONLY) */}
-      {activeTab === 'config' && isAdmin && (
+      {activeTab === 'config' && canManage && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <Card className="lg:col-span-1 border border-slate-800 bg-slate-900/90 shadow-xl h-fit">
             <CardHeader className="border-b border-slate-800">
@@ -492,6 +507,11 @@ export default function LeaveManagementPage() {
             </CardContent>
           </Card>
 
+          <div className="lg:col-span-2 space-y-8">
+            <LeaveTemplatePicker onApplied={refreshLeaveTypes} />
+            <LeavePolicyEditor />
+          </div>
+
           <Card className="lg:col-span-2 border border-slate-800 bg-slate-900/90 shadow-xl">
             <CardHeader className="border-b border-slate-800">
               <CardTitle className="text-lg font-bold text-white">Configured Leave Types</CardTitle>
@@ -510,7 +530,12 @@ export default function LeaveManagementPage() {
                     </div>
                     <div className="text-right text-xs">
                       <p className="font-bold text-white">{t.max_days_per_year} days/yr</p>
-                      <p className="text-slate-400">Max per request: {t.max_days_per_request}</p>
+                      <p className="text-slate-400">
+                        Max per request:{' '}
+                        {t.max_days_per_request === null || t.max_days_per_request === undefined
+                          ? 'No limit'
+                          : t.max_days_per_request}
+                      </p>
                     </div>
                   </div>
                 ))}

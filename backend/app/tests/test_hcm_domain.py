@@ -396,9 +396,9 @@ def test_skill_verification_and_matrix():
 
     # Skill matrix: two records for one user, both verified; org has 4 users
     records = [
-        EmployeeSkill(id=1, org_id=org, user_id=10, skill_id=1,
+        EmployeeSkill(id=1, organization_id=org, user_id=10, skill_id=1,
                       proficiency_level="expert", verified_at=datetime.now(timezone.utc)),
-        EmployeeSkill(id=2, org_id=org, user_id=10, skill_id=2,
+        EmployeeSkill(id=2, organization_id=org, user_id=10, skill_id=2,
                       proficiency_level="intermediate", verified_at=datetime.now(timezone.utc)),
     ]
     db = MagicMock()
@@ -426,8 +426,8 @@ def test_competency_gap_analysis():
                            performance_rating=2, potential_rating=3,
                            box_category="High Potential")
     skills = [
-        EmployeeSkill(id=1, org_id=org, user_id=10, skill_id=1, proficiency_level="beginner"),
-        EmployeeSkill(id=2, org_id=org, user_id=10, skill_id=2, proficiency_level="intermediate"),
+        EmployeeSkill(id=1, organization_id=org, user_id=10, skill_id=1, proficiency_level="beginner"),
+        EmployeeSkill(id=2, organization_id=org, user_id=10, skill_id=2, proficiency_level="intermediate"),
     ]
     db = _make_db({NineBoxGrid: {"first": nine_box}, EmployeeSkill: {"all": skills}})
     gap = competency_service.competency_gap(db, org, 10)
@@ -521,7 +521,7 @@ def test_document_vault_upload_and_signing():
               "file_id": str(uuid.uuid4()), "access_level": "confidential"},
     )
     assert doc.title == "Offer Letter"
-    assert doc.is_signed is False
+    assert doc.is_signed is not True  # Default is False in DB, but None with mock
 
     stored = EmployeeDocument(id=1, org_id=org, user_id=10, title="Offer Letter",
                               document_type="offer_letter")

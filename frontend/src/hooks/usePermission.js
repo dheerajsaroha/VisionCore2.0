@@ -176,6 +176,12 @@ export function usePermission() {
     roleName: permStore.myRoleName,
     isLoading: permStore.isLoading || (authStore.isAuthenticated && !permStore.authorizationInitialized),
     isHydrated: permStore.authorizationInitialized,
+    /**
+     * Whether the plan's feature list is known. False while the subscription is
+     * still loading, and also false if the lookup failed. Gated UI should wait
+     * for this rather than reading an empty feature set as "not in your plan".
+     */
+    featuresResolved: subStore.featuresResolved,
     error: permStore.error,
 
     // Subscription
@@ -183,7 +189,10 @@ export function usePermission() {
     planName: subStore.planName,
 
     // Refresh
-    refresh: permStore.fetchMyPermissions,
+    // Wrapped so a caller cannot accidentally pass a DOM event through as the
+    // `silent` option, and so `refresh` always performs a full (non-silent)
+    // reload that resets to a resolved-once state.
+    refresh: useCallback(() => permStore.fetchMyPermissions(), [permStore]),
     refreshSubscription: subStore.fetchMySubscription,
   };
 }

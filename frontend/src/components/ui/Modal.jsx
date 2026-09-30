@@ -18,7 +18,7 @@ export const Modal = ({
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-6 md:items-center">
       {/* Overlay */}
       <div
-        className="fixed inset-0 bg-gray-950/70 backdrop-blur-sm transition-opacity"
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -34,7 +34,7 @@ export const Modal = ({
           <div className="flex items-start justify-between p-6 pb-0">
             <div className="space-y-1">
               {title && (
-                <h3 className="text-lg font-semibold leading-none text-white">
+                <h3 className="text-lg font-semibold leading-none text-gray-100">
                   {title}
                 </h3>
               )}
@@ -46,7 +46,7 @@ export const Modal = ({
             {showClose && (
               <button
                 onClick={onClose}
-                className="rounded-lg p-1 text-gray-400 hover:bg-gray-800 hover:text-white transition-colors duration-200"
+                className="rounded-lg p-1 text-gray-400 hover:bg-gray-800 hover:text-gray-100 transition-colors duration-200"
               >
                 <X className="h-5 w-5" />
               </button>

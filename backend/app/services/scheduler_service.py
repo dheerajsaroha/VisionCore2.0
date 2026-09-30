@@ -394,6 +394,32 @@ class SchedulerService:
         """Get all failed jobs."""
         return [j for j in self._jobs.values() if j.status == JobStatus.FAILED]
 
+    def list_jobs(
+        self,
+        status: JobStatus | None = None,
+        job_type: JobType | None = None,
+        module: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict]:
+        """List jobs with filtering, newest first.
+
+        The `/operations/jobs` endpoint called `list_jobs`, which did not exist,
+        so the job list 500'd. The service had per-status helpers
+        (`get_pending_jobs` and friends) but no way to filter and page over the
+        live set, which is what a list endpoint needs.
+        """
+        jobs = list(self._jobs.values())
+        if status is not None:
+            jobs = [j for j in jobs if j.status == status]
+        if job_type is not None:
+            jobs = [j for j in jobs if j.job_type == job_type]
+        if module:
+            jobs = [j for j in jobs if j.module == module]
+        jobs.sort(key=lambda j: j.created_at, reverse=True)
+        window = jobs[offset:offset + limit]
+        return [self._job_to_dict(j) for j in window]
+
     def get_running_jobs(self) -> list[Job]:
         """Get all currently running jobs."""
         return [j for j in self._jobs.values() if j.status == JobStatus.RUNNING]
@@ -686,6 +712,7 @@ class SchedulerService:
 #  Job Events
 # =============================================================================
 
+@dataclass
 class JobCreatedEvent(DomainEvent):
     event_type: str = "job.created"
     source_module: str = "scheduler"
@@ -696,6 +723,7 @@ class JobCreatedEvent(DomainEvent):
     task: str = ""
 
 
+@dataclass
 class JobCompletedEvent(DomainEvent):
     event_type: str = "job.completed"
     source_module: str = "scheduler"
@@ -706,6 +734,7 @@ class JobCompletedEvent(DomainEvent):
     status: str = ""
 
 
+@dataclass
 class JobFailedEvent(DomainEvent):
     event_type: str = "job.failed"
     source_module: str = "scheduler"

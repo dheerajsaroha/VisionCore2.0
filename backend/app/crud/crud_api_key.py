@@ -22,6 +22,7 @@ class CRUDOrgApiKey(CRUDBase[OrgApiKey, ApiKeyCreateInternal, ApiKeyUpdateIntern
         return (
             db.query(self.model)
             .filter(OrgApiKey.org_id == org_id)
+            .order_by(OrgApiKey.id.desc())
             .offset(skip)
             .limit(limit)
             .all()

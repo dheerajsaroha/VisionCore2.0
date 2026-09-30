@@ -43,7 +43,7 @@ def seed_enterprise_v2():
             db.rollback()
 
         # 2. Roles
-        roles_master = ["SuperAdmin", "Admin", "HR", "Manager", "Employee", "Candidate"]
+        roles_master = ["SuperAdmin", "OrgAdmin", "OrgHR", "OrgManager", "OrgEmployee", "Candidate"]
         role_map = {}
         for r_name in roles_master:
             role = db.query(Role).filter(Role.name == r_name).first()
@@ -94,12 +94,12 @@ def seed_enterprise_v2():
             db.refresh(shift)
 
         # 6. Users for all 6 Roles
-        seed_users = [
-            ("SuperAdmin User", "superadmin@visioncore.io", "SuperAdmin", "Engineering"),
-            ("Org Admin User", "admin@visioncore.io", "Admin", "Operations"),
-            ("HR Director", "hr@visioncore.io", "HR", "HR"),
-            ("Engineering Manager", "manager@visioncore.io", "Manager", "Engineering"),
-            ("Lead Developer", "employee@visioncore.io", "Employee", "Engineering"),
+seed_users = [
+            ("Super Administrator", "superadmin@visioncore.io", "SuperAdmin", None),
+            ("Organization Admin", "orgadmin@visioncore.io", "OrgAdmin", "Management"),
+            ("HR Director", "hr@visioncore.io", "OrgHR", "HR"),
+            ("Engineering Manager", "manager@visioncore.io", "OrgManager", "Engineering"),
+            ("Lead Developer", "employee@visioncore.io", "OrgEmployee", "Engineering"),
             ("Sarah Candidate", "candidate@visioncore.io", "Candidate", None),
         ]
 
@@ -130,7 +130,7 @@ def seed_enterprise_v2():
 
         # 7. Biometric Face Embeddings (128-d mock vector for active employees)
         for u in created_users:
-            if u.role.name in ["Employee", "Manager", "HR", "Admin"]:
+            if u.role.name in ["OrgEmployee", "OrgManager", "OrgHR", "OrgAdmin", "SuperAdmin"]:
                 existing_emb = db.query(FaceEmbedding).filter(FaceEmbedding.user_id == u.id, FaceEmbedding.is_active == 1).first()
                 if not existing_emb:
                     mock_vec = [random.uniform(-0.1, 0.1) for _ in range(128)]
@@ -146,7 +146,7 @@ def seed_enterprise_v2():
         db.commit()
 
         # 8. Attendance Logs (Past 7 days for employees)
-        emp_user = next((u for u in created_users if u.role.name == "Employee"), None)
+        emp_user = next((u for u in created_users if u.role.name == "OrgEmployee"), None)
         if emp_user:
             now = datetime.now()
             for i in range(7):

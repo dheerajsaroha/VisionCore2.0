@@ -10,7 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from app.api.deps import get_db, get_current_active_user
+from app.api import deps
+from app.api.deps import (
+    get_db,
+    get_current_active_user,
+    normalize_role_name,
+    require_permission,
+)
 from app.db.models.all_models import (
     User, CourseCategory, Course, CourseModule, CourseEnrollment, ModuleProgress,
     TrainingSession, SessionAttendance, AssessmentQuiz, AssessmentQuestion,
@@ -30,8 +36,25 @@ from app.schema.learning import (
     TrainingBudgetCreate, TrainingBudgetResponse, LearningAnalyticsResponse
 )
 from app.db.seed_learning import seed_learning_defaults_for_org
+from app.services.permission_service import PermissionService
 
-router = APIRouter()
+
+def _has(db: Session, user: User, *permission_names: str) -> bool:
+    """Whether `user` holds any of `permission_names`.
+
+    These checks used to call `current_user.has_permission(...)`, but `User` has
+    no such method, so every one of them raised `AttributeError` and returned
+    500 — including the plain `GET /enrollments`, `GET /employee-skills` and
+    `GET /certificates` reads. An employee opening Learning & Development hit
+    three server errors on load.
+
+    Only SuperAdmin is treated as holding everything, matching `require_permission`.
+    """
+    if user.role and normalize_role_name(user.role.name) == "SuperAdmin":
+        return True
+    return PermissionService.has_any_permission(db, user, list(permission_names))
+
+router = APIRouter(dependencies=[Depends(deps.require_feature("training"))])
 
 
 # ── CATEGORIES ──
@@ -39,10 +62,8 @@ router = APIRouter()
 def create_course_category(
     payload: CourseCategoryCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission("learning.create")),
 ):
-    if current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "HR"]:
-        raise HTTPException(status_code=403, detail="Unauthorized")
     return crud_course_engine.create_category(db, current_user.org_id, payload.name, payload.description)
 
 
@@ -60,10 +81,8 @@ def list_course_categories(
 def create_course(
     payload: CourseCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission("learning.create")),
 ):
-    if current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "HR", "Manager"]:
-        raise HTTPException(status_code=403, detail="Unauthorized")
     c = crud_course_engine.create_course(db, current_user.org_id, payload.model_dump())
     return {**c.__dict__, "category_name": c.category.name if c.category else None, "modules": []}
 
@@ -90,10 +109,8 @@ def add_course_module(
     course_id: int,
     payload: CourseModuleCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission("learning.create")),
 ):
-    if current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "HR", "Manager"]:
-        raise HTTPException(status_code=403, detail="Unauthorized")
     course = crud_course_engine.get_course_by_id(db, course_id)
     if not course or course.organization_id != current_user.org_id:
         raise HTTPException(status_code=404, detail="Course not found")
@@ -105,10 +122,10 @@ def add_course_module(
 def enroll_in_course(
     payload: CourseEnrollmentCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission("learning.view")),
 ):
     target_user_id = payload.user_id or current_user.id
-    if target_user_id != current_user.id and current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "HR", "Manager"]:
+    if target_user_id != current_user.id and not _has(db, current_user, "learning.manage"):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     course = crud_course_engine.get_course_by_id(db, payload.course_id)
@@ -130,7 +147,7 @@ def list_enrollments(
     current_user: User = Depends(get_current_active_user)
 ):
     target_user_id = user_id
-    if target_user_id is None and current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "HR"]:
+    if target_user_id is None and not _has(db, current_user, "learning.view_org"):
         target_user_id = current_user.id
 
     q = db.query(CourseEnrollment).filter(CourseEnrollment.organization_id == current_user.org_id)
@@ -159,7 +176,7 @@ def update_enrollment_progress(
     if not enrollment or enrollment.organization_id != current_user.org_id:
         raise HTTPException(status_code=404, detail="Enrollment not found")
 
-    if enrollment.user_id != current_user.id and current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "HR"]:
+    if enrollment.user_id != current_user.id and not _has(db, current_user, "learning.manage"):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     updated = crud_course_engine.update_module_progress(db, enrollment, payload.module_id, payload.time_spent_seconds, payload.completed)
@@ -175,10 +192,8 @@ def update_enrollment_progress(
 def create_training_session(
     payload: TrainingSessionCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission("learning.create")),
 ):
-    if current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "HR", "Manager"]:
-        raise HTTPException(status_code=403, detail="Unauthorized")
 
     session = TrainingSession(
         organization_id=current_user.org_id,
@@ -222,10 +237,8 @@ def list_training_sessions(
 def create_quiz(
     payload: AssessmentQuizCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission("learning.create")),
 ):
-    if current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "HR", "Manager"]:
-        raise HTTPException(status_code=403, detail="Unauthorized")
     quiz = crud_assessment_engine.create_quiz(db, payload.course_id, payload.model_dump())
     return {
         **quiz.__dict__,
@@ -273,10 +286,8 @@ def submit_quiz(
 def create_skill(
     payload: SkillMasterCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission("learning.manage")),
 ):
-    if current_user.role.name not in ["Admin", "SuperAdmin", "OrgAdmin", "HR"]:
-        raise HTTPException(status_code=403, detail="Unauthorized")
     return crud_skill_engine.create_skill(db, current_user.org_id, payload.name, payload.category, payload.description)
 
 
@@ -293,9 +304,11 @@ def list_skills(
 def add_employee_skill(
     payload: EmployeeSkillCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission("learning.update")),
 ):
     target_user_id = payload.user_id or current_user.id
+    if target_user_id != current_user.id and not _has(db, current_user, "learning.manage"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
     es = crud_skill_engine.add_or_update_employee_skill(db, current_user.org_id, target_user_id, payload.skill_id, payload.proficiency_level, payload.source)
     return {
         **es.__dict__,
@@ -310,9 +323,13 @@ def list_employee_skills(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    target_user_id = user_id
+    if target_user_id is None and not _has(db, current_user, "learning.view_org"):
+        target_user_id = current_user.id
+
     q = db.query(EmployeeSkill).filter(EmployeeSkill.organization_id == current_user.org_id)
-    if user_id:
-        q = q.filter(EmployeeSkill.user_id == user_id)
+    if target_user_id:
+        q = q.filter(EmployeeSkill.user_id == target_user_id)
     skills = q.all()
     res = []
     for s in skills:
@@ -331,9 +348,13 @@ def list_certificates(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
+    target_user_id = user_id
+    if target_user_id is None and not _has(db, current_user, "learning.view_org"):
+        target_user_id = current_user.id
+
     q = db.query(Certificate).filter(Certificate.organization_id == current_user.org_id)
-    if user_id:
-        q = q.filter(Certificate.user_id == user_id)
+    if target_user_id:
+        q = q.filter(Certificate.user_id == target_user_id)
 
     certs = q.all()
     res = []
@@ -351,7 +372,7 @@ def list_certificates(
 def get_training_budgets(
     fiscal_year: int = 2025,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission("learning.view_org")),
 ):
     seed_learning_defaults_for_org(db, current_user.org_id)
     budgets = db.query(TrainingBudget).filter(
@@ -371,7 +392,7 @@ def get_training_budgets(
 @router.get("/analytics/dashboard", response_model=LearningAnalyticsResponse)
 def get_learning_analytics(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
+    current_user: User = Depends(require_permission("learning.view_org")),
 ):
     org_id = current_user.org_id
     total_courses = db.query(Course).filter(Course.organization_id == org_id, Course.is_active.is_(True)).count()

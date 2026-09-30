@@ -15,20 +15,30 @@ export const useAuthStore = create(
       sessionEpoch: 0,
 
       initializeAuthorization: async () => {
-        const permissionStore = usePermissionStore.getState();
-        const permissions = await permissionStore.fetchMyPermissions();
+        // Both authorization dimensions must be resolved before the app is
+        // allowed to render gated UI: the RBAC permissions and the plan
+        // features. Resolving only permissions left a window where
+        // `authorizationInitialized` was true but the feature set was still
+        // empty, so every feature-gated module read as "not in your plan".
+        const [{ usePermissionStore: permStore }, { useSubscriptionStore: subStore }] =
+          await Promise.all([import('./permissionStore'), import('./subscriptionStore')]);
+
+        const [permissions] = await Promise.allSettled([
+          permStore.getState().fetchMyPermissions(),
+          subStore.getState().fetchMySubscription(),
+        ]);
         set({ authorizationInitialized: true });
-        return permissions;
+        return permissions.status === 'fulfilled' ? permissions.value : null;
       },
 
-      login: async (email, password) => {
+      login: async (email, password, organization) => {
         // Sign-in can replace another browser identity. Clear every
         // authorization-derived value before issuing the new request.
         const sessionEpoch = get().sessionEpoch + 1;
         usePermissionStore.getState().clearAuthorization();
         set({ isLoading: true, isHydrated: false, authorizationInitialized: false, sessionEpoch });
         try {
-          const response = await authService.login(email, password);
+          const response = await authService.login(email, password, organization);
           const { access_token } = response.data;
           
           set({ token: access_token, refreshToken: null });

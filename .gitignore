@@ -46,3 +46,6 @@ installed_packages.txt
 # Backup folders
 archive_models/
 >>>>>>> refs/remotes/origin/main
+dev_mail
+.node
+.kilo

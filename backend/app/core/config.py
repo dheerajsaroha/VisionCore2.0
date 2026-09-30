@@ -95,7 +95,7 @@ class Settings(BaseSettings):
     def DATABASE_URL(self) -> str:
         # Encode the password here!
         password = quote_plus(self.POSTGRES_PASSWORD)
-        return (f"postgresql://{self.POSTGRES_USER}:{password}"
+        return (f"postgresql+psycopg2://{self.POSTGRES_USER}:{password}"
                 f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}")
 
     @property
@@ -130,6 +130,26 @@ class Settings(BaseSettings):
     LIVENESS_CHECK_ENABLED: bool = True
     LIVENESS_STRICT_MODE: bool = True
     EMBEDDING_DIMENSIONS: int = 128
+    # Upload ceiling for biometric enrollment/recognition payloads. A 1280x720
+    # JPEG is ~150 KB, so 10 MB leaves ample headroom while still rejecting
+    # unbounded uploads before they are decoded into memory.
+    MAX_BIOMETRIC_IMAGE_BYTES: int = 10 * 1024 * 1024
+
+    # Subscription enforcement
+    # Gates business routers on the tenant's plan features and licensing limits.
+    # Keep True in production so published plan limits are actually binding.
+    # Set False only as an emergency rollback: with enforcement off every plan
+    # grants every feature and unlimited capacity, so tiers stop being
+    # distinguishable products.
+    ENFORCE_SUBSCRIPTION_LIMITS: bool = True
+    # Plan assigned to a newly provisioned tenant. Free tier keeps self-service
+    # signup working while still producing enforceable seat/capacity limits.
+    DEFAULT_PLAN_CODE: str = "starter"
+    DEFAULT_TRIAL_DAYS: int = 14
+    # Plans exposed on public pricing surfaces. An explicit allowlist rather than
+    # an is_system filter: every seeded row is is_system=true (including
+    # test_plan_* leftovers), so is_system does not identify the real catalog.
+    PUBLIC_PLAN_CODES: str = "starter,professional,enterprise"
 
     # ZKP
     ZKP_DEFAULT_THRESHOLD: float = 0.98
@@ -156,13 +176,45 @@ class Settings(BaseSettings):
     CHECKIN_COOLDOWN_MINUTES: int = 5
 
     # Email
+    #
+    # Delivery used to be SMTP-only and fail *silently* when unconfigured: the
+    # reset endpoint reported success, nothing was sent, and nobody could tell
+    # the difference. `EMAIL_TRANSPORT` now selects a provider and every send
+    # returns a delivery result that is persisted, so a failure is visible
+    # instead of inferred.
+    #
+    #   console - writes the message to the log and ./dev_mail/. No credentials,
+    #              no cost, no network. Development only: nothing is delivered.
+    #   smtp    - any SMTP server. Needs SMTP_HOST/USER/PASSWORD.
+    #   brevo   - HTTP API, 300 messages/day free. Needs BREVO_API_KEY.
+    #   resend  - HTTP API, 100 messages/day free. Needs RESEND_API_KEY.
+    #
+    # Free tiers need a verified sending domain (SPF/DKIM) before mail lands in
+    # real inboxes rather than spam, so expect to add DNS records.
+    EMAIL_TRANSPORT: str = "console"
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    SMTP_TIMEOUT_SECONDS: int = 10
     EMAIL_FROM: str = "noreply@attendance.local"
+    EMAIL_FROM_NAME: str = "VisionCore"
+    BREVO_API_KEY: str = ""
+    RESEND_API_KEY: str = ""
+    EMAIL_HTTP_TIMEOUT_SECONDS: int = 10
+    DEV_MAIL_DIR: str = "./dev_mail"
     FRONTEND_URL: str = "http://localhost:5173"
     PASSWORD_RESET_EXPIRE_MINUTES: int = 30
+    # One-time code alternative to the link. Deliberately much shorter-lived
+    # than the link and attempt-capped, because 6 digits is a small space.
+    PASSWORD_RESET_OTP_EXPIRE_MINUTES: int = 10
+    PASSWORD_RESET_OTP_MAX_ATTEMPTS: int = 5
+    # Per-account ceilings, on top of the per-IP limiter. An attacker who knows
+    # a victim's address could otherwise use the endpoint to flood their inbox
+    # and to time-probe whether the account exists.
+    PASSWORD_RESET_ACCOUNT_COOLDOWN_SECONDS: int = 60
+    PASSWORD_RESET_ACCOUNT_HOURLY_LIMIT: int = 3
 
     # Audit
     AUDIT_ENABLED: bool = True

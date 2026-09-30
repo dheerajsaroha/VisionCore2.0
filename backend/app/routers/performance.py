@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
+from app.api import deps
 from app.api.deps import get_db, get_current_active_user
 from app.api.eaac_deps import require_eaac_authorization
 from app.db.models.all_models import (
@@ -41,7 +42,7 @@ from app.services.kpi_engine import kpi_engine
 from app.services.goal_scoring_engine import goal_scoring_engine
 from app.db.seed_performance import seed_performance_defaults_for_org
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(deps.require_feature("performance_reviews"))])
 
 
 # ── PERFORMANCE CYCLES ──

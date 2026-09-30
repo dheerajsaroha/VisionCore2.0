@@ -42,7 +42,7 @@ STANDARD_METRICS = [
         "name": "Daily Attendance Rate",
         "description": "Percentage of active employees present today",
         "category": "attendance",
-        "required_permission": "attendance.read",
+        "required_permission": "attendance.view",
         "unit": "percent",
     },
     {
@@ -58,7 +58,7 @@ STANDARD_METRICS = [
         "name": "Asset Utilization Rate",
         "description": "Percentage of organization assets currently assigned to active employees",
         "category": "assets",
-        "required_permission": "assets.read",
+        "required_permission": "asset.read",
         "unit": "percent",
     },
     {
@@ -78,8 +78,19 @@ class MetricRegistryService:
     """
 
     def seed_default_metrics(self, db: Session) -> int:
-        """Seeds default system metrics into metric_definitions table if missing."""
+        """Seeds default system metrics, reconciling drifted system-owned fields.
+
+        Previously this only inserted missing rows, so a definition written by an
+        earlier release kept its old values forever. That mattered because
+        `required_permission` is now enforced when a metric is read: two of the
+        seeded names (`attendance.read`, `assets.read`) never existed in the
+        RBAC catalog, so a row seeded with one of them is readable by nobody.
+
+        The permission a system metric requires is code-owned configuration, not
+        tenant data, so it is corrected here rather than left to drift.
+        """
         seeded = 0
+        reconciled = 0
         for item in STANDARD_METRICS:
             existing = db.execute(
                 select(MetricDefinition).where(MetricDefinition.metric_key == item["metric_key"])
@@ -96,9 +107,24 @@ class MetricRegistryService:
                 )
                 db.add(defn)
                 seeded += 1
-        if seeded > 0:
+                continue
+
+            for field in ("name", "description", "category", "required_permission", "unit"):
+                desired = item[field]
+                if getattr(existing, field) != desired:
+                    logger.warning(
+                        "Reconciling metric %s field %s: %r -> %r",
+                        item["metric_key"], field, getattr(existing, field), desired,
+                    )
+                    setattr(existing, field, desired)
+                    reconciled += 1
+
+        if seeded or reconciled:
             db.commit()
+        if seeded:
             logger.info(f"Seeded {seeded} metric definitions into MetricRegistry.")
+        if reconciled:
+            logger.info(f"Reconciled {reconciled} drifted metric definition fields.")
         return seeded
 
     def list_metric_definitions(

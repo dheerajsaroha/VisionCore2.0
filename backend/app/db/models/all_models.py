@@ -6,13 +6,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, time, timezone
+from datetime import datetime, time, timezone
 from typing import List, Optional
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import (BigInteger, Boolean, CheckConstraint, Date, DateTime,
+from sqlalchemy import (BigInteger, Boolean, CheckConstraint, DateTime,
                          Float, ForeignKey, Index, Integer, LargeBinary, Numeric, String, Text, Time,
-                         UniqueConstraint, text)
+                         UniqueConstraint, func, text)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -55,15 +55,12 @@ class Role(Base):
                                                comment="Legacy flat permission list — use RolePermission instead")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
                                                   default=_utc_now, server_default=text("NOW()"))
+    users: Mapped[List["User"]] = relationship("User", back_populates="role")
+    members: Mapped[List["User"]] = relationship("User", secondary="user_roles", back_populates="roles", overlaps="user,user_roles,role")
+    user_roles: Mapped[List["UserRole"]] = relationship(
+        "UserRole", back_populates="role", cascade="all, delete-orphan")
     role_permissions: Mapped[List["RolePermission"]] = relationship(
         "RolePermission", back_populates="role", cascade="all, delete-orphan")
-    user_roles: Mapped[List["UserRole"]] = relationship(
-        "UserRole", back_populates="role", cascade="all, delete-orphan",
-        overlaps="members,roles,user")
-    users: Mapped[List["User"]] = relationship("User", back_populates="role", foreign_keys="User.role_id")
-    members: Mapped[List["User"]] = relationship(
-        "User", secondary="user_roles", back_populates="roles",
-        overlaps="user_roles,user,role")
     __table_args__ = (
         UniqueConstraint("name", name="uq_roles_name"),
         Index("ix_roles_tier", "tier"),
@@ -76,14 +73,12 @@ class Permission(Base):
     """Granular permission definitions — the atomic unit of authorization."""
     __tablename__ = "permissions"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    name: Mapped[str] = mapped_column(NVARCHAR(120), nullable=False, unique=True, index=True,
-                                       comment="Resource + action identifier, e.g. attendance.view | user.manage")
+    name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False, unique=True, index=True,
+                                       comment="Dot-notation: e.g. 'users.read', 'attendance.checkin'")
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True,
                                                         comment="Human-readable description")
     module: Mapped[Optional[str]] = mapped_column(NVARCHAR(50), nullable=True, index=True,
                                                    comment="Grouping: auth | users | attendance | payroll | etc")
-    category: Mapped[Optional[str]] = mapped_column(NVARCHAR(80), nullable=True,
-                                                   comment="Permission domain such as auth, attendance, analytics")
     group: Mapped[Optional[str]] = mapped_column(NVARCHAR(50), nullable=True,
                                                   comment="Sub-group within module: read | write | admin")
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True,
@@ -120,24 +115,6 @@ class RolePermission(Base):
     def __repr__(self): return f"<RolePermission role={self.role_id} perm={self.permission_id}>"
 
 
-# ── UserRole ──────────────────────────────────────────────────────────────────
-class UserRole(Base):
-    __tablename__ = "user_roles"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"),
-                                          nullable=False, index=True)
-    role_id: Mapped[int] = mapped_column(Integer, ForeignKey("roles.id", ondelete="CASCADE"),
-                                          nullable=False, index=True)
-    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
-                                                  default=_utc_now, server_default=text("NOW()"))
-    user: Mapped["User"] = relationship("User", back_populates="user_roles", overlaps="members,roles")
-    role: Mapped["Role"] = relationship("Role", back_populates="user_roles", overlaps="members,roles")
-    __table_args__ = (
-        UniqueConstraint("user_id", "role_id", name="uq_user_role"),
-    )
-    def __repr__(self): return f"<UserRole {self.user_id} {self.role_id}>"
-
-
 # ── SystemSetting ─────────────────────────────────────────────────────────────
 class SystemSetting(Base):
     """Global key-value settings that control runtime behavior."""
@@ -154,6 +131,23 @@ class SystemSetting(Base):
     def __repr__(self): return f"<SystemSetting {self.setting_key}={self.setting_value!r}>"
 
 
+class UserRole(Base):
+    __tablename__ = "user_roles"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"),
+                                          nullable=False, index=True)
+    role_id: Mapped[int] = mapped_column(Integer, ForeignKey("roles.id", ondelete="CASCADE"),
+                                          nullable=False, index=True)
+    assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
+                                                  default=_utc_now, server_default=text("NOW()"))
+    user: Mapped["User"] = relationship("User", back_populates="user_roles")
+    role: Mapped["Role"] = relationship("Role", back_populates="user_roles")
+    __table_args__ = (
+        UniqueConstraint("user_id", "role_id", name="uq_user_role"),
+    )
+    def __repr__(self): return f"<UserRole {self.user_id} {self.role_id}>"
+
+
 # ── Organization ──────────────────────────────────────────────────────────────
 class Organization(Base):
     __tablename__ = "organizations"
@@ -167,6 +161,11 @@ class Organization(Base):
     logo_url: Mapped[Optional[str]] = mapped_column(NVARCHAR(512), nullable=True)
     primary_color: Mapped[str] = mapped_column(NVARCHAR(7), nullable=False,
                                                 server_default=text("'#4F46E5'"))
+    # Public careers page identifier: /careers/<career_slug>. Nullable so
+    # existing tenants keep working; it is generated on first use rather than
+    # forced at migration time.
+    career_slug: Mapped[Optional[str]] = mapped_column(NVARCHAR(80), nullable=True,
+                                                       unique=True, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False,
                                             default=True,
                                             server_default=text("TRUE"))
@@ -175,9 +174,9 @@ class Organization(Base):
                                          server_default=text("'ACTIVE'"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
                                                   default=_utc_now, server_default=text("NOW()"))
+    users: Mapped[List["User"]] = relationship("User", back_populates="organization")
     api_keys:    Mapped[List["OrgApiKey"]]  = relationship("OrgApiKey",  back_populates="organization",
                                                             cascade="all, delete-orphan")
-    users:       Mapped[List["User"]]       = relationship("User",       back_populates="organization")
     departments: Mapped[List["Department"]] = relationship("Department", back_populates="organization")
     shifts:      Mapped[List["Shift"]]      = relationship("Shift",      back_populates="organization")
     tickets:     Mapped[List["Ticket"]]     = relationship("Ticket",     back_populates="organization")
@@ -286,8 +285,18 @@ class User(Base):
                                                      nullable=True, index=True)
     full_name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False)
     username: Mapped[str] = mapped_column(NVARCHAR(80), nullable=False, unique=True, index=True)
-    email: Mapped[str] = mapped_column(NVARCHAR(150), nullable=False, unique=True, index=True)
+    # Unique per tenant, not globally: the same person may hold an account at
+    # two organisations. Declared as a functional index below because
+    # `Ada@x.com` and `ada@x.com` are one mailbox, so the uniqueness has to be
+    # case-insensitive. Lookups must therefore match on `func.lower`, and every
+    # write path must store a lowercased address.
+    email: Mapped[str] = mapped_column(NVARCHAR(150), nullable=False, index=True)
     phone: Mapped[Optional[str]] = mapped_column(NVARCHAR(20), nullable=True)
+    gender: Mapped[Optional[str]] = mapped_column(
+        String(32), nullable=True,
+        comment="male|female|other|undisclosed — scopes gender-specific leave types "
+                "such as maternity and paternity. NULL means unstated, which is "
+                "treated as 'no opinion' rather than a match")
     employee_id: Mapped[str] = mapped_column(NVARCHAR(50), nullable=False,
                                               unique=True, index=True,
                                               comment="HR / payroll reference code")
@@ -320,14 +329,16 @@ class User(Base):
     emotion_logs: Mapped[List["EmotionLog"]] = relationship("EmotionLog", back_populates="user")
     requested_reports: Mapped[List["Report"]] = relationship("Report", back_populates="requester")
     user_roles: Mapped[List["UserRole"]] = relationship(
-        "UserRole", back_populates="user", cascade="all, delete-orphan",
-        overlaps="members,roles,role")
+        "UserRole", back_populates="user", cascade="all, delete-orphan")
     roles: Mapped[List["Role"]] = relationship(
         "Role",
         secondary="user_roles",
         back_populates="members",
         collection_class=list,
-        overlaps="user_roles,user,role,members",
+        # Resolve the overlapping relationship warning between User.roles
+        # (many-to-many via user_roles) and User.user_roles (one-to-many to
+        # the join table). Both intentionally expose the same join data.
+        overlaps="user,user_roles,members,role",
     )
     manual_overrides_as_target: Mapped[List["ManualOverride"]] = relationship(
         "ManualOverride", back_populates="target_user", foreign_keys="ManualOverride.target_user_id")
@@ -339,20 +350,69 @@ class User(Base):
     reimbursements: Mapped[List["Reimbursement"]] = relationship("Reimbursement", back_populates="user", foreign_keys="Reimbursement.user_id")
     payrolls: Mapped[List["Payroll"]] = relationship("Payroll", back_populates="user")
     sessions: Mapped[List["UserSession"]] = relationship("UserSession", back_populates="user")
+    employment_record: Mapped[Optional["EmploymentRecord"]] = relationship(
+        "EmploymentRecord",
+        foreign_keys="EmploymentRecord.user_id",
+        uselist=False,
+        viewonly=True,
+    )
+
+    @property
+    def has_face_enrolled(self) -> bool:
+        if self.face_embedding is not None:
+            return bool(getattr(self.face_embedding, "is_active", 0))
+        return False
+
+    @property
+    def designation(self) -> Optional[str]:
+        return self.employment_record.designation if self.employment_record else None
+
+    @property
+    def employment_type(self) -> str:
+        return self.employment_record.employment_type if self.employment_record else "EMPLOYEE"
+
+    @property
+    def manager_name(self) -> Optional[str]:
+        if self.employment_record and self.employment_record.reporting_manager:
+            return self.employment_record.reporting_manager.full_name
+        return None
+
+    @property
+    def manager_id(self) -> Optional[int]:
+        return self.employment_record.reporting_manager_id if self.employment_record else None
+
+    @property
+    def branch_id(self) -> Optional[int]:
+        return self.employment_record.branch_id if self.employment_record else None
+
+    @property
+    def location(self) -> Optional[str]:
+        if self.employment_record and self.employment_record.branch:
+            b = self.employment_record.branch
+            return f"{b.name} ({b.city})" if b.city and b.name != b.city else b.name or b.city
+        return None
+
+    @property
+    def last_activity(self) -> Optional[datetime]:
+        if self.sessions:
+            active_sessions = [s.last_activity_at for s in self.sessions if s.last_activity_at and s.is_active]
+            if active_sessions:
+                return max(active_sessions)
+            all_sessions = [s.last_activity_at for s in self.sessions if s.last_activity_at]
+            if all_sessions:
+                return max(all_sessions)
+        return None
+
     __table_args__ = (
         CheckConstraint("is_deleted IN (0, 1)", name="ck_users_is_deleted"),
         CheckConstraint("is_active IN (0, 1)", name="ck_users_is_active"),
         Index("ix_users_active_org", "org_id", postgresql_where=text("is_deleted = 0")),
         Index("ix_users_org_email", "org_id", "email"),
+        # Uniqueness is per tenant and case-insensitive; see the `email`
+        # column. Functional, so it must be built with `lower(email)`, which a
+        # plain (org_id, email) unique would not enforce.
+        Index("uq_users_org_email_lower", "org_id", func.lower(email), unique=True),
     )
-    @property
-    def dept_name(self) -> Optional[str]:
-        return self.department.name if self.department else None
-
-    @property
-    def org_name(self) -> Optional[str]:
-        return self.organization.name if self.organization else None
-
     def __repr__(self): return f"<User {self.id} {self.username!r} active={self.is_active}>"
 
 
@@ -424,6 +484,14 @@ class FaceEmbedding(Base):
         comment="AES-encrypted biometric backup — never returned in API responses")
     zkp_public_commitment: Mapped[Optional[str]] = mapped_column(
         NVARCHAR(512), nullable=True, comment="Schnorr P=x·G — no raw biometric stored")
+
+    # Reference capture kept so operators can confirm whose template is on file.
+    # Served only through the authenticated, tenant-scoped photo endpoint.
+    enrollment_photo: Mapped[Optional[bytes]] = mapped_column(
+        LargeBinary, nullable=True,
+        comment="Enrollment capture bytes — served via GET /users/{id}/face-photo only")
+    enrollment_photo_mime: Mapped[Optional[str]] = mapped_column(
+        NVARCHAR(60), nullable=True, server_default=text("'image/jpeg'"))
 
     # Phase-3 additions
     quality_score: Mapped[Optional[float]] = mapped_column(
@@ -632,10 +700,6 @@ class AttendanceLog(Base):
                                                 index=True)
     check_out: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True,
                                                            comment="NULL until clock-out")
-    break_start: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True,
-                                                             comment="NULL until break start")
-    break_end: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True,
-                                                           comment="NULL until break end")
     status: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False,
                                          comment="on_time|late|early|absent|excused|manual_override")
     emotion: Mapped[Optional[str]] = mapped_column(NVARCHAR(30), nullable=True)
@@ -673,6 +737,23 @@ class AttendanceLog(Base):
                         name="ck_attendance_source"),
     )
     def __repr__(self): return f"<AttendanceLog {self.id} user={self.user_id} {self.status!r}>"
+
+    @property
+    def user_name(self) -> Optional[str]:
+        """Employee display name for API consumers.
+
+        AttendanceLogResponse exposes user_name/user_email; they are derived from
+        the owning user so history endpoints never have to hand-build payloads.
+        """
+        if self.user is None:
+            return None
+        return getattr(self.user, "full_name", None) or getattr(self.user, "username", None)
+
+    @property
+    def user_email(self) -> Optional[str]:
+        if self.user is None:
+            return None
+        return getattr(self.user, "email", None)
 
 
 # ── ManualOverride ────────────────────────────────────────────────────────────
@@ -862,6 +943,12 @@ class Payroll(Base):
     status: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False, default="draft",
                                          server_default=text("'draft'"),
                                          comment="draft|pending|paid")
+    # ISO 4217 code the figures were computed in. Snapshotted so a payslip is
+    # labelled with the same currency as its statutory deductions, and so a
+    # later tenant currency change cannot relabel an already-issued document.
+    currency: Mapped[str] = mapped_column(
+        NVARCHAR(3), nullable=False, default="INR", server_default=text("'INR'"),
+    )
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
                                                     default=_utc_now, server_default=text("NOW()"))
 
@@ -871,135 +958,6 @@ class Payroll(Base):
     __table_args__ = (
         CheckConstraint("status IN ('draft','pending','paid')", name="ck_payroll_status"),
         UniqueConstraint("user_id", "month", "year", name="uq_user_monthly_payroll"),
-    )
-
-
-# ── Payroll Period ─────────────────────────────────────────────────────────────
-class PayrollPeriod(Base):
-    __tablename__ = "payroll_periods"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False)
-    start_date: Mapped[date] = mapped_column(Date, nullable=False)
-    end_date: Mapped[date] = mapped_column(Date, nullable=False)
-    is_closed: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
-
-    __table_args__ = (
-        CheckConstraint("is_closed IN (0, 1)", name="ck_payroll_period_closed"),
-    )
-
-
-# ── Salary Component ───────────────────────────────────────────────────────────
-class SalaryComponent(Base):
-    __tablename__ = "salary_components"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    code: Mapped[str] = mapped_column(NVARCHAR(50), nullable=False, index=True)
-    name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False)
-    component_type: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False, comment="earning|deduction")
-    is_taxable: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
-    is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
-
-
-# ── Tax Configuration ─────────────────────────────────────────────────────────
-class TaxConfiguration(Base):
-    __tablename__ = "tax_configurations"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False)
-    tax_type: Mapped[str] = mapped_column(NVARCHAR(50), nullable=False, comment="income_tax|provident_fund|tax")
-    rate: Mapped[float] = mapped_column(Numeric(5, 2), nullable=False)
-    effective_from: Mapped[date] = mapped_column(Date, nullable=False)
-    effective_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
-
-
-# ── Expense Category ───────────────────────────────────────────────────────────
-class ExpenseCategory(Base):
-    __tablename__ = "expense_categories"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
-
-
-# ── Payslip ───────────────────────────────────────────────────────────────────
-class Payslip(Base):
-    __tablename__ = "payslips"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    payroll_id: Mapped[int] = mapped_column(Integer, ForeignKey("payrolls.id", ondelete="CASCADE"), nullable=False, index=True)
-    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    month: Mapped[int] = mapped_column(Integer, nullable=False)
-    year: Mapped[int] = mapped_column(Integer, nullable=False)
-    gross_salary: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
-    total_deductions: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
-    net_salary: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
-    pdf_path: Mapped[Optional[str]] = mapped_column(NVARCHAR(512), nullable=True)
-    is_sent: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
-    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
-
-
-# ── Bank Account ──────────────────────────────────────────────────────────────
-class BankAccount(Base):
-    __tablename__ = "bank_accounts"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    bank_name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False)
-    account_number: Mapped[str] = mapped_column(NVARCHAR(50), nullable=False)
-    ifsc_code: Mapped[str] = mapped_column(NVARCHAR(20), nullable=False)
-    account_holder_name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False)
-    is_primary: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
-    is_verified: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
-
-
-# ── Payroll Settlement ────────────────────────────────────────────────────────
-class PayrollSettlement(Base):
-    __tablename__ = "payroll_settlements"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    payroll_id: Mapped[int] = mapped_column(Integer, ForeignKey("payrolls.id", ondelete="CASCADE"), nullable=False, index=True)
-    status: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False, default="DRAFT", server_default=text("'DRAFT'"))
-    settlement_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    total_amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0.0)
-    currency: Mapped[str] = mapped_column(NVARCHAR(10), nullable=False, default="USD", server_default=text("'USD'"))
-    initiated_by_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    approved_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
-    settled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    idempotency_key: Mapped[Optional[str]] = mapped_column(NVARCHAR(255), nullable=True, unique=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
-
-    __table_args__ = (
-        CheckConstraint("status IN ('DRAFT','VALIDATED','APPROVED','SETTLEMENT_PENDING','SETTLEMENT_PROCESSING','SETTLED','SETTLEMENT_FAILED')", name="ck_settlement_status"),
-    )
-
-
-# ── Payroll Settlement Item ───────────────────────────────────────────────────
-class PayrollSettlementItem(Base):
-    __tablename__ = "payroll_settlement_items"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    settlement_id: Mapped[int] = mapped_column(Integer, ForeignKey("payroll_settlements.id", ondelete="CASCADE"), nullable=False, index=True)
-    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
-    currency: Mapped[str] = mapped_column(NVARCHAR(10), nullable=False, default="USD", server_default=text("'USD'"))
-    status: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False, default="PENDING")
-    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
-
-    __table_args__ = (
-        CheckConstraint("status IN ('PENDING','PROCESSING','PAID','FAILED')", name="ck_settlement_item_status"),
     )
 
 
@@ -1511,6 +1469,13 @@ class ApprovalStage(Base):
 
     workflow: Mapped["ApprovalWorkflow"] = relationship("ApprovalWorkflow", back_populates="stages")
     approvers: Mapped[list["ApprovalStageApprover"]] = relationship("ApprovalStageApprover", back_populates="stage", cascade="all, delete-orphan", order_by="ApprovalStageApprover.sequence_order")
+    # Added so conditional rules reach the API response. The `workflow_conditions`
+    # table already existed and the evaluator read it, but a stage carried no way
+    # to reach its own rules, so an administrator could not see the routing they
+    # had configured. No schema change: this is a mapped attribute only.
+    conditions: Mapped[list["WorkflowCondition"]] = relationship(
+        "WorkflowCondition", back_populates="stage", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("ix_approval_stage_wf_order", "workflow_id", "stage_order"),
@@ -1694,7 +1659,7 @@ class WorkflowCondition(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
 
     workflow: Mapped["ApprovalWorkflow"] = relationship("ApprovalWorkflow")
-    stage: Mapped[Optional["ApprovalStage"]] = relationship("ApprovalStage")
+    stage: Mapped[Optional["ApprovalStage"]] = relationship("ApprovalStage", back_populates="conditions")
 
     def __repr__(self): return f"<WorkflowCondition wf={self.workflow_id} field={self.field_name} op={self.operator}>"
 
@@ -1954,6 +1919,69 @@ class RoleAudit(Base):
 # SPRINT 3 — MODULE 1: LEAVE MANAGEMENT
 # =============================================================================
 
+class LeaveTemplate(Base):
+    """A named starting set of leave types an organization can adopt.
+
+    Leave types were previously a single hardcoded list injected into every
+    tenant on first access, so a design studio, a hospital and a call centre all
+    received an identical set including 180 days of maternity leave. The set an
+    organization offers is a business decision that differs by sector and region,
+    so the choice is exposed to the organization instead of hardcoded.
+
+    Templates are data, not code, so they can be adjusted without a deployment.
+    `is_system` marks the seeded ones that should not be deleted.
+    """
+    __tablename__ = "leave_templates"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    code: Mapped[str] = mapped_column(NVARCHAR(60), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(NVARCHAR(120), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(NVARCHAR(500), nullable=True)
+    region: Mapped[Optional[str]] = mapped_column(NVARCHAR(60), nullable=True, index=True,
+                                                  comment="ISO country/region label, e.g. IN, UK, US")
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
+                                              server_default=text("FALSE"),
+                                              comment="Suggested template for a new organization")
+    is_system: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True,
+                                            server_default=text("TRUE"),
+                                            comment="Seeded by the platform; not deletable")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True,
+                                            server_default=text("TRUE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
+                                                  default=_utc_now, server_default=text("NOW()"))
+    items: Mapped[List["LeaveTemplateItem"]] = relationship(
+        "LeaveTemplateItem", back_populates="template",
+        cascade="all, delete-orphan", order_by="LeaveTemplateItem.display_order",
+    )
+
+
+class LeaveTemplateItem(Base):
+    """One leave type within a template, mirroring the LeaveType configuration."""
+    __tablename__ = "leave_template_items"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    template_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("leave_templates.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+    code: Mapped[str] = mapped_column(NVARCHAR(40), nullable=False)
+    name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(NVARCHAR(300), nullable=True)
+    max_days_per_year: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    max_days_per_request: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    carry_forward: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
+                                                server_default=text("FALSE"))
+    max_carry_forward_days: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    requires_document: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
+                                                    server_default=text("FALSE"))
+    min_notice_days: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True,
+                                          server_default=text("TRUE"))
+    gender_specific: Mapped[Optional[str]] = mapped_column(NVARCHAR(20), nullable=True)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
+                                                  default=_utc_now, server_default=text("NOW()"))
+
+    template: Mapped["LeaveTemplate"] = relationship("LeaveTemplate", back_populates="items")
+
+
 class LeaveType(Base):
     """Leave type configuration per organization (Annual, Sick, Casual, etc.)"""
     __tablename__ = "leave_types"
@@ -2134,12 +2162,17 @@ class PayGrade(Base):
 
 
 class SalaryStructure(Base):
-    """Detailed employee salary breakdown structure."""
+    """Detailed employee salary breakdown structure.
+
+    Effective-dated: a raise inserts a new version and closes the previous one,
+    rather than overwriting it. Overwriting would make a re-run of an already
+    paid month recompute that month at the new rate.
+    """
     __tablename__ = "salary_structures"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     pay_grade_id: Mapped[Optional[int]] = mapped_column(ForeignKey("pay_grades.id", ondelete="SET NULL"), nullable=True)
     base_pay: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     hra: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False, default=0.0)
@@ -2149,10 +2182,20 @@ class SalaryStructure(Base):
     gross_salary: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     net_salary: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, onupdate=_utc_now, server_default=text("NOW()"))
+    effective_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+    effective_to: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("TRUE"))
 
     user: Mapped["User"] = relationship("User")
     pay_grade: Mapped[Optional["PayGrade"]] = relationship("PayGrade")
     organization: Mapped["Organization"] = relationship("Organization")
+
+    __table_args__ = (
+        # At most one version per effective date; successive versions are allowed.
+        UniqueConstraint(
+            "user_id", "effective_from", name="uq_salary_structures_user_effective"
+        ),
+    )
 
     def __repr__(self): return f"<SalaryStructure user={self.user_id} net={self.net_salary}>"
 
@@ -2178,63 +2221,360 @@ class PayrollAdvance(Base):
 
 
 class LoanRepayment(Base):
-    """Scheduled instalment for an approved payroll advance."""
+    """Scheduled monthly repayment installment for a PayrollAdvance loan."""
     __tablename__ = "loan_repayments"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    advance_id: Mapped[int] = mapped_column(ForeignKey("payroll_advances.id", ondelete="CASCADE"), nullable=False, index=True)
-    payroll_id: Mapped[Optional[int]] = mapped_column(ForeignKey("payrolls.id", ondelete="SET NULL"), nullable=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    advance_id: Mapped[int] = mapped_column(
+        ForeignKey("payroll_advances.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
-    scheduled_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending", server_default=text("'pending'"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+    scheduled_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="pending", server_default=text("'pending'"),
+        comment="pending | paid | waived"
+    )
+    # Set when deducted from a payroll run
+    payroll_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("payrolls.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    paid_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()")
+    )
 
     advance: Mapped["PayrollAdvance"] = relationship("PayrollAdvance")
-    payroll: Mapped[Optional["Payroll"]] = relationship("Payroll")
 
-    def __repr__(self): return f"<LoanRepayment advance={self.advance_id} amount={self.amount}>"
+    __table_args__ = (
+        Index("ix_loan_repayments_advance_status", "advance_id", "status"),
+        CheckConstraint("status IN ('pending','paid','waived')", name="ck_loan_repayment_status"),
+    )
 
-
-class StatutoryRule(Base):
-    """Tenant-scoped statutory configuration used by payroll calculations."""
-    __tablename__ = "statutory_rules"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    rule_code: Mapped[str] = mapped_column(NVARCHAR(80), nullable=False)
-    rule_name: Mapped[str] = mapped_column(NVARCHAR(160), nullable=False)
-    parameter_json: Mapped[dict] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
-    effective_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    effective_to: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("TRUE"))
-
-
-class PayrollRun(Base):
-    """A batch calculation run; individual results remain in ``payrolls``."""
-    __tablename__ = "payroll_runs"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    run_name: Mapped[str] = mapped_column(NVARCHAR(160), nullable=False)
-    month: Mapped[int] = mapped_column(Integer, nullable=False)
-    year: Mapped[int] = mapped_column(Integer, nullable=False)
-    status: Mapped[str] = mapped_column(NVARCHAR(40), nullable=False, default="draft", server_default=text("'draft'"))
-    total_gross: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0, server_default=text("0"))
-    total_deductions: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0, server_default=text("0"))
-    total_net: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0, server_default=text("0"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+    def __repr__(self):
+        return f"<LoanRepayment advance={self.advance_id} amount={self.amount} status={self.status!r}>"
 
 
 class PayrollLineItem(Base):
-    """Auditable earning/deduction component for a generated payroll record."""
+    """Granular payroll component line item for full audit trail."""
     __tablename__ = "payroll_line_items"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    payroll_id: Mapped[int] = mapped_column(ForeignKey("payrolls.id", ondelete="CASCADE"), nullable=False, index=True)
-    component_name: Mapped[str] = mapped_column(NVARCHAR(160), nullable=False)
-    component_type: Mapped[str] = mapped_column(NVARCHAR(40), nullable=False)
-    amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    payroll_id: Mapped[int] = mapped_column(
+        ForeignKey("payrolls.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    component_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    component_type: Mapped[str] = mapped_column(
+        String(30), nullable=False,
+        comment="earning|deduction|statutory|tax"
+    )
+    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    payroll: Mapped["Payroll"] = relationship("Payroll")
+
+    def __repr__(self):
+        return f"<PayrollLineItem payroll={self.payroll_id} {self.component_name}={self.amount}>"
+
+
+class PayrollRun(Base):
+    """Batch payroll processing run for an organization period."""
+    __tablename__ = "payroll_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    payroll_period_id: Mapped[int] = mapped_column(
+        ForeignKey("payroll_periods.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    run_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(30), nullable=False,
+        comment="draft|calculated|validated|approval|approved|finalized"
+    )
+    total_gross: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0.0)
+    total_deductions: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0.0)
+    total_net: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0.0)
+    executed_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    approved_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    finalized_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    organization: Mapped["Organization"] = relationship("Organization")
+    executed_by: Mapped["User"] = relationship("User", foreign_keys=[executed_by_user_id])
+    approved_by: Mapped[Optional["User"]] = relationship("User", foreign_keys=[approved_by_user_id])
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('draft','calculated','validated','approval','approved','finalized')",
+            name="ck_payroll_run_status"
+        ),
+    )
+
+    def __repr__(self):
+        return f"<PayrollRun {self.run_name!r} status={self.status!r}>"
+
+
+class StatutoryRule(Base):
+    """Statutory compliance rule (PF, TDS, ESI, etc.) for payroll calculation."""
+    __tablename__ = "statutory_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    rule_code: Mapped[str] = mapped_column(String(50), nullable=False)
+    rule_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    parameter_json: Mapped[str] = mapped_column(Text, nullable=False)
+    effective_from: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()")
+    )
+    effective_to: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    organization: Mapped["Organization"] = relationship("Organization")
+
+    def __repr__(self):
+        return f"<StatutoryRule {self.rule_code!r} org={self.organization_id}>"
+
+
+class ExpenseCategory(Base):
+    """Expense reimbursement category definition per organization."""
+    __tablename__ = "expense_categories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    code: Mapped[str] = mapped_column(String(50), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    organization: Mapped["Organization"] = relationship("Organization")
+
+    def __repr__(self):
+        return f"<ExpenseCategory {self.code!r} {self.name!r}>"
+
+
+class PayrollPeriod(Base):
+    """Payroll accounting period definition for an organization."""
+    __tablename__ = "payroll_periods"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    period_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    start_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    pay_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="draft",
+        comment="draft|processing|pending_approval|approved|finalized|cancelled|locked"
+    )
+
+    organization: Mapped["Organization"] = relationship("Organization")
+
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('draft','processing','pending_approval','approved','finalized','cancelled','locked')",
+            name="ck_payroll_period_status"
+        ),
+    )
+
+    def __repr__(self):
+        return f"<PayrollPeriod {self.period_name!r} status={self.status!r}>"
+
+
+class SalaryComponent(Base):
+    """Salary component master definition (earnings, deductions, statutory)."""
+    __tablename__ = "salary_components"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    component_code: Mapped[str] = mapped_column(String(50), nullable=False)
+    component_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    component_type: Mapped[str] = mapped_column(
+        String(30), nullable=False,
+        comment="earning|deduction|statutory"
+    )
+    is_taxable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    organization: Mapped["Organization"] = relationship("Organization")
+
+    __table_args__ = (
+        CheckConstraint(
+            "component_type IN ('earning','deduction','statutory')",
+            name="ck_salary_comp_type"
+        ),
+    )
+
+    def __repr__(self):
+        return f"<SalaryComponent {self.component_code!r} type={self.component_type!r}>"
+
+
+class TaxConfiguration(Base):
+    """Tenant tax calculation configuration and rules."""
+    __tablename__ = "tax_configurations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    country_code: Mapped[str] = mapped_column(String(10), nullable=False, default="IN")
+    region: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    configuration_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    effective_from: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()")
+    )
+    effective_to: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    organization: Mapped["Organization"] = relationship("Organization")
+
+    def __repr__(self):
+        return f"<TaxConfiguration {self.country_code!r} org={self.organization_id}>"
+
+
+class BankAccount(Base):
+    """Employee bank account details for payroll settlement."""
+    __tablename__ = "bank_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    account_holder_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    account_number_masked: Mapped[str] = mapped_column(String(50), nullable=False, comment="Last 4 digits visible")
+    account_number_encrypted: Mapped[str] = mapped_column(Text, nullable=False, comment="AES-256 encrypted full account number")
+    bank_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    ifsc_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    swift_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    account_type: Mapped[str] = mapped_column(String(50), nullable=False, comment="savings|current|checking")
+    currency: Mapped[str] = mapped_column(String(10), nullable=False)
+    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, onupdate=_utc_now
+    )
+
+    organization: Mapped["Organization"] = relationship("Organization")
+    user: Mapped["User"] = relationship("User")
+
+    __table_args__ = (
+        Index("ix_bank_accounts_org_user", "organization_id", "user_id"),
+    )
+
+    def __repr__(self):
+        return f"<BankAccount user={self.user_id} bank={self.bank_name!r}>"
+
+
+class PayrollSettlement(Base):
+    """Payroll settlement batch execution record."""
+    __tablename__ = "payroll_settlements"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    payroll_run_id: Mapped[int] = mapped_column(
+        ForeignKey("payroll_runs.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="DRAFT")
+    total_amount: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), nullable=False)
+    employee_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    provider: Mapped[str] = mapped_column(String(100), nullable=False)
+    initiated_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    approved_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    initiated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    settled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    validation_report: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    bank_file_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, onupdate=_utc_now
+    )
+
+    organization: Mapped["Organization"] = relationship("Organization")
+    payroll_run: Mapped["PayrollRun"] = relationship("PayrollRun")
+    initiated_by: Mapped[Optional["User"]] = relationship("User", foreign_keys=[initiated_by_user_id])
+    approved_by: Mapped[Optional["User"]] = relationship("User", foreign_keys=[approved_by_user_id])
+    items: Mapped[List["PayrollSettlementItem"]] = relationship(
+        "PayrollSettlementItem", back_populates="settlement", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index("ix_payroll_settlements_org_status", "organization_id", "status"),
+        UniqueConstraint("payroll_run_id", "idempotency_key", name="uq_settlement_run_idempotency"),
+    )
+
+    def __repr__(self):
+        return f"<PayrollSettlement id={self.id} run={self.payroll_run_id} status={self.status!r}>"
+
+
+class PayrollSettlementItem(Base):
+    """Per-employee item within a payroll settlement batch."""
+    __tablename__ = "payroll_settlement_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    settlement_id: Mapped[int] = mapped_column(
+        ForeignKey("payroll_settlements.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
+    payroll_id: Mapped[int] = mapped_column(
+        ForeignKey("payrolls.id"), nullable=False, index=True
+    )
+    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(10), nullable=False)
+    bank_account_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("bank_accounts.id"), nullable=True
+    )
+    destination_reference: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="PENDING")
+    failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()")
+    )
+
+    settlement: Mapped["PayrollSettlement"] = relationship("PayrollSettlement", back_populates="items")
+    employee: Mapped["User"] = relationship("User")
+    payroll: Mapped["Payroll"] = relationship("Payroll")
+
+    __table_args__ = (
+        UniqueConstraint("settlement_id", "employee_id", name="uq_settlement_item_employee"),
+    )
+
+    def __repr__(self):
+        return f"<PayrollSettlementItem settlement={self.settlement_id} emp={self.employee_id} status={self.status!r}>"
 
 
 # =============================================================================
@@ -2255,11 +2595,23 @@ class JobPosting(Base):
     employment_type: Mapped[str] = mapped_column(String(50), nullable=False, default="Full-time") # Full-time, Part-time, Contract
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="open", server_default=text("'open'")) # open, closed, draft
     posted_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    # The internal slot this advert fills. Nullable: a tenant may advertise
+    # without defining positions at all, in which case a hire records no slot
+    # rather than being forced into an invented one.
+    position_id: Mapped[Optional[int]] = mapped_column(ForeignKey("job_positions.id", ondelete="SET NULL"), nullable=True, index=True)
+    # How many openings this posting covers. A posting is not implicitly
+    # single-hire; without this a capacity check could never actually fail.
+    headcount: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+
+    __table_args__ = (
+        CheckConstraint("headcount >= 1", name="ck_job_postings_headcount_positive"),
+    )
 
     organization: Mapped["Organization"] = relationship("Organization")
     posted_by: Mapped["User"] = relationship("User")
     department: Mapped[Optional["Department"]] = relationship("Department")
+    position: Mapped[Optional["JobPosition"]] = relationship("JobPosition")
 
     def __repr__(self): return f"<JobPosting {self.title}>"
 
@@ -2292,13 +2644,73 @@ class JobApplication(Base):
     stage: Mapped[str] = mapped_column(String(50), nullable=False, default="applied", server_default=text("'applied'")) # applied, screening, interview, offer, hired, rejected
     rating: Mapped[Optional[int]] = mapped_column(Integer, nullable=True) # 1-5 scale
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # The employment record created when this candidate was hired. Set
+    # synchronously by the hiring service, which makes it the idempotency key:
+    # a repeated PATCH to `hired` returns the same hire instead of creating a
+    # second employment record and a second onboarding invite.
+    hired_employment_id: Mapped[Optional[int]] = mapped_column(ForeignKey("employment_records.id", ondelete="SET NULL"), nullable=True, index=True)
     applied_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
 
     job_posting: Mapped["JobPosting"] = relationship("JobPosting")
     candidate: Mapped["Candidate"] = relationship("Candidate")
     organization: Mapped["Organization"] = relationship("Organization")
+    hired_employment: Mapped[Optional["EmploymentRecord"]] = relationship("EmploymentRecord")
 
     def __repr__(self): return f"<JobApplication candidate={self.candidate_id} job={self.job_posting_id} stage={self.stage}>"
+
+
+class Referral(Base):
+    """An employee referring an external candidate to a vacancy.
+
+    A referral is raised by an employee, who then shares `referral_code` with
+    the candidate. The candidate applies through the public careers page and
+    quotes the code, which links the resulting JobApplication back to this row
+    and lets HR verify the referral before any reward is paid.
+    """
+    __tablename__ = "referrals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Nullable: a referral may be raised against a specific vacancy, or left
+    # general ("we have openings, send them anywhere") until one is picked.
+    job_posting_id: Mapped[Optional[int]] = mapped_column(ForeignKey("job_postings.id", ondelete="SET NULL"), nullable=True, index=True)
+    # The employee who made the referral. ondelete CASCADE: when the referrer
+    # leaves, the referral is removed rather than orphaned.
+    referrer_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Populated when the referred person actually applies.
+    candidate_id: Mapped[Optional[int]] = mapped_column(ForeignKey("candidates.id", ondelete="SET NULL"), nullable=True, index=True)
+    referred_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    referred_email: Mapped[str] = mapped_column(String(150), nullable=False, index=True)
+    referred_phone: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Short, shareable, globally unique so a candidate can quote it on a public
+    # application form. Only this token is handed out -- never the referral id.
+    referral_code: Mapped[str] = mapped_column(String(32), nullable=False, unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending", server_default=text("'pending'"))  # pending, submitted, screening, qualified, hired, rejected
+    reward_amount: Mapped[Optional[float]] = mapped_column(Numeric(10, 2), nullable=True)
+    reward_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)  # pending, approved, paid
+    verified_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, onupdate=_utc_now, server_default=text("NOW()"))
+
+    organization: Mapped["Organization"] = relationship("Organization")
+    job_posting: Mapped[Optional["JobPosting"]] = relationship("JobPosting")
+    referrer: Mapped["User"] = relationship("User", foreign_keys=[referrer_user_id])
+    candidate: Mapped[Optional["Candidate"]] = relationship("Candidate")
+    verified_by: Mapped[Optional["User"]] = relationship("User", foreign_keys=[verified_by_user_id])
+
+    __table_args__ = (
+        # One employee cannot refer the same person twice for the same vacancy.
+        Index(
+            "ux_referral_referrer_email_job",
+            "referrer_user_id", "referred_email", "job_posting_id",
+            unique=True,
+            postgresql_where=text("job_posting_id IS NOT NULL"),
+        ),
+    )
+
+    def __repr__(self): return f"<Referral {self.referred_email} by user={self.referrer_user_id} status={self.status}>"
 
 
 class InterviewSchedule(Base):
@@ -2839,7 +3251,7 @@ class EmployeeSkill(Base):
     __tablename__ = "employee_skills"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     skill_id: Mapped[int] = mapped_column(ForeignKey("skill_master.id", ondelete="CASCADE"), nullable=False, index=True)
     proficiency_level: Mapped[str] = mapped_column(String(30), nullable=False, default="intermediate")  # beginner | intermediate | advanced | expert
@@ -3543,42 +3955,31 @@ class PolicyNotification(Base):
     def __repr__(self): return f"<PolicyNotification type={self.notification_type} user={self.user_id}>"
 
 
-# ── Notification (In-App User Notifications) ─────────────────────────────────
 class Notification(Base):
-    """Persisted in-app notifications for users in a tenant organization."""
+    """In-app notification for users."""
     __tablename__ = "notifications"
 
-    id: Mapped[str] = mapped_column(
-        NVARCHAR(64), primary_key=True, default=lambda: str(uuid.uuid4()),
-        server_default=text("uuid_generate_v4()"))
-    user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    org_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
-    title: Mapped[str] = mapped_column(NVARCHAR(255), nullable=False)
-    message: Mapped[str] = mapped_column(Text, nullable=False)
-    type: Mapped[str] = mapped_column(
-        NVARCHAR(30), nullable=False, default="info", server_default=text("'info'"),
-        comment="info | success | warning | error")
-    action_url: Mapped[Optional[str]] = mapped_column(NVARCHAR(512), nullable=True)
-    source_event: Mapped[Optional[str]] = mapped_column(NVARCHAR(100), nullable=True)
-    is_read: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, server_default=text("FALSE"), index=True)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    org_id: Mapped[UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    type: Mapped[str] = mapped_column(String(30), nullable=False, default="info")
+    action_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    source_event: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("FALSE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
     read_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"), index=True)
 
     user: Mapped["User"] = relationship("User")
     organization: Mapped["Organization"] = relationship("Organization")
 
     __table_args__ = (
-        Index("ix_notifications_user_org_read", "org_id", "user_id", "is_read"),
-        Index("ix_notifications_created", "created_at"),
+        Index("ix_notif_user", "user_id", "is_read"),
+        Index("ix_notif_org", "org_id"),
     )
 
-    def __repr__(self):
-        return f"<Notification {self.id} user={self.user_id} title={self.title!r} read={self.is_read}>"
-
+    def __repr__(self): return f"<Notification {self.id} user={self.user_id} type={self.type}>"
 
 
 class ComplianceRule(Base):
@@ -3654,55 +4055,6 @@ class ComplianceAudit(Base):
     created_by: Mapped[Optional["User"]] = relationship("User", foreign_keys=[created_by_user_id])
 
     def __repr__(self): return f"<ComplianceAudit type={self.audit_type} doc={self.document_id}>"
-
-
-# ── Privacy Request ───────────────────────────────────────────────────────────
-class PrivacyRequest(Base):
-    __tablename__ = "privacy_requests"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    request_type: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False, comment="access|erasure|rectification|portability")
-    status: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False, default="PENDING", server_default=text("'PENDING'"))
-    reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    processed_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
-    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
-
-    __table_args__ = (
-        CheckConstraint("status IN ('PENDING','APPROVED','REJECTED','COMPLETED','CANCELLED')", name="ck_privacy_request_status"),
-    )
-
-
-# ── Retention Policy ──────────────────────────────────────────────────────────
-class RetentionPolicy(Base):
-    __tablename__ = "retention_policies"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    name: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False)
-    data_type: Mapped[str] = mapped_column(NVARCHAR(50), nullable=False, comment="attendance|payroll|hcm|biometric|audit")
-    retention_days: Mapped[int] = mapped_column(Integer, nullable=False)
-    action: Mapped[str] = mapped_column(NVARCHAR(30), nullable=False, default="archive", server_default=text("'archive'"), comment="archive|delete|anonymize")
-    is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
-
-    __table_args__ = (
-        CheckConstraint("action IN ('archive','delete','anonymize')", name="ck_retention_action"),
-    )
-
-
-# ── Legal Hold ────────────────────────────────────────────────────────────────
-class LegalHold(Base):
-    __tablename__ = "legal_holds"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
-    org_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    case_number: Mapped[str] = mapped_column(NVARCHAR(100), nullable=False, unique=True, index=True)
-    description: Mapped[str] = mapped_column(Text, nullable=False)
-    applied_by_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    is_active: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
-    released_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    released_by_user_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
 
 
 # ============================================================================
@@ -4315,6 +4667,7 @@ class EmploymentRecord(Base):
     reporting_manager: Mapped[Optional["User"]] = relationship("User", foreign_keys=[reporting_manager_id])
     skip_level_manager: Mapped[Optional["User"]] = relationship("User", foreign_keys=[skip_level_manager_id])
     functional_manager: Mapped[Optional["User"]] = relationship("User", foreign_keys=[functional_manager_id])
+    branch: Mapped[Optional["Branch"]] = relationship("Branch", foreign_keys=[branch_id])
 
 
 class IdentityHistory(Base):
@@ -5407,7 +5760,7 @@ class EmployeeDocument(Base):
 
     def __repr__(self): return f"<EmployeeDocument title='{self.title}' type='{self.document_type}'>"
 
-# ── SystemSetting ─────────────────────────────────────────────────────────────
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
@@ -5629,3 +5982,607 @@ class AttendanceApproval(Base):
 
     def __repr__(self) -> str:
         return f"<AttendanceApproval {self.id} request={self.attendance_request_id} status={self.approval_status!r}>"
+
+
+# =============================================================================
+# SPRINT 9: ENTERPRISE ANALYTICS, GOVERNANCE, PRIVACY & COMPLIANCE MODELS
+# =============================================================================
+
+class MetricDefinition(Base):
+    """Centralized Metric Registry Definition."""
+    __tablename__ = "metric_definitions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    metric_key: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True, comment="e.g. workforce.headcount")
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    category: Mapped[str] = mapped_column(String(50), nullable=False, default="workforce", comment="workforce|leave|hcm|finance|payroll|system")
+    required_permission: Mapped[str] = mapped_column(String(100), nullable=False, default="report.generate")
+    calculation_logic: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    unit: Mapped[str] = mapped_column(String(30), nullable=False, default="count", comment="count|percentage|currency|hours|ratio")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+
+
+class MetricSnapshot(Base):
+    """Aggregated historical snapshot for metric trend queries."""
+    __tablename__ = "metric_snapshots"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    metric_key: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    metric_value: Mapped[float] = mapped_column(Numeric(14, 4), nullable=False)
+    dimensions: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True, comment="Department, branch, or segment metadata")
+    snapshot_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+    organization: Mapped["Organization"] = relationship("Organization")
+    __table_args__ = (
+        Index("ix_metric_snapshots_org_key_date", "organization_id", "metric_key", "snapshot_date"),
+    )
+
+
+class ScheduledReport(Base):
+    """Configuration for automated background report delivery."""
+    __tablename__ = "scheduled_reports"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    report_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    report_type: Mapped[str] = mapped_column(String(50), nullable=False, comment="ATTENDANCE|PAYROLL|LEAVE|COMPLIANCE|WORKFORCE")
+    frequency: Mapped[str] = mapped_column(String(20), nullable=False, default="MONTHLY", comment="DAILY|WEEKLY|MONTHLY")
+    file_format: Mapped[str] = mapped_column(String(10), nullable=False, default="CSV", comment="CSV|JSON|EXCEL")
+    filters: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    recipient_emails: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    last_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+    organization: Mapped["Organization"] = relationship("Organization")
+    created_by_user: Mapped["User"] = relationship("User")
+
+
+class RetentionPolicy(Base):
+    """Configurable data retention and purging policy per entity category."""
+    __tablename__ = "retention_policies"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    entity_category: Mapped[str] = mapped_column(String(50), nullable=False, comment="AUDIT_LOGS|ATTENDANCE|PAYROLL|DOCUMENTS|AI_CHATS|NOTIFICATIONS")
+    retention_days: Mapped[int] = mapped_column(Integer, nullable=False, default=365)
+    action_type: Mapped[str] = mapped_column(String(20), nullable=False, default="ARCHIVE", comment="ARCHIVE|PURGE")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, onupdate=_utc_now)
+    organization: Mapped["Organization"] = relationship("Organization")
+    __table_args__ = (
+        UniqueConstraint("organization_id", "entity_category", name="uq_org_entity_retention"),
+    )
+
+
+class LegalHold(Base):
+    """Legal hold rule preventing data purging for specified scopes."""
+    __tablename__ = "legal_holds"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    placed_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    hold_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    entity_category: Mapped[str] = mapped_column(String(50), nullable=False)
+    target_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+    organization: Mapped["Organization"] = relationship("Organization")
+    placed_by_user: Mapped["User"] = relationship("User", foreign_keys=[placed_by_user_id])
+
+
+class PrivacyRequest(Base):
+    """Enterprise DSAR / GDPR Privacy Request lifecycle state machine."""
+    __tablename__ = "privacy_requests"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    request_type: Mapped[str] = mapped_column(String(50), nullable=False, comment="DATA_EXPORT|DATA_CORRECTION|DATA_DELETION|ACCESS_REQUEST")
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="REQUESTED", comment="REQUESTED|UNDER_REVIEW|APPROVED|PROCESSING|COMPLETED|REJECTED")
+    details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    export_file_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    processed_by_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+    organization: Mapped["Organization"] = relationship("Organization")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+
+
+class SecurityEventLog(Base):
+    """High-priority security event audit log classification."""
+    __tablename__ = "security_event_logs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True)
+    actor_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(80), nullable=False, index=True, comment="AUTH_FAILURE|TOKEN_REVOKED|PERMISSION_DENIED|AI_QUERY_DENIED|PRIVACY_REQUEST")
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, default="INFO", comment="INFO|WARNING|CRITICAL")
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    correlation_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    meta_data: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"), index=True)
+    organization: Mapped[Optional["Organization"]] = relationship("Organization")
+
+class WebhookSubscription(Base):
+    """Enterprise Outbound Webhook Subscription Target."""
+    __tablename__ = "webhook_subscriptions"
+    id: Mapped[str] = mapped_column(String(50), primary_key=True, default=lambda: f"whk-{uuid.uuid4().hex[:12]}")
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    url: Mapped[str] = mapped_column(String(2000), nullable=False)
+    method: Mapped[str] = mapped_column(String(10), nullable=False, default="POST")
+    events: Mapped[dict] = mapped_column(JSONB, nullable=False, default=list, comment="List of subscribed event strings")
+    secret: Mapped[str] = mapped_column(String(255), nullable=False)
+    signature_header: Mapped[str] = mapped_column(String(100), nullable=False, default="X-Webhook-Signature")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="ACTIVE", comment="ACTIVE|ERROR|INACTIVE")
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    delivery_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_success_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_failure_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+    organization: Mapped["Organization"] = relationship("Organization")
+
+
+class WebhookDeliveryRecord(Base):
+    """Historical record of webhook payload delivery attempts."""
+    __tablename__ = "webhook_delivery_records"
+    id: Mapped[str] = mapped_column(String(50), primary_key=True, default=lambda: f"del-{uuid.uuid4().hex[:12]}")
+    webhook_id: Mapped[str] = mapped_column(ForeignKey("webhook_subscriptions.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    url: Mapped[str] = mapped_column(String(2000), nullable=False)
+    response_status: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    response_body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="failed", comment="success|failed")
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    duration_ms: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"), index=True)
+    webhook: Mapped["WebhookSubscription"] = relationship("WebhookSubscription")
+    organization: Mapped["Organization"] = relationship("Organization")
+
+
+class GatewayRouteConfig(Base):
+    """Enterprise API Gateway tenant rate-limiting and route configuration."""
+    __tablename__ = "gateway_route_configs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    route_pattern: Mapped[str] = mapped_column(String(200), nullable=False, default="*")
+    requests_per_second: Mapped[float] = mapped_column(Float, nullable=False, default=100.0)
+    burst_size: Mapped[int] = mapped_column(Integer, nullable=False, default=200)
+    tier: Mapped[str] = mapped_column(String(30), nullable=False, default="STANDARD", comment="BASIC|STANDARD|ENTERPRISE")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+    organization: Mapped["Organization"] = relationship("Organization")
+
+
+class ApiKeyMetadata(Base):
+    """Enterprise API Key Scoping & Security Tracking."""
+    __tablename__ = "api_key_metadata"
+    id: Mapped[str] = mapped_column(String(50), primary_key=True, default=lambda: f"apk-{uuid.uuid4().hex[:12]}")
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    key_prefix: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    key_hash: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    permissions: Mapped[dict] = mapped_column(JSONB, nullable=False, default=list)
+    allowed_ips: Mapped[dict] = mapped_column(JSONB, nullable=False, default=list)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="ACTIVE")
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+    organization: Mapped["Organization"] = relationship("Organization")
+
+
+class IntegrationConnector(Base):
+    """Third-party External Service Connector (Slack, Email, Storage, CRM)."""
+    __tablename__ = "integration_connectors"
+    id: Mapped[str] = mapped_column(String(50), primary_key=True, default=lambda: f"con-{uuid.uuid4().hex[:12]}")
+    organization_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    connector_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True, comment="SLACK|EMAIL_SMTP|STORAGE_S3|CRM_SALESFORCE|CUSTOM")
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    credentials: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="PENDING", comment="PENDING|ACTIVE|ERROR|DISABLED")
+    last_health_check: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    health_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+    organization: Mapped["Organization"] = relationship("Organization")
+
+
+class PasswordResetToken(Base):
+    """One-time, expiring password reset token (hashed at rest)."""
+    __tablename__ = "password_reset_tokens"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"),
+                                          nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(NVARCHAR(128), nullable=False, unique=True, index=True,
+                                             comment="SHA-256 hash of the raw reset token — never store raw")
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False,
+                                                  default=_utc_now, server_default=text("NOW()"))
+    user: Mapped["User"] = relationship("User")
+    __table_args__ = (
+        Index("ix_password_reset_active", "user_id", postgresql_where=text("used_at IS NULL AND revoked_at IS NULL")),
+    )
+    def __repr__(self): return f"<PasswordResetToken user={self.user_id} used={self.used_at is not None}>"
+
+
+class PasswordResetRequest(Base):
+    """
+    One password-reset request, and what became of it.
+
+    Exists so that issuing a reset is not the same as delivering one. The
+    endpoint's contract ("if that account exists, we have emailed you") was
+    previously a claim with nothing behind it: delivery could be skipped
+    because no SMTP credentials were configured, and the failure was swallowed,
+    so a user waiting on a link had no way to tell it was never coming.
+
+    The one-time code is stored hashed, separately from the reset link's JWT,
+    and carries its own shorter expiry and attempt budget -- six digits is a far
+    smaller space than the link's signature, so it must not inherit the link's
+    generous 30 minutes.
+    """
+    __tablename__ = "password_reset_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    # Nullable: a request against an unknown address is still recorded, so that
+    # abuse attempts are visible, but no account is implied.
+    user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=True, index=True)
+    email: Mapped[str] = mapped_column(NVARCHAR(150), nullable=False, index=True)
+    # Correlates a row with the JWT that was minted for it, without storing the
+    # token itself.
+    token_jti: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+
+    delivery_status: Mapped[str] = mapped_column(
+        String(30), nullable=False,
+        comment="sent|logged|skipped_unconfigured|failed")
+    delivery_provider: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    delivery_detail: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    delivery_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # Whether the account owner was told in-app. Independent of email: the
+    # in-app channel works with no third-party provider at all, which is what
+    # makes "the account person gets notified" true even with mail unconfigured.
+    notified_in_app: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("FALSE"))
+
+    otp_code_hash: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    otp_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True)
+    otp_attempts: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=text("0"))
+    satisfied_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True)
+
+    ip_address: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()"))
+
+    user: Mapped[Optional["User"]] = relationship("User")
+    organization: Mapped[Optional["Organization"]] = relationship("Organization")
+
+    __table_args__ = (
+        # Throttling and the operator's failed-delivery view both read recent
+        # rows for one address.
+        Index("ix_password_reset_requests_email_created",
+              "email", "created_at"),
+    )
+
+    def __repr__(self):
+        return (f"<PasswordResetRequest email={self.email} "
+                f"delivery={self.delivery_status}>")
+
+
+
+
+
+
+class Payslip(Base):
+    """
+    Generated PDF payslip for a single employee's payroll period.
+
+    One payslip per payroll row (enforced by uq_payslip_payroll). The monetary
+    columns are a point-in-time snapshot taken at generation time so a payslip
+    remains auditable and reproducible even if the payroll row is later
+    recalculated or the salary structure changes.
+    """
+
+    __tablename__ = "payslips"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    payroll_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("payrolls.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    # Storage path returned by the configured storage provider.
+    file_url: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # SHA-256 of the generated PDF, for integrity verification on download.
+    pdf_sha256: Mapped[Optional[str]] = mapped_column(NVARCHAR(64), nullable=True)
+
+    # Immutable snapshot of the figures rendered into the PDF.
+    period_label: Mapped[Optional[str]] = mapped_column(NVARCHAR(20), nullable=True, index=True)
+    currency: Mapped[str] = mapped_column(NVARCHAR(8), nullable=False, default="USD",
+                                          server_default=text("'USD'"))
+    gross_salary: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0.0)
+    total_deductions: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0.0)
+    net_pay: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0.0)
+
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()")
+    )
+    generated_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+    payroll: Mapped["Payroll"] = relationship("Payroll")
+    user: Mapped["User"] = relationship("User", foreign_keys=[user_id])
+    organization: Mapped["Organization"] = relationship("Organization")
+    generated_by: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[generated_by_user_id]
+    )
+
+    __table_args__ = (
+        UniqueConstraint("payroll_id", name="uq_payslip_payroll"),
+        CheckConstraint("gross_salary >= 0", name="ck_payslip_gross_non_negative"),
+        CheckConstraint("total_deductions >= 0", name="ck_payslip_deductions_non_negative"),
+    )
+
+    def __repr__(self):
+        return f"<Payslip payroll={self.payroll_id} net={self.net_pay} {self.currency}>"
+
+
+# =============================================================================
+#  HIRING — OFFER LETTERS
+# =============================================================================
+
+class OfferTemplate(Base):
+    """
+    Reusable offer letter body containing merge tags.
+
+    Tags are written as {{tag_name}} and resolved at render time. Templates are
+    tenant-scoped so one employer's legal wording is never visible to another.
+    """
+
+    __tablename__ = "offer_templates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(NVARCHAR(120), nullable=False)
+    subject: Mapped[Optional[str]] = mapped_column(NVARCHAR(200), nullable=True)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
+                                             server_default=text("false"))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True,
+                                             server_default=text("true"))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now,
+        onupdate=_utc_now, server_default=text("NOW()")
+    )
+
+    organization: Mapped["Organization"] = relationship("Organization")
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name", name="uq_offer_template_org_name"),
+    )
+
+    def __repr__(self):
+        return f"<OfferTemplate {self.name!r} default={self.is_default}>"
+
+
+class OfferLetter(Base):
+    """
+    A generated offer letter for one candidate.
+
+    The commercial terms are stored as columns rather than only inside the PDF
+    so they remain queryable and reportable; the rendered document additionally
+    captures them as an immutable snapshot at generation time.
+    """
+
+    __tablename__ = "offer_letters"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    application_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("job_applications.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    candidate_id: Mapped[int] = mapped_column(
+        ForeignKey("candidates.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    job_posting_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("job_postings.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    template_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("offer_templates.id", ondelete="SET NULL"), nullable=True
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="draft", server_default=text("'draft'"),
+        comment="draft|sent|accepted|declined|withdrawn|expired"
+    )
+
+    designation: Mapped[str] = mapped_column(NVARCHAR(150), nullable=False)
+    employment_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="Full-time", server_default=text("'Full-time'")
+    )
+    location: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    currency: Mapped[str] = mapped_column(NVARCHAR(8), nullable=False, default="USD",
+                                          server_default=text("'USD'"))
+
+    base_pay: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0.0)
+    allowances: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0.0)
+    annual_ctc: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False, default=0.0)
+
+    offer_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()")
+    )
+    start_date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()")
+    )
+    # Candidates should know how long they have to respond.
+    expiry_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    expires_in_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=7, server_default=text("7")
+    )
+
+    file_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    pdf_sha256: Mapped[Optional[str]] = mapped_column(NVARCHAR(64), nullable=True)
+
+    sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    responded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    decline_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    created_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now,
+        onupdate=_utc_now, server_default=text("NOW()")
+    )
+
+    application: Mapped[Optional["JobApplication"]] = relationship("JobApplication")
+    candidate: Mapped["Candidate"] = relationship("Candidate")
+    job_posting: Mapped[Optional["JobPosting"]] = relationship("JobPosting")
+    template: Mapped[Optional["OfferTemplate"]] = relationship("OfferTemplate")
+    organization: Mapped["Organization"] = relationship("Organization")
+    created_by: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[created_by_user_id]
+    )
+
+    __table_args__ = (
+        CheckConstraint("status IN ('draft','sent','accepted','declined','withdrawn','expired')",
+                        name="ck_offer_letter_status"),
+        CheckConstraint("base_pay >= 0", name="ck_offer_letter_base_non_negative"),
+        CheckConstraint("annual_ctc >= 0", name="ck_offer_letter_ctc_non_negative"),
+        CheckConstraint("expires_in_days > 0", name="ck_offer_letter_expiry_positive"),
+    )
+
+    def __repr__(self):
+        return f"<OfferLetter candidate={self.candidate_id} status={self.status} ctc={self.annual_ctc}>"
+
+
+class EmployeeInvite(Base):
+    """
+    One-time onboarding invitation for a new hire.
+
+    The raw token is never stored: only its SHA-256 hash, so a database leak
+    does not hand out working onboarding links. The token is deliberately
+    opaque and database-backed rather than a JWT, because an invite must stay
+    revocable by the organisation and auditable for as long as the employee
+    record exists.
+
+    The role is authorised when the invite is created, by an authenticated
+    administrator who is already subject to the privilege-escalation rules.
+    Accepting the link therefore needs no further permission check: there is no
+    authenticated actor at that point.
+    """
+
+    __tablename__ = "employee_invites"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    email: Mapped[str] = mapped_column(NVARCHAR(150), nullable=False, index=True)
+    full_name: Mapped[Optional[str]] = mapped_column(NVARCHAR(100), nullable=True)
+
+    token_hash: Mapped[str] = mapped_column(
+        NVARCHAR(64), nullable=False, unique=True, index=True,
+        comment="SHA-256 hash of the raw invite token — never store raw",
+    )
+    role_id: Mapped[int] = mapped_column(
+        ForeignKey("roles.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    department_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    manager_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    # The `JobPosition` slot this hire fills, carried from the job posting
+    # through onboarding. The `User` row is only created at acceptance, so this
+    # is how the slot survives the gap between being hired and starting.
+    position_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("job_positions.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="pending", server_default=text("'pending'"),
+        comment="pending|accepted|revoked",
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Onboarding checklist, so a new hire can finish before their start date.
+    profile_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    documents_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    tax_form_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    accepted_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    invited_by_user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utc_now, server_default=text("NOW()")
+    )
+
+    role: Mapped["Role"] = relationship("Role")
+    department: Mapped[Optional["Department"]] = relationship("Department")
+    manager: Mapped[Optional["User"]] = relationship("User", foreign_keys=[manager_id])
+    organization: Mapped["Organization"] = relationship("Organization")
+    invited_by: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[invited_by_user_id]
+    )
+    accepted_user: Mapped[Optional["User"]] = relationship(
+        "User", foreign_keys=[accepted_user_id]
+    )
+
+    __table_args__ = (
+        CheckConstraint("status IN ('pending','accepted','revoked')",
+                        name="ck_employee_invite_status"),
+        Index(
+            "ix_employee_invite_active",
+            "organization_id",
+            postgresql_where=text("status = 'pending' AND used_at IS NULL"),
+        ),
+    )
+
+    def __repr__(self):
+        return f"<EmployeeInvite {self.email} status={self.status}>"

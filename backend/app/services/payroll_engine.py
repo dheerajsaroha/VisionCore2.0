@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 from calendar import monthrange
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -25,6 +25,8 @@ from sqlalchemy.orm import Session
 
 from app.db.models.all_models import (
     AttendanceLog,
+    LeaveRequest,
+    LeaveType,
     LoanRepayment,
     Payroll,
     PayrollAdvance,
@@ -35,10 +37,11 @@ from app.db.models.all_models import (
     StatutoryRule,
     User,
 )
+from app.services import statutory_engine
 
 logger = logging.getLogger(__name__)
 
-# ── Constants (configurable via StatutoryRule in future) ──────────────────────
+# ── Constants (configurable via StatutoryRule) ─────────────────────────────────
 DEFAULT_BASE_SALARY = Decimal("50000.00")
 DEFAULT_LATE_DEDUCTION = Decimal("100.00")  # per late day; previously ₹10 hardcode
 CENTS = Decimal("0.01")
@@ -49,6 +52,60 @@ def _to_decimal(value: Any) -> Decimal:
     if value is None:
         return Decimal("0.00")
     return Decimal(str(value)).quantize(CENTS, rounding=ROUND_HALF_UP)
+
+
+def _tax_deducted_ytd(
+    db: Session, user_id: int, org_id, year: int, month: int
+) -> Decimal:
+    """
+    Sum of income tax already withheld this financial year.
+
+    Income tax is an annual slab liability, so each month's withholding is
+    trued up against what has already been taken. The Indian financial year
+    runs April (4) to March (3), so months before April belong to the
+    previous year.
+    """
+    if month < 4:
+        year -= 1
+        months_elapsed = tuple(range(4, 13)) + tuple(range(1, month))
+    else:
+        months_elapsed = tuple(range(4, month))
+
+    if not months_elapsed:
+        return Decimal("0.00")
+
+    rows = (
+        db.query(Payroll.month, Payroll.deductions)
+        .filter(
+            Payroll.user_id == user_id,
+            Payroll.org_id == org_id,
+            Payroll.year == year,
+            Payroll.month.in_(months_elapsed),
+        )
+        .all()
+    )
+
+    total = Decimal("0.00")
+    for row_month, deductions in rows:
+        # The payroll row aggregates every deduction, so the tax component is
+        # recovered from the persisted line items when they exist.
+        tax_rows = (
+            db.query(PayrollLineItem.amount)
+            .join(Payroll, Payroll.id == PayrollLineItem.payroll_id)
+            .filter(
+                Payroll.user_id == user_id,
+                Payroll.org_id == org_id,
+                Payroll.year == year,
+                Payroll.month == row_month,
+                PayrollLineItem.component_type == "tax",
+            )
+            .all()
+        )
+        if tax_rows:
+            total += sum((_to_decimal(a) for (a,) in tax_rows), Decimal("0.00"))
+        else:
+            total += _to_decimal(deductions)
+    return total.quantize(CENTS, rounding=ROUND_HALF_UP)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -89,12 +146,99 @@ def _get_statutory_rules(db: Session, org_id) -> List[StatutoryRule]:
     )
 
 
+def _working_days_in_month(org_id, year: int, month: int) -> int:
+    """
+    Working days available for pay in the month.
+
+    Falls back to weekdays if the calendar service is unavailable, so a payroll
+    run never fails outright because a non-payroll component is down.
+    """
+    try:
+        from app.services.business_calendar_service import business_calendar_service
+
+        count = business_calendar_service.get_working_days_in_month(year, month, str(org_id))
+        if count:
+            return len(count)
+    except Exception:
+        logger.warning("Working-day calendar unavailable; falling back to weekdays", exc_info=True)
+
+    _, last_day = monthrange(year, month)
+    return sum(
+        1 for d in range(1, last_day + 1) if date(year, month, d).weekday() < 5
+    )
+
+
+def _unpaid_leave_days(db: Session, user_id: int, org_id, month: int, year: int) -> Decimal:
+    """
+    Approved leave days in the month that fall on an unpaid leave type.
+
+    Loss of pay is a legal deduction, so it is derived from approved requests
+    joined to their leave type's `is_paid` flag rather than tracked by hand.
+    Only days that overlap the pay month count, so a request spanning a month
+    boundary contributes only its own portion.
+    """
+    month_start = date(year, month, 1)
+    _, last_day = monthrange(year, month)
+    month_end = date(year, month, last_day)
+
+    rows = (
+        db.query(LeaveRequest, LeaveType)
+        .join(LeaveType, LeaveRequest.leave_type_id == LeaveType.id)
+        .filter(
+            LeaveRequest.organization_id == org_id,
+            LeaveRequest.user_id == user_id,
+            LeaveRequest.status == "approved",
+            LeaveType.is_paid.is_(False),
+            # Overlap with this pay month.
+            func.date(LeaveRequest.start_date) <= month_end,
+            func.date(LeaveRequest.end_date) >= month_start,
+        )
+        .all()
+    )
+
+    total = Decimal("0.00")
+    for request, _leave_type in rows:
+        start = _as_date(request.start_date)
+        end = _as_date(request.end_date)
+        if start is None or end is None:
+            continue
+        # Clamp to the pay month, then count the weekdays in the overlap.
+        overlap_start = max(start, month_start)
+        overlap_end = min(end, month_end)
+        if overlap_end < overlap_start:
+            continue
+        days = sum(
+            1
+            for offset in range((overlap_end - overlap_start).days + 1)
+            if (overlap_start + timedelta(days=offset)).weekday() < 5
+        )
+        if request.is_half_day:
+            days = min(days, 1) / 2
+        total += Decimal(str(days))
+    return total
+
+
+def _as_date(value) -> Optional[date]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
 def _attendance_data(
     db: Session, user_id: int, org_id, month: int, year: int
-) -> Tuple[int, int]:
+) -> Tuple[int, Decimal]:
     """
     Returns (late_count, unpaid_leave_days).
-    Late count from AttendanceLogs; unpaid leave can be extended later.
+
+    Both feed loss of pay, so soft-deleted (corrected or voided) attendance rows
+    are excluded — otherwise a reversed late mark keeps deducting pay.
     """
     late_count = (
         db.query(func.count(AttendanceLog.id))
@@ -102,6 +246,7 @@ def _attendance_data(
         .filter(
             User.org_id == org_id,
             AttendanceLog.user_id == user_id,
+            AttendanceLog.is_deleted == 0,
             AttendanceLog.status == "late",
             extract("month", AttendanceLog.check_in) == month,
             extract("year", AttendanceLog.check_in) == year,
@@ -109,8 +254,7 @@ def _attendance_data(
         .scalar()
         or 0
     )
-    # Unpaid leave integration point — placeholder; extend with LeaveRequest model
-    unpaid_leave_days = 0
+    unpaid_leave_days = _unpaid_leave_days(db, user_id, org_id, month, year)
     return late_count, unpaid_leave_days
 
 
@@ -177,14 +321,40 @@ def calculate_for_user(
     special_allowance = _to_decimal(ss.special_allowance if ss else Decimal("0.00"))
     gross_salary      = base_pay + hra + special_allowance
 
-    # ── Statutory deductions (from SalaryStructure or StatutoryRule engine) ───
-    pf_deduction  = _to_decimal(ss.pf_deduction if ss else Decimal("0.00"))
-    tds_deduction = _to_decimal(ss.tds_deduction if ss else Decimal("0.00"))
-    statutory_total = pf_deduction + tds_deduction
+    # ── Statutory deductions ───────────────────────────────────────────────
+    # Computed by the statutory engine (wage ceilings, slab-based income tax,
+    # year-to-date aware TDS) rather than flat percentages of basic pay.
+    # A salary structure that already stores explicit statutory amounts is
+    # honoured, so an administrator can still override the computed values.
+    statutory_config = statutory_engine.load_config(db, user.org_id)
+    statutory = statutory_engine.compute_statutory(
+        gross_monthly=gross_salary,
+        basic_monthly=base_pay,
+        da_monthly=Decimal("0.00"),
+        config=statutory_config,
+        # Position within the April-March financial year, not the calendar year.
+        months_paid=statutory_engine.fy_month_index(month),
+        tax_deducted_ytd=_tax_deducted_ytd(db, user.id, user.org_id, year, month),
+    )
+
+    if ss is not None and (
+        _to_decimal(ss.pf_deduction) > 0 or _to_decimal(ss.tds_deduction) > 0
+    ):
+        pf_deduction = _to_decimal(ss.pf_deduction)
+        tds_deduction = _to_decimal(ss.tds_deduction)
+    else:
+        pf_deduction = statutory.pf_employee
+        tds_deduction = statutory.tds
+
+    esi_deduction = statutory.esi_employee
+    professional_tax = statutory.professional_tax
+    statutory_total = pf_deduction + tds_deduction + esi_deduction + professional_tax
 
     # ── Attendance-based deductions ────────────────────────────────────────────
     late_count, unpaid_leave_days = _attendance_data(db, user.id, user.org_id, month, year)
-    working_days = monthrange(year, month)[1]  # calendar days; refine if needed
+    # Working days, not calendar days: dividing by 30 when only 22 are payable
+    # understates loss of pay by roughly a quarter.
+    working_days = _working_days_in_month(user.org_id, year, month)
     late_deduction = _to_decimal(late_count) * per_late_deduction
     unpaid_leave_deduction = (
         (_to_decimal(unpaid_leave_days) / _to_decimal(working_days)) * base_pay
@@ -217,6 +387,12 @@ def calculate_for_user(
         "gross_salary":        gross_salary,
         "pf_deduction":        pf_deduction,
         "tds_deduction":       tds_deduction,
+        "esi_deduction":       esi_deduction,
+        "professional_tax":    professional_tax,
+        "employer_pf":         statutory.pf_employer,
+        "employer_esi":        statutory.esi_employer,
+        "annual_tax_liability": statutory.annual_tax,
+        "taxable_income":      statutory.taxable_income,
         "late_count":          late_count,
         "late_deduction":      late_deduction,
         "unpaid_leave_days":   unpaid_leave_days,
@@ -225,6 +401,9 @@ def calculate_for_user(
         "deductions":          total_deductions,
         "reimbursements_total": reimb_total,
         "total_salary":        net_pay,
+        # The currency every figure above is denominated in, so the payslip is
+        # labelled consistently with its own deductions.
+        "currency":            statutory.currency,
     }
 
 
@@ -271,11 +450,23 @@ def generate_payroll_for_org(
             
             if user.id in existing_map:
                 rec = existing_map[user.id]
+                if rec.status == "paid":
+                    # Re-running a settled month would silently un-pay every
+                    # payslip while the already-issued PDFs stayed on disk and
+                    # `get_or_generate_payslip` kept serving them, so the record
+                    # and the document would disagree.
+                    logger.warning(
+                        "Skipping already-paid payroll user=%s %s-%s",
+                        user.id, year, month,
+                    )
+                    results.append(rec)
+                    continue
                 rec.base_salary         = data["base_salary"]
                 rec.deductions          = data["deductions"]
                 rec.reimbursements_total = data["reimbursements_total"]
                 rec.total_salary        = data["total_salary"]
                 rec.status              = "pending"
+                rec.currency            = data["currency"]
                 # Delete old line items and recreate
                 db.query(PayrollLineItem).filter(
                     PayrollLineItem.payroll_id == rec.id
@@ -291,6 +482,7 @@ def generate_payroll_for_org(
                     reimbursements_total=data["reimbursements_total"],
                     total_salary=data["total_salary"],
                     status="pending",
+                    currency=data["currency"],
                 )
                 db.add(rec)
                 db.flush()  # get rec.id
@@ -302,6 +494,14 @@ def generate_payroll_for_org(
                 PayrollLineItem(payroll_id=rec.id, component_name="Special Allowance", component_type="earning",    amount=data["special_allowance"]),
                 PayrollLineItem(payroll_id=rec.id, component_name="Provident Fund",    component_type="statutory",  amount=-data["pf_deduction"]),
                 PayrollLineItem(payroll_id=rec.id, component_name="TDS",               component_type="tax",        amount=-data["tds_deduction"]),
+                *[
+                    PayrollLineItem(payroll_id=rec.id, component_name=label, component_type=kind, amount=-data[key])
+                    for label, kind, key in (
+                        ("ESI", "statutory", "esi_deduction"),
+                        ("Professional Tax", "statutory", "professional_tax"),
+                    )
+                    if _to_decimal(data[key]) > 0
+                ],
                 PayrollLineItem(payroll_id=rec.id, component_name="Late Deduction",    component_type="deduction",  amount=-data["late_deduction"],       description=f"{data['late_count']} late days"),
                 PayrollLineItem(payroll_id=rec.id, component_name="Unpaid Leave",      component_type="deduction",  amount=-data["unpaid_leave_deduction"],description=f"{data['unpaid_leave_days']} unpaid day(s)"),
                 PayrollLineItem(payroll_id=rec.id, component_name="Loan Repayment",    component_type="deduction",  amount=-data["loan_deduction"]),

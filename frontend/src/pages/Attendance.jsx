@@ -5,16 +5,22 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import { motion } from 'framer-motion';
-import { Camera, CheckCircle2, XCircle, Clock, RefreshCw, Activity, Calendar } from 'lucide-react';
+import { Camera, CheckCircle2, XCircle, Clock, RefreshCw, Activity, Calendar, FileEdit } from 'lucide-react';
 import { attendanceService } from '../services/attendanceService';
+import { locationFields } from '../services/geolocation';
+import { workforceService } from '../services/workforceService';
 import { useAuthStore } from '../store/authStore';
+import { usePermission } from '../hooks/usePermission';
 import { useToast } from '../components/ui/Toast';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
 import { Spinner } from '../components/ui/Spinner';
 import { formatTime, formatDate, titleCase } from '../lib/utils';
 import { EmployeeDetailModal } from '../components/EmployeeDetailModal';
+import { BiometricAvatar } from '../components/directory/BiometricAvatar';
+import { Modal } from '../components/ui/Modal';
 
 
 export default function Attendance() {
@@ -28,10 +34,19 @@ export default function Attendance() {
   const [result,      setResult]      = useState(null);
   const [clock,       setClock]       = useState(new Date());
   const [selectedUserId, setSelectedUserId] = useState(null);
+  const [correctionLog, setCorrectionLog] = useState(null);
+  const [correctionReason, setCorrectionReason] = useState('');
+  const [requestedIn, setRequestedIn] = useState('');
+  const [requestedOut, setRequestedOut] = useState('');
+  const [correctionLoading, setCorrectionLoading] = useState(false);
+  const [correctionError, setCorrectionError] = useState('');
+  const [myCorrections, setMyCorrections] = useState([]);
 
 
   const { user }  = useAuthStore();
+  const { hasPermission } = usePermission();
   const toast     = useToast();
+  const canRequestCorrection = hasPermission('attendance_correction:create');
 
   /* Live clock — updates every second */
   useEffect(() => {
@@ -55,6 +70,52 @@ export default function Attendance() {
     };
   }, [fetchLogs]);
 
+  const fetchCorrections = useCallback(async () => {
+    if (!canRequestCorrection) return;
+    try {
+      const response = await workforceService.corrections.listMine();
+      setMyCorrections(response.data?.requests || []);
+    } catch {
+      setMyCorrections([]);
+    }
+  }, [canRequestCorrection]);
+
+  useEffect(() => { fetchCorrections(); }, [fetchCorrections]);
+
+  const openCorrection = (log) => {
+    setCorrectionLog(log);
+    setCorrectionError('');
+    setCorrectionReason('');
+    setRequestedIn(log.check_in ? new Date(log.check_in).toISOString().slice(0, 16) : '');
+    setRequestedOut(log.check_out ? new Date(log.check_out).toISOString().slice(0, 16) : '');
+  };
+
+  const submitCorrection = async (event) => {
+    event.preventDefault();
+    if (!correctionLog || !correctionReason.trim()) return;
+    setCorrectionLoading(true);
+    setCorrectionError('');
+    try {
+      await workforceService.corrections.create({
+        attendance_log_id: correctionLog.id,
+        request_payload: {
+          requested_clock_in: requestedIn ? new Date(requestedIn).toISOString() : undefined,
+          requested_clock_out: requestedOut ? new Date(requestedOut).toISOString() : undefined,
+          reason: correctionReason.trim(),
+        },
+      });
+      toast({ message: 'Correction request submitted for review.', type: 'success' });
+      setCorrectionLog(null);
+      await fetchCorrections();
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      const message = typeof detail === 'string' ? detail : detail?.message || 'Unable to submit correction request.';
+      setCorrectionError(message);
+    } finally {
+      setCorrectionLoading(false);
+    }
+  };
+
   const reset = useCallback(() => {
     setStep('idle');
     setResult(null);
@@ -65,16 +126,26 @@ export default function Attendance() {
     setStep('processing');
 
     const imageSrc = webcamRef.current?.getScreenshot();
-    if (!imageSrc) { setStep('idle'); return; }
+    if (!imageSrc) {
+      setStep('idle');
+      toast({
+        message: 'Unable to capture a camera frame. Check camera access and try again.',
+        type: 'error',
+      });
+      return;
+    }
 
     try {
+      // Geo-tagging is optional: a null result (denied, unavailable, or no
+      // provider) still clocks the user in, just without coordinates.
+      const geo = await locationFields();
+
       const response = await attendanceService.checkIn({
-        user_id:      user?.id,
         image_base64: imageSrc.split(',')[1],
-        timestamp:    new Date().toISOString(),
-        is_live:      0,
-        emotion:      null,
+        // Identity, liveness and check-in time are determined server-side by
+        // the canonical biometric attendance pipeline.
         source:       'ai',
+        ...geo,
       });
       const data = response.data;
       setResult({
@@ -92,7 +163,10 @@ export default function Attendance() {
       timeoutRef.current = setTimeout(reset, 4000);
     } catch (err) {
       setStep('fail');
-      const msg = err?.response?.data?.detail || 'Face not recognized. Please try again.';
+      const detail = err?.response?.data?.detail;
+      const msg = typeof detail === 'string'
+        ? detail
+        : detail?.message || 'Face not recognized. Please try again.';
       toast({ message: msg, type: 'error' });
       timeoutRef.current = setTimeout(reset, 3000);
     }
@@ -109,7 +183,10 @@ export default function Attendance() {
       });
       await fetchLogs();
     } catch (err) {
-      const msg = err?.response?.data?.detail || 'Check-out failed. Ensure you have an active check-in.';
+      const detail = err?.response?.data?.detail;
+      const msg = typeof detail === 'string'
+        ? detail
+        : detail?.message || 'Check-out failed. Ensure you have an active check-in.';
       toast({ message: msg, type: 'error' });
     }
   }, [toast, fetchLogs]);
@@ -280,9 +357,11 @@ export default function Attendance() {
                       title="Click to view employee details"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 rounded-full bg-gray-800 text-gray-300 flex items-center justify-center text-sm font-bold shrink-0 group-hover:bg-indigo-500/20 group-hover:text-indigo-400 transition-colors">
-                          {(log.user_name || '?')[0].toUpperCase()}
-                        </div>
+                        <BiometricAvatar
+                          userId={log.user_id}
+                          name={log.user_name}
+                          className="group-hover:ring-1 group-hover:ring-indigo-500/40 transition-all"
+                        />
                         <div>
                           <p className="text-sm font-semibold text-white leading-tight group-hover:text-indigo-300 transition-colors">
                             {log.user_name || `Employee #${log.user_id}`}
@@ -290,12 +369,25 @@ export default function Attendance() {
                           <p className="text-[11px] text-gray-500 mt-0.5">{formatDate(log.check_in)}</p>
                         </div>
                       </div>
-                      <div className="text-right shrink-0 ml-2">
+                      <div className="text-right shrink-0 ml-2 flex items-end gap-2">
+                        {canRequestCorrection && log.user_id === user?.id && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="px-2 py-1 text-[10px]"
+                            onClick={(event) => { event.stopPropagation(); openCorrection(log); }}
+                            title="Request attendance correction"
+                          >
+                            <FileEdit className="h-3 w-3" />
+                          </Button>
+                        )}
+                        <div>
                         <Badge variant={log.status === 'on_time' ? 'success' : log.status === 'late' ? 'warning' : 'default'}
                           className="text-[10px] px-1.5 py-0.5">
                           {titleCase(log.status)}
                         </Badge>
                         <p className="text-[10px] font-mono text-gray-500 mt-0.5 block">{formatTime(log.check_in)}</p>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -312,6 +404,23 @@ export default function Attendance() {
         isOpen={!!selectedUserId}
         onClose={() => setSelectedUserId(null)}
       />
+      <Modal isOpen={!!correctionLog} onClose={() => setCorrectionLog(null)} title="Request Attendance Correction">
+        <form onSubmit={submitCorrection} className="space-y-4">
+          {correctionError && <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{correctionError}</div>}
+          <p className="text-sm text-gray-400">
+            Current: {correctionLog?.check_in ? new Date(correctionLog.check_in).toLocaleString() : 'No check-in'}
+            {' → '}
+            {correctionLog?.check_out ? new Date(correctionLog.check_out).toLocaleString() : 'No check-out'}
+          </p>
+          <Input label="Requested check-in" type="datetime-local" value={requestedIn} onChange={(event) => setRequestedIn(event.target.value)} />
+          <Input label="Requested check-out" type="datetime-local" value={requestedOut} onChange={(event) => setRequestedOut(event.target.value)} />
+          <Input label="Reason" value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} required placeholder="Explain the attendance correction" />
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={() => setCorrectionLog(null)}>Cancel</Button>
+            <Button type="submit" isLoading={correctionLoading} disabled={!correctionReason.trim()}>Submit request</Button>
+          </div>
+        </form>
+      </Modal>
     </>
   );
 }

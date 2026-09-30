@@ -74,6 +74,7 @@ class TenantIsolationMiddleware(BaseHTTPMiddleware):
         "/api/v1/auth/forgot-password",
         "/api/v1/auth/reset-password",
         "/api/v1/onboarding",
+        "/api/v1/public",
     ]
 
     def __init__(self, app: ASGIApp):

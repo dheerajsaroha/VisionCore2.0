@@ -25,14 +25,14 @@ Integrates the five Workforce Core services:
 from __future__ import annotations
 
 from datetime import date, datetime, time as dtime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db, get_current_active_user
+from app.api.deps import get_db, get_current_active_user, require_permission
 from app.db.models.all_models import (
     AttendanceCorrection,
     AttendanceDevice,
@@ -40,6 +40,7 @@ from app.db.models.all_models import (
     AttendanceSession,
     AttendanceEvent,
     GeofenceZone,
+    LeaveRequest,
     Roster,
     RosterEntry,
     Shift,
@@ -272,7 +273,11 @@ class OvertimeDecisionIn(BaseModel):
 
 class HolidayCalendarCreate(BaseModel):
     name: str
-    year: int = 2026
+    # The blueprint asks for pre-configured calendars "by region/state". These
+    # columns already existed on the model but no schema exposed them, so the
+    # API could not set them and every calendar was region-less.
+    country_code: Optional[str] = Field(default=None, max_length=3)
+    region: Optional[str] = Field(default=None, max_length=100)
     description: Optional[str] = None
     is_active: bool = True
 
@@ -280,8 +285,13 @@ class HolidayCalendarCreate(BaseModel):
 class HolidayEntryCreate(BaseModel):
     holiday_date: date
     name: str
-    holiday_type: str = "NATIONAL"
-    is_optional: bool = False
+    # Must match the ck_holiday_entry_type CHECK constraint on the table.
+    holiday_type: Literal[
+        "NATIONAL", "OPTIONAL", "RESTRICTED", "ORG_SPECIFIC"
+    ] = "NATIONAL"
+    # Without this the handler always resolved to the first calendar in the
+    # organisation, so entries could not be targeted at a named calendar.
+    calendar_id: Optional[int] = None
     description: Optional[str] = None
 
 
@@ -340,17 +350,32 @@ def mark_attendance(
 ) -> Any:
     """Mark attendance for a user via any supported channel. Emits AttendanceMarked event."""
     target_user_id = payload.user_id or current_user.id
-    if target_user_id != current_user.id:
+    is_self = target_user_id == current_user.id
+    if not is_self:
         _require_admin(current_user)
+
+    # A self-service punch must use the server's clock. Otherwise an employee
+    # could back-date or future-date their own attendance, and payroll computes
+    # payable days straight off these timestamps.
+    check_in, check_out, work_date = payload.check_in, payload.check_out, payload.work_date
+    if is_self and (check_in is not None or check_out is not None or work_date is not None):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Clock times are recorded by the server. "
+                "An administrator can enter them on your behalf if needed."
+            ),
+        )
+
     try:
         session_obj = attendance_service.mark_attendance(
             db=db,
             org_id=current_user.org_id,
             user_id=target_user_id,
             channel=payload.channel,
-            check_in=payload.check_in,
-            check_out=payload.check_out,
-            work_date=payload.work_date,
+            check_in=check_in,
+            check_out=check_out,
+            work_date=work_date,
             device_id=payload.device_id,
             device_ref=payload.device_ref,
             gps_lat=payload.gps_lat,
@@ -623,6 +648,53 @@ def apply_leave(
     return _model_to_dict(req)
 
 
+def _reject_self_decision(db: Session, current_user: User, request_id: int, action: str) -> None:
+    """
+    Refuse a decision on the caller's own leave request.
+
+    Without this a manager could approve their own absence, so the request would
+    never reach anyone who could actually review it.
+    """
+    req = (
+        db.query(LeaveRequest)
+        .filter(
+            LeaveRequest.id == request_id,
+            LeaveRequest.organization_id == current_user.org_id,
+        )
+        .first()
+    )
+    if req is None:
+        raise HTTPException(status_code=404, detail="Leave request not found")
+    if req.user_id == current_user.id:
+        raise HTTPException(
+            status_code=403,
+            detail="You cannot %s your own leave request" % action,
+        )
+
+
+def _require_cancel_owner(db: Session, current_user: User, request_id: int) -> None:
+    """Only the requester, or someone with org-wide leave authority, may cancel."""
+    req = (
+        db.query(LeaveRequest)
+        .filter(
+            LeaveRequest.id == request_id,
+            LeaveRequest.organization_id == current_user.org_id,
+        )
+        .first()
+    )
+    if req is None:
+        raise HTTPException(status_code=404, detail="Leave request not found")
+    if req.user_id == current_user.id:
+        return
+    from app.api.deps import has_permission
+
+    if not has_permission(current_user, "leave.manage", db):
+        raise HTTPException(
+            status_code=403,
+            detail="You can only cancel your own leave requests",
+        )
+
+
 @router.post("/leave/requests/{request_id}/approve", tags=["leave"])
 def approve_leave_request(
     request_id: int,
@@ -633,6 +705,7 @@ def approve_leave_request(
     """Approve a pending leave request (Admin/Manager)."""
     if current_user.role.name not in _ADMIN_ROLES + ("Manager", "DeptHead"):
         raise HTTPException(status_code=403, detail="Unauthorized to approve leave requests")
+    _reject_self_decision(db, current_user, request_id, "approve")
     try:
         req = leave_service.approve_leave(
             db, current_user.org_id, request_id, current_user.id, payload.note
@@ -652,6 +725,7 @@ def reject_leave_request(
     """Reject a pending leave request (Admin/Manager)."""
     if current_user.role.name not in _ADMIN_ROLES + ("Manager", "DeptHead"):
         raise HTTPException(status_code=403, detail="Unauthorized to reject leave requests")
+    _reject_self_decision(db, current_user, request_id, "reject")
     try:
         req = leave_service.reject_leave(
             db, current_user.org_id, request_id, current_user.id, payload.note
@@ -668,6 +742,7 @@ def cancel_leave_request(
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """Cancel a leave request (owner or admin)."""
+    _require_cancel_owner(db, current_user, request_id)
     try:
         result = leave_service.cancel_leave(
             db, current_user.org_id, request_id, current_user.id
@@ -939,7 +1014,7 @@ def list_shift_swaps(
     status_filter: Optional[str] = Query(None, alias="status"),
     user_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_permission("shifts.read")),
 ) -> List[Dict[str, Any]]:
     swaps = shift_swap_service.list_swap_requests(
         db, current_user.org_id, status_filter=status_filter, user_id=user_id
@@ -951,7 +1026,7 @@ def list_shift_swaps(
 def create_shift_swap(
     payload: ShiftSwapCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_permission("shifts.update")),
 ) -> Any:
     """Create a shift swap request with workflow submission."""
     swap = shift_swap_service.create_swap_request(
@@ -965,7 +1040,7 @@ def resolve_shift_swap(
     swap_id: int,
     payload: ShiftSwapResolveIn,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_active_user),
+    current_user: User = Depends(require_permission("shifts.update")),
 ) -> Any:
     """Approve, reject, or cancel a shift swap request."""
     try:
@@ -1195,7 +1270,7 @@ def create_holiday_calendar(
 ) -> Any:
     """Create a named holiday calendar (Admin)."""
     _require_admin(current_user)
-    calendar = holiday_service.create_calendar(db, current_user.org_id, payload.model_dump(exclude={"year"}))
+    calendar = holiday_service.create_calendar(db, current_user.org_id, payload.model_dump())
     return _model_to_dict(calendar)
 
 
@@ -1221,11 +1296,8 @@ def add_holiday_entry(
     if not payload.holiday_date:
         raise HTTPException(status_code=400, detail="holiday_date is required")
     data = payload.model_dump()
-    data["holiday_date"] = payload.holiday_date
-    if data.pop("is_optional", False):
-        data["holiday_type"] = "OPTIONAL"
     # If calendar_id omitted, fall back to first org calendar
-    calendar_id = data.get("calendar_id")
+    calendar_id = data.pop("calendar_id", None)
     if not calendar_id:
         calendars = holiday_service.list_calendars(db, current_user.org_id)
         calendar_id = calendars[0].id if calendars else None

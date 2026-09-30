@@ -35,30 +35,44 @@ export const usePermissionStore = create(
 
       // ── My Permissions ──────────────────────────────────────────────────
 
-      fetchMyPermissions: async () => {
-        set({
-          isLoading: true,
-          error: null,
-          // Never make a decision from permissions that belonged to a prior
-          // browser session while the current identity is being resolved.
-          myPermissions: [],
-          myPermissionCount: 0,
-          myRoleName: '',
-          isCacheHydrated: false,
-          authorizationInitialized: false,
-        });
+      fetchMyPermissions: async ({ silent = false } = {}) => {
+        // A silent call is a background re-check of an already-rendered user
+        // (e.g. after an administrator changes their role). It must not reset
+        // to the loading state, because ProtectedRoute and the sidebar treat
+        // `authorizationInitialized === false` as "not resolved yet" and would
+        // blank the whole UI every time the poll fired.
+        if (!silent) {
+          set({
+            isLoading: true,
+            error: null,
+            // Never make a decision from permissions that belonged to a prior
+            // browser session while the current identity is being resolved.
+            myPermissions: [],
+            myPermissionCount: 0,
+            myRoleName: '',
+            isCacheHydrated: false,
+            authorizationInitialized: false,
+          });
+        }
         try {
           const data = await permissionService.getMyPermissions();
           set({
             myPermissions: data.permissions || [],
             myPermissionCount: data.permission_count || 0,
             myRoleName: data.role_name || '',
-            isLoading: false,
+            isLoading: silent ? get().isLoading : false,
             isCacheHydrated: true,
             authorizationInitialized: true,
           });
           return data;
         } catch (error) {
+          if (silent) {
+            // A failed background re-check must not revoke access the user
+            // already has: keep the last known-good set and let the next
+            // attempt retry. Only a cold load fails closed.
+            set({ error: error.message });
+            return null;
+          }
           // A failed permission request must be a deterministic deny, not a
           // temporary allow.  Mark initialization complete so route guards
           // can render 403 rather than evaluate stale data.

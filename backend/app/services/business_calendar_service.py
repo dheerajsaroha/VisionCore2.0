@@ -68,6 +68,10 @@ class BusinessCalendarService:
         self._holidays: Dict[str, List[HolidayEntry]] = {}
         self._working_config: Dict[str, WorkingDayConfig] = {}
         self._fiscal_config: Dict[str, FiscalCalendar] = {}
+        # org id -> (country_code, region), so regional holidays can be scoped.
+        self._org_region: Dict[str, Any] = {}
+        # Derived from _holidays; invalidated on any mutation.
+        self._holiday_cache: Dict[str, set] = {}
         self._register_global_defaults()
 
     # ------------------------------------------------------------------
@@ -92,11 +96,16 @@ class BusinessCalendarService:
         existing_dates = {h.date for h in self._holidays[organization_id]}
         if entry.date not in existing_dates:
             self._holidays[organization_id].append(entry)
+        self._holiday_cache.pop(str(organization_id), None)
 
     def get_holidays(self, organization_id: str, year: Optional[int] = None) -> List[HolidayEntry]:
         """Get all holidays for an organization, optionally filtered by year."""
-        entries = self._holidays.get(organization_id, [])
-        entries += self._holidays.get("__global__", [])
+        # Build a new list. Using `+=` on the stored list appended the global
+        # entries into the organisation's own list in place, so every call grew
+        # it by five more and duplicated them — and this runs once per candidate
+        # day inside leave-day loops.
+        entries = list(self._holidays.get(organization_id, []))
+        entries.extend(self._holidays.get("__global__", []))
         if year:
             entries = [h for h in entries if h.date.startswith(str(year))]
         return sorted(entries, key=lambda h: h.date)
@@ -112,10 +121,142 @@ class BusinessCalendarService:
         if check_date.weekday() not in config.working_days:
             return False
         # Check holidays
-        date_str = check_date.isoformat()
-        holidays = self.get_holidays(organization_id)
-        holiday_dates = {h.date for h in holidays if not h.is_optional}
-        return date_str not in holiday_dates
+        return check_date.isoformat() not in self._mandatory_holiday_dates(organization_id)
+
+    def _mandatory_holiday_dates(self, organization_id: str) -> set:
+        """
+        Non-optional holiday dates that actually apply to this organisation.
+
+        Scoped by country and region: without this, an org's own calendar and the
+        pre-seeded Indian national holidays were applied to every tenant
+        worldwide, so a US or UK organisation silently lost working days.
+        Cached per organisation and invalidated on mutation, because this is
+        called once per candidate day from the leave-day loops.
+        """
+        cached = self._holiday_cache.get(organization_id)
+        if cached is not None:
+            return cached
+
+        org_country, org_region = self._org_region.get(organization_id, (None, None))
+        dates = set()
+        for entry in self.get_holidays(organization_id):
+            if entry.is_optional:
+                continue
+            if not self._entry_applies(entry, org_country, org_region):
+                continue
+            dates.add(entry.date)
+
+        self._holiday_cache[organization_id] = dates
+        return dates
+
+    @staticmethod
+    def _entry_applies(
+        entry: HolidayEntry, org_country: Optional[str], org_region: Optional[str]
+    ) -> bool:
+        """Whether a holiday entry is in scope for an organisation."""
+        code = (entry.country_code or "").upper()
+        if code in ("", "GLOBAL", "*"):
+            # Unscoped or explicitly global: applies everywhere.
+            if entry.region:
+                return org_region is not None and entry.region == org_region
+            return True
+        if org_country is None:
+            # The organisation has not declared a country. Applying a
+            # country-specific holiday would guess, so keep the conservative
+            # existing behaviour of honouring it only when unscoped.
+            return False
+        if code != org_country.upper():
+            return False
+        if entry.region and org_region and entry.region != org_region:
+            return False
+        return True
+
+    def set_org_region(
+        self, organization_id: str, country_code: Optional[str], region: Optional[str]
+    ) -> None:
+        """Declare an organisation's country/region so regional holidays can be scoped."""
+        key = str(organization_id)
+        self._org_region[key] = (
+            (country_code or "").upper() or None,
+            region or None,
+        )
+        self._holiday_cache.pop(key, None)
+
+    def load_from_db(self, db: Any) -> int:
+        """
+        Populate the in-memory calendar from the `holiday_entries` table.
+
+        The store used to be process-local, so holidays vanished on restart and
+        were invisible to any other worker. The database is authoritative; this
+        makes each process reflect it.
+
+        Returns the number of entries loaded.
+        """
+        from app.db.models.all_models import HolidayCalendar, HolidayEntry as HolidayRow
+
+        try:
+            calendars = db.query(HolidayCalendar).all()
+        except Exception:
+            logger.warning("Holiday calendars unavailable; keeping built-in defaults", exc_info=True)
+            return 0
+
+        by_org: Dict[str, Any] = {}
+        for calendar in calendars:
+            by_org[calendar.org_id] = calendar
+            self.set_org_region(
+                str(calendar.org_id),
+                calendar.country_code,
+                calendar.region,
+            )
+
+        loaded = 0
+        for org_key, calendar in by_org.items():
+            org_str = str(org_key)
+            rows = (
+                db.query(HolidayRow)
+                .filter(HolidayRow.org_id == org_key)
+                .all()
+            )
+            for row in rows:
+                raw = row.holiday_date
+                iso = raw.isoformat() if hasattr(raw, "isoformat") else str(raw)[:10]
+                self._holidays.setdefault(org_str, [])
+                existing = {h.date for h in self._holidays[org_str]}
+                if iso in existing:
+                    continue
+                optional = row.holiday_type in ("OPTIONAL",)
+                self._holidays[org_str].append(
+                    HolidayEntry(
+                        date=iso,
+                        name=row.name,
+                        type=DayType.OPTIONAL_HOLIDAY if optional else DayType.HOLIDAY,
+                        country_code=calendar.country_code,
+                        region=calendar.region,
+                        is_optional=optional,
+                    )
+                )
+                loaded += 1
+            self._holiday_cache.pop(org_str, None)
+
+        if loaded:
+            logger.info("Loaded %d holiday entries from database", loaded)
+        return loaded
+
+    def remove_holiday(self, organization_id: str, iso_date: str) -> bool:
+        """
+        Drop a holiday from the in-memory store.
+
+        Deleting the database row alone left the entry in memory, so a removed
+        holiday kept excluding working days for the life of the process.
+        """
+        key = str(organization_id)
+        entries = self._holidays.get(key)
+        if not entries:
+            return False
+        before = len(entries)
+        self._holidays[key] = [h for h in entries if h.date != iso_date]
+        self._holiday_cache.pop(key, None)
+        return len(self._holidays[key]) != before
 
     def count_working_days(
         self,

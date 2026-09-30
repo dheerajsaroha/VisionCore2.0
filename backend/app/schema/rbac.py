@@ -11,9 +11,21 @@ from pydantic import BaseModel, Field, ConfigDict
 
 
 # ── Permission Schemas ────────────────────────────────────────────────────────
+# Permission names are namespaced: "<module><separator><action>", where the
+# separator is "." or ":". Both separators and underscores inside the module
+# segment occur in the seeded catalog and are referenced verbatim by
+# require_permission() guards, so validation must accept them:
+#   users.read, reports.attendance.export, ai_governance.manage,
+#   attendance_correction:approve
+# The previous pattern rejected the latter two shapes, which made
+# GET /rbac/permissions fail response validation with a 500.
+PERMISSION_NAME_PATTERN = r"^[a-z][a-z0-9_]*[.:][a-z][a-z0-9_]*([.:][a-z][a-z0-9_]*)*$"
+
+
 class PermissionBase(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100, pattern=r"^[a-z][a-z0-9]*(\.[a-z][a-z0-9_]*)+$",
-                      description="Dot-notation: e.g. 'users.read', 'attendance.checkin', 'reports.attendance.export'")
+    name: str = Field(..., min_length=1, max_length=100, pattern=PERMISSION_NAME_PATTERN,
+                      description="Namespaced name: e.g. 'users.read', 'attendance.checkin', "
+                                  "'attendance_correction:approve'")
     description: Optional[str] = Field(None, max_length=500)
     module: Optional[str] = Field(None, max_length=50)
     group: Optional[str] = Field(None, max_length=50)
@@ -61,6 +73,9 @@ class RoleUpdate(BaseModel):
 
 
 class RoleResponse(RoleBase):
+    # Existing roles may use display names with spaces; the identifier
+    # constraint applies to role creation, not serialization of stored data.
+    name: str = Field(..., min_length=1, max_length=50)
     id: int
     created_at: datetime
     permission_count: int = 0

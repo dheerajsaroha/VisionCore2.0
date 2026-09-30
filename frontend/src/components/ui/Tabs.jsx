@@ -33,8 +33,8 @@ export const TabsTrigger = ({ value, children, className }) => {
         'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-200',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
         isActive
-          ? 'bg-gray-700 text-white shadow-sm'
-          : 'text-gray-400 hover:text-gray-200',
+          ? 'bg-gray-700 text-gray-100 shadow-sm'
+          : 'text-gray-400 hover:text-gray-100',
         className
       )}
     >

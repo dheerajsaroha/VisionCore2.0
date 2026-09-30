@@ -149,6 +149,7 @@ router = APIRouter()
 @router.get("/expense-categories", response_model=List[ExpenseCategoryOut], tags=["finance-admin"])
 def list_expense_categories(
     db: Session = Depends(get_db),
+    _feature: None = Depends(deps.require_feature("expenses")),
     current_user: User = Depends(deps.require_permission("finance.view")),
 ) -> Any:
     return (
@@ -162,6 +163,7 @@ def list_expense_categories(
 def create_expense_category(
     payload: ExpenseCategoryCreate,
     db: Session = Depends(get_db),
+    _feature: None = Depends(deps.require_feature("expenses")),
     current_user: User = Depends(deps.require_permission("finance.manage")),
 ) -> Any:
     obj = ExpenseCategory(
@@ -186,6 +188,7 @@ def create_expense_category(
 def delete_expense_category(
     category_id: int,
     db: Session = Depends(get_db),
+    _feature: None = Depends(deps.require_feature("expenses")),
     current_user: User = Depends(deps.require_permission("finance.manage")),
 ) -> None:
     obj = db.query(ExpenseCategory).filter(
@@ -212,6 +215,7 @@ def delete_expense_category(
 @router.get("/salary-components", response_model=List[SalaryComponentOut], tags=["finance-admin"])
 def list_salary_components(
     db: Session = Depends(get_db),
+    _feature: None = Depends(deps.require_feature("payroll")),
     current_user: User = Depends(deps.require_permission("finance.view")),
 ) -> Any:
     return (
@@ -225,6 +229,7 @@ def list_salary_components(
 def create_salary_component(
     payload: SalaryComponentCreate,
     db: Session = Depends(get_db),
+    _feature: None = Depends(deps.require_feature("payroll")),
     current_user: User = Depends(deps.require_permission("finance.manage")),
 ) -> Any:
     if payload.component_type not in {"earning", "deduction", "statutory"}:
@@ -254,6 +259,7 @@ def create_salary_component(
 @router.get("/statutory-rules", response_model=List[StatutoryRuleOut], tags=["finance-admin"])
 def list_statutory_rules(
     db: Session = Depends(get_db),
+    _feature: None = Depends(deps.require_feature("payroll")),
     current_user: User = Depends(deps.require_permission("finance.view")),
 ) -> Any:
     return (
@@ -267,6 +273,7 @@ def list_statutory_rules(
 def create_statutory_rule(
     payload: StatutoryRuleCreate,
     db: Session = Depends(get_db),
+    _feature: None = Depends(deps.require_feature("payroll")),
     current_user: User = Depends(deps.require_permission("finance.manage")),
 ) -> Any:
     obj = StatutoryRule(
@@ -294,6 +301,7 @@ def create_statutory_rule(
 @router.get("/tax-configurations", response_model=List[TaxConfigOut], tags=["finance-admin"])
 def list_tax_configurations(
     db: Session = Depends(get_db),
+    _feature: None = Depends(deps.require_feature("payroll")),
     current_user: User = Depends(deps.require_permission("finance.view")),
 ) -> Any:
     return (
@@ -307,6 +315,7 @@ def list_tax_configurations(
 def create_tax_configuration(
     payload: TaxConfigCreate,
     db: Session = Depends(get_db),
+    _feature: None = Depends(deps.require_feature("payroll")),
     current_user: User = Depends(deps.require_permission("finance.manage")),
 ) -> Any:
     obj = TaxConfiguration(
@@ -333,6 +342,7 @@ def create_tax_configuration(
 @router.get("/payroll-periods", response_model=List[PayrollPeriodOut], tags=["finance-admin"])
 def list_payroll_periods(
     db: Session = Depends(get_db),
+    _feature: None = Depends(deps.require_feature("payroll")),
     current_user: User = Depends(deps.require_permission("payroll.view", "finance.view")),
 ) -> Any:
     return (
@@ -347,6 +357,7 @@ def list_payroll_periods(
 def create_payroll_period(
     payload: PayrollPeriodCreate,
     db: Session = Depends(get_db),
+    _feature: None = Depends(deps.require_feature("payroll")),
     current_user: User = Depends(deps.require_permission("payroll.manage")),
 ) -> Any:
     obj = PayrollPeriod(
@@ -372,6 +383,7 @@ def update_payroll_period_status(
     period_id: int,
     status_update: dict,
     db: Session = Depends(get_db),
+    _feature: None = Depends(deps.require_feature("payroll")),
     current_user: User = Depends(deps.require_permission("payroll.manage")),
 ) -> Any:
     valid_statuses = {"draft", "processing", "pending_approval", "approved", "finalized", "cancelled", "locked"}
@@ -410,6 +422,7 @@ def update_payroll_period_status(
 @router.get("/payroll-runs", response_model=List[PayrollRunOut], tags=["finance-admin"])
 def list_payroll_runs(
     db: Session = Depends(get_db),
+    _feature: None = Depends(deps.require_feature("payroll")),
     current_user: User = Depends(deps.require_permission("payroll.view", "finance.view")),
 ) -> Any:
     return (
@@ -424,6 +437,7 @@ def list_payroll_runs(
 def create_and_execute_payroll_run(
     payload: PayrollRunCreate,
     db: Session = Depends(get_db),
+    _feature: None = Depends(deps.require_feature("payroll")),
     current_user: User = Depends(deps.require_permission("payroll.generate")),
 ) -> Any:
     """
@@ -441,7 +455,7 @@ def create_and_execute_payroll_run(
         organization_id=current_user.org_id,
         payroll_period_id=payload.payroll_period_id,
         run_name=payload.run_name,
-        status="processing",
+        status="draft",
         total_gross=0.0,
         total_deductions=0.0,
         total_net=0.0,
@@ -495,6 +509,7 @@ def create_and_execute_payroll_run(
 def finalize_payroll_run(
     run_id: int,
     db: Session = Depends(get_db),
+    _feature: None = Depends(deps.require_feature("payroll")),
     current_user: User = Depends(deps.require_permission("payroll.finalize")),
 ) -> Any:
     run = db.query(PayrollRun).filter(
@@ -505,8 +520,8 @@ def finalize_payroll_run(
         raise HTTPException(status_code=404, detail="Payroll run not found.")
     
     # State Machine check
-    if run.status in {"finalized", "paid"}:
-        raise HTTPException(status_code=422, detail="Run is already finalized or paid.")
+    if run.status in {"finalized"}:
+        raise HTTPException(status_code=422, detail="Run is already finalized.")
     if run.status not in {"calculated", "approved"}:
         raise HTTPException(status_code=422, detail=f"Cannot finalize from state: {run.status}")
         

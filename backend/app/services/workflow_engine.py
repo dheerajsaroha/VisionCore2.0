@@ -14,10 +14,260 @@ from app.crud import crud_workflow
 from app.db.models.all_models import (
     ApprovalWorkflow, ApprovalStage, ApprovalStageApprover,
     ApprovalRequest, ApprovalAction, ApprovalHistory,
-    ApprovalDelegation, ApprovalEscalation, WorkflowCondition, User
+    ApprovalDelegation, ApprovalEscalation, WorkflowCondition, User,
+    OvertimeRecord,
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ── 0b. DOMAIN OUTCOME BRIDGE ──
+class DomainOutcomeApplier:
+    """Applies a finished workflow decision to the entity it governs.
+
+    `WorkflowEngine` only ever moved the `approval_requests` row. The domain
+    entity kept its own independent approval path, so approving a leave through
+    the workflow engine left the `leave_requests` row `pending` forever, with its
+    days stuck in `pending_days` and never deducted. A request could be fully
+    approved in the workflow queue and still be un-actionable in the leave
+    ledger — and the only way to finish it was a second, separate action through
+    the other path.
+
+    The four entities that carry `workflow_request_id` — leave, shift swap,
+    overtime and policy documents — are registered here so a terminal workflow
+    decision resolves the real record in the same transaction.
+    """
+
+    _handlers: Dict[str, Any] = {}
+
+    @classmethod
+    def register(cls, entity_type: str, handler) -> None:
+        cls._handlers[entity_type] = handler
+
+    @classmethod
+    def apply(cls, db: Session, req: ApprovalRequest, outcome: str, actor_user_id: int, comments: Optional[str] = None) -> bool:
+        """Resolve the governed entity for a terminal decision.
+
+        Returns whether a domain change was applied. A handler that raises is
+        logged and swallowed: the workflow decision itself has already been
+        recorded, and failing the whole approval because the ledger could not be
+        updated would leave the request in a state neither system agrees on.
+        """
+        handler = cls._handlers.get(req.entity_type)
+        if handler is None:
+            return False
+        try:
+            handler(db, req, outcome, actor_user_id, comments)
+            return True
+        except Exception:
+            logger.exception(
+                "Workflow %s for %s %s was recorded but the %s entity could not be resolved",
+                outcome, req.entity_type, req.id, req.entity_type,
+            )
+            return False
+
+
+def _apply_leave_outcome(db: Session, req: ApprovalRequest, outcome: str, actor_user_id: int, comments: Optional[str]) -> None:
+    from app.services.workforce_leave_service import LeaveService
+
+    request_id = int(req.entity_id)
+    service = LeaveService()
+    if outcome == "approved":
+        service.approve_leave(db, req.organization_id, request_id, actor_user_id, comments)
+    elif outcome == "rejected":
+        service.reject_leave(db, req.organization_id, request_id, actor_user_id, comments)
+
+
+def _apply_overtime_outcome(db: Session, req: ApprovalRequest, outcome: str, actor_user_id: int, comments: Optional[str]) -> None:
+    from app.services.workforce_time_service import OvertimeService
+
+    overtime_id = int(req.entity_id)
+    service = OvertimeService()
+    if outcome == "approved":
+        service.approve_overtime(db, req.organization_id, overtime_id, actor_user_id, comments)
+        return
+
+    overtime = db.query(OvertimeRecord).filter(
+        OvertimeRecord.id == overtime_id,
+        OvertimeRecord.org_id == req.organization_id,
+    ).first()
+    if overtime is not None and overtime.status == "PENDING":
+        overtime.status = "rejected"
+        overtime.approver_user_id = actor_user_id
+        overtime.approval_note = comments
+        db.commit()
+
+
+def _apply_shift_swap_outcome(db: Session, req: ApprovalRequest, outcome: str, actor_user_id: int, comments: Optional[str]) -> None:
+    from app.services.workforce_shift_service import ShiftSwapService
+
+    swap_id = int(req.entity_id)
+    action = "approve" if outcome == "approved" else "reject"
+    ShiftSwapService().resolve_swap(
+        db, req.organization_id, swap_id, actor_user_id, action, comments
+    )
+
+
+DomainOutcomeApplier.register("leave", _apply_leave_outcome)
+DomainOutcomeApplier.register("overtime", _apply_overtime_outcome)
+DomainOutcomeApplier.register("shift_swap", _apply_shift_swap_outcome)
+
+
+# ── 0. CONDITION EVALUATOR ──
+class ConditionEvaluator:
+    """Evaluates `WorkflowCondition` rows against a submission payload.
+
+    The `workflow_conditions` table — `skip_stage`, `auto_approve` and
+    `require_stage` over a field, an operator and a value — was created, migrated
+    and never queried. Conditional routing is the whole reason a configurable
+    approval engine exists, so an "if the amount is over $1,000 also require
+    Finance" rule was unrepresentable in practice no matter what an admin
+    entered.
+
+    This evaluates those rows. Operators are compared natively where both sides
+    are numbers, so `greater_than` on a currency amount does not fall back to
+    string ordering.
+    """
+
+    SUPPORTED_OPERATORS = (
+        "equals", "not_equals", "greater_than", "less_than", "in", "contains",
+    )
+
+    @staticmethod
+    def _coerce(stored: str):
+        """Read a stored condition value into a comparable Python value.
+
+        Condition values are stored as text, so `greater_than` against a
+        threshold of 1000 has to become the number 1000 for the comparison to
+        mean anything.
+        """
+        raw = str(stored).strip()
+        lowered = raw.lower()
+        if lowered in ("true", "false"):
+            return lowered == "true"
+        if lowered in ("null", "none"):
+            return None
+        try:
+            return int(raw)
+        except ValueError:
+            pass
+        try:
+            return float(raw)
+        except ValueError:
+            pass
+        return raw
+
+    @staticmethod
+    def _compare(actual, operator: str, expected) -> bool:
+        if operator not in ConditionEvaluator.SUPPORTED_OPERATORS:
+            logger.warning("Unsupported workflow condition operator %r; treating as false", operator)
+            return False
+
+        if operator == "equals":
+            return actual == expected
+        if operator == "not_equals":
+            return actual != expected
+        if operator == "greater_than":
+            return actual is not None and expected is not None and actual > expected
+        if operator == "less_than":
+            return actual is not None and expected is not None and actual < expected
+        if operator == "in":
+            # `in` is stored as a delimited list, most commonly "a,b,c".
+            options = [ConditionEvaluator._coerce(p) for p in str(expected).split(",")]
+            return actual in options
+        if operator == "contains":
+            if actual is None:
+                return False
+            if isinstance(actual, (list, tuple, set)):
+                return expected in actual
+            return str(expected) in str(actual)
+        return False
+
+    @staticmethod
+    def evaluate_condition(condition: WorkflowCondition, payload: Dict[str, Any]) -> bool:
+        """Whether one condition holds for this payload.
+
+        A condition whose field is absent from the payload is false rather than
+        an error: a rule about an amount cannot hold when no amount was supplied,
+        and treating a missing field as "skip the Finance stage" would silently
+        drop a required approval.
+        """
+        if condition.field_name not in payload:
+            return False
+        actual = payload.get(condition.field_name)
+        expected = ConditionEvaluator._coerce(condition.value)
+        # Coerce the actual side too, so a JSON number matches a stored numeric
+        # threshold rather than only a JSON string.
+        if isinstance(actual, (int, float)) and not isinstance(actual, bool):
+            pass
+        elif isinstance(actual, str):
+            actual = ConditionEvaluator._coerce(actual)
+        return ConditionEvaluator._compare(actual, condition.operator, expected)
+
+    @staticmethod
+    def stage_conditions(db: Session, stage_id: int) -> List[WorkflowCondition]:
+        return (
+            db.query(WorkflowCondition)
+            .filter(WorkflowCondition.stage_id == stage_id)
+            .all()
+        )
+
+    @staticmethod
+    def should_skip_stage(db: Session, stage: ApprovalStage, payload: Dict[str, Any]) -> bool:
+        """Whether every applicable rule says this stage can be skipped.
+
+        All skip rules on a stage must hold before it is dropped — the safe
+        reading, since skipping a stage removes a control. A `require_stage`
+        rule that holds vetoes the skip unconditionally.
+        """
+        conditions = ConditionEvaluator.stage_conditions(db, stage.id)
+        if not conditions:
+            return False
+
+        if any(
+            c.condition_type == "require_stage"
+            and ConditionEvaluator.evaluate_condition(c, payload)
+            for c in conditions
+        ):
+            return False
+
+        skips = [c for c in conditions if c.condition_type == "skip_stage"]
+        if not skips:
+            return False
+        return all(ConditionEvaluator.evaluate_condition(c, payload) for c in skips)
+
+    @staticmethod
+    def should_auto_approve(db: Session, stage: Optional[ApprovalStage], payload: Dict[str, Any]) -> bool:
+        """Whether this stage's rules call for automatic approval.
+
+        Two rule sources are honoured: the `auto_approve` rows in
+        `workflow_conditions`, and the stage's `auto_approve_condition` JSONB
+        blob. The blob previously supported only strict equality, so a rule
+        meaning "auto-approve a correction under 15 minutes" could not be
+        expressed — the seeded example compared `delta_minutes == 10` exactly.
+        """
+        if stage is None:
+            return False
+
+        conditions = ConditionEvaluator.stage_conditions(db, stage.id)
+        auto_rows = [c for c in conditions if c.condition_type == "auto_approve"]
+        if auto_rows and any(
+            ConditionEvaluator.evaluate_condition(c, payload) for c in auto_rows
+        ):
+            return True
+
+        blob = stage.auto_approve_condition or {}
+        field = blob.get("field")
+        if not field:
+            return False
+        operator = blob.get("operator", "equals")
+        expected = ConditionEvaluator._coerce(blob.get("value"))
+        if field not in payload:
+            return False
+        actual = payload.get(field)
+        if isinstance(actual, str):
+            actual = ConditionEvaluator._coerce(actual)
+        return ConditionEvaluator._compare(actual, operator, expected)
 
 
 # ── 1. WORKFLOW RESOLVER ──
@@ -81,20 +331,45 @@ class WorkflowEngine:
         if not wf:
             raise ValueError(f"No active approval workflow found for entity_type '{entity_type}'")
 
-        first_stage = wf.stages[0] if wf.stages else None
+        stages = sorted(wf.stages, key=lambda s: s.stage_order) if wf.stages else []
+
+        # Resolve the stage the request should actually land on. Stages whose
+        # skip rules hold are bypassed, so a conditional chain can route a small
+        # amount straight to Finance while a large one still collects Manager
+        # approval first.
+        first_stage = None
+        skipped_stages: List[ApprovalStage] = []
+        for candidate in stages:
+            if not candidate.is_active:
+                continue
+            if ConditionEvaluator.should_skip_stage(db, candidate, payload):
+                skipped_stages.append(candidate)
+                continue
+            first_stage = candidate
+            break
+
+        # Every stage skipped means the workflow has nothing left to approve.
+        if stages and not first_stage:
+            first_stage = None
+
         first_stage_id = first_stage.id if first_stage else None
         first_stage_order = first_stage.stage_order if first_stage else 1
 
-        # Check auto-approval rules
         is_auto_approved = wf.auto_approval_enabled
-        if first_stage and first_stage.auto_approve_condition:
-            cond = first_stage.auto_approve_condition
-            field = cond.get("field")
-            val = cond.get("value")
-            if field and val and payload.get(field) == val:
-                is_auto_approved = True
+        if ConditionEvaluator.should_auto_approve(db, first_stage, payload):
+            is_auto_approved = True
+
+        if skipped_stages:
+            logger.info(
+                "Skipped stage(s) %s for %s request %s via condition rules",
+                [s.name for s in skipped_stages], entity_type, entity_id,
+            )
 
         status = "approved" if is_auto_approved else "pending"
+        if not first_stage and not is_auto_approved:
+            # Nothing left to approve and no rule said to auto-approve: the
+            # request is complete rather than pending against no stage.
+            status = "approved"
         due_at = (datetime.now(timezone.utc) + timedelta(hours=first_stage.sla_hours)) if (first_stage and first_stage.sla_hours) else None
 
         req = crud_workflow.create_request(db, {
@@ -113,7 +388,8 @@ class WorkflowEngine:
                 "actor_user_id": requester_user_id, "action": "auto_approve",
                 "comments": "Auto-approved based on workflow criteria"
             })
-            crud_workflow.update_request_status(db, req.id, "approved", actor_id=requester_user_id, reason="Auto-approved")
+            req = crud_workflow.update_request_status(db, req.id, "approved", actor_id=requester_user_id, reason="Auto-approved")
+            DomainOutcomeApplier.apply(db, req, "approved", requester_user_id, "Auto-approved by policy")
             WorkflowEngine._dispatch_workflow_event("workflow.approved", req)
         else:
             WorkflowEngine._dispatch_workflow_event("workflow.request_submitted", req)
@@ -144,7 +420,9 @@ class WorkflowEngine:
             # Check parallel stage approval requirements if defined
             stage_complete = WorkflowEngine._check_stage_approval_complete(db, req, stg, actor_user_id)
             if stage_complete:
-                next_stage = WorkflowEngine._get_next_stage(wf, req.current_stage_order)
+                next_stage = WorkflowEngine._get_next_stage(
+                    wf, req.current_stage_order, db=db, payload=req.request_payload
+                )
                 if next_stage:
                     due_at = (datetime.now(timezone.utc) + timedelta(hours=next_stage.sla_hours)) if next_stage.sla_hours else None
                     req = crud_workflow.update_request_status(
@@ -160,6 +438,7 @@ class WorkflowEngine:
                         db, req.id, "approved", actor_id=actor_user_id,
                         reason="All workflow approval stages completed successfully"
                     )
+                    DomainOutcomeApplier.apply(db, req, "approved", actor_user_id, comments)
                     WorkflowEngine._dispatch_workflow_event("workflow.approved", req)
 
         elif action == "reject":
@@ -167,6 +446,7 @@ class WorkflowEngine:
                 db, req.id, "rejected", actor_id=actor_user_id,
                 reason=f"Rejected at stage {req.current_stage_order}: {comments or 'No reason provided'}"
             )
+            DomainOutcomeApplier.apply(db, req, "rejected", actor_user_id, comments)
             WorkflowEngine._dispatch_workflow_event("workflow.rejected", req)
 
         elif action == "return":
@@ -197,21 +477,43 @@ class WorkflowEngine:
 
     @staticmethod
     def _check_stage_approval_complete(db: Session, req: ApprovalRequest, stg: Optional[ApprovalStage], current_actor_id: int) -> bool:
-        """Determines if the current stage requirements (sequential or parallel quorum) are satisfied."""
+        """Whether the current stage's approval requirement is satisfied.
+
+        This previously guarded on `hasattr(stg, "requires_unanimous")`, but
+        `ApprovalStage` has no such attribute — it has `approval_type` and
+        `min_approvals`. `hasattr` was therefore always False, so the function
+        returned True on the first approval and quorum never applied. The seeded
+        payroll workflow is `approval_type="parallel", min_approvals=2` and was
+        in practice a single-approval control.
+        """
         if not stg:
             return True
-        # Default single approval completes stage
-        if not hasattr(stg, "requires_unanimous") or not stg.requires_unanimous:
+
+        required = int(stg.min_approvals or 1)
+        if required <= 1:
             return True
-        # If unanimous parallel approval is required, check all approvers
+
+        # A quorum larger than the number of designated approvers can never be
+        # met, which would strand the request in `pending` forever with no way
+        # out but rejection. The seeded payroll workflow is exactly this shape —
+        # `min_approvals: 2` against a single role approver — so capping, loudly,
+        # is the difference between a weakened control and a stuck one.
+        designated = len(stg.approvers) if stg.approvers else 0
+        if designated and required > designated:
+            logger.warning(
+                "Stage %r requires %d approvals but has %d designated approvers; "
+                "capping the quorum so the request can complete",
+                stg.name, required, designated,
+            )
+            required = designated
+
         actions = db.query(ApprovalAction).filter(
             ApprovalAction.request_id == req.id,
             ApprovalAction.stage_id == stg.id,
             ApprovalAction.action == "approve"
         ).all()
-        approved_user_ids = {a.actor_user_id for a in actions} | {current_actor_id}
-        total_approvers = len(stg.approvers) if stg.approvers else 1
-        return len(approved_user_ids) >= total_approvers
+        approved_user_ids = {a.actor_user_id for a in actions if a.actor_user_id} | {current_actor_id}
+        return len(approved_user_ids) >= required
 
     @staticmethod
     def _dispatch_workflow_event(event_type: str, req: ApprovalRequest) -> None:
@@ -231,11 +533,23 @@ class WorkflowEngine:
             logger.warning(f"Failed to dispatch workflow event notification: {e}")
 
     @staticmethod
-    def _get_next_stage(wf: ApprovalWorkflow, current_order: int) -> Optional[ApprovalStage]:
+    def _get_next_stage(wf: ApprovalWorkflow, current_order: int, db: Optional[Session] = None, payload: Optional[Dict[str, Any]] = None) -> Optional[ApprovalStage]:
+        """The next stage to route to, skipping stages whose rules say to skip.
+
+        A conditional chain has to behave the same way when advancing as it does
+        on submission: if Finance is only required above a threshold, a request
+        that passed the threshold should collect it, and one that did not should
+        not have to reach the end to discover that.
+        """
         stages = sorted(wf.stages, key=lambda s: s.stage_order)
         for s in stages:
-            if s.stage_order > current_order and s.is_active:
-                return s
+            if s.stage_order <= current_order or not s.is_active:
+                continue
+            if db is not None and payload is not None and ConditionEvaluator.should_skip_stage(db, s, payload):
+                logger.info("Skipping stage %r on advance via condition rules", s.name)
+                continue
+            return s
+        return None
         return None
 
 

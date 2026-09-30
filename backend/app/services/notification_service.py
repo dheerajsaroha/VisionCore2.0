@@ -24,6 +24,8 @@ from email.mime.text import MIMEText
 from enum import Enum
 from typing import Any, Optional
 
+from sqlalchemy.orm import Session
+
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -474,3 +476,170 @@ class NotificationService:
 
 # Singleton
 notification_service = NotificationService()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Durable, database-backed dispatch
+#
+#  NotificationService above is in-memory and process-local, so anything it
+#  delivers disappears on restart and is invisible to the in-app notification
+#  feed, which reads the `notifications` table. The helpers below write real
+#  rows so a business event (a leave request awaiting review, say) actually
+#  reaches its recipient.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _db_recipients_for_permission(
+    db: Session, org_id: Any, permission_name: str
+) -> list[int]:
+    """User ids in the organisation holding a permission, via any of their roles."""
+    from app.db.models.all_models import Permission, Role, RolePermission, User
+
+    return [
+        row[0]
+        for row in (
+            db.query(User.id)
+            # Join on the foreign keys rather than through `User.role`: an
+            # explicit on-clause against a relationship path is rejected.
+            .join(RolePermission, RolePermission.role_id == User.role_id)
+            .join(Permission, Permission.id == RolePermission.permission_id)
+            .filter(
+                User.org_id == org_id,
+                User.is_active == 1,
+                User.is_deleted == 0,
+                Permission.name == permission_name,
+            )
+            .distinct()
+            .all()
+        )
+    ]
+
+
+def persist_notification(
+    db: Session,
+    *,
+    user_id: int,
+    org_id: Any,
+    title: str,
+    message: Optional[str] = None,
+    notif_type: str = "info",
+    action_url: Optional[str] = None,
+    source_event: Optional[str] = None,
+) -> None:
+    """Write one durable in-app notification row."""
+    import uuid as _uuid
+
+    from app.db.models.all_models import Notification as NotificationRow
+
+    db.add(
+        NotificationRow(
+            id=str(_uuid.uuid4()),
+            user_id=user_id,
+            org_id=org_id,
+            title=title[:300],
+            message=message,
+            type=notif_type,
+            action_url=action_url,
+            source_event=source_event,
+            is_read=False,
+        )
+    )
+
+
+def notify_leave_approvers(
+    db: Session,
+    leave_request: Any,
+    *,
+    actor_id: Optional[int] = None,
+) -> int:
+    """
+    Tell everyone who can act on a leave request that it needs review.
+
+    The blueprint promises the requester "manager receives notification, 1-click
+    approve". Recipients are the requester's own reporting manager plus anyone
+    holding `leave.approve` in the organisation, so a request is never left
+    unowned when a manager is unassigned. The requester is never notified of
+    their own request.
+
+    Returns the number of recipients notified.
+    """
+    from app.db.models.all_models import EmploymentRecord, LeaveType, User
+
+    org_id = leave_request.organization_id
+    requester_id = leave_request.user_id
+
+    # 1. The requester's own reporting manager takes precedence.
+    recipients: list[int] = []
+    employment = (
+        db.query(EmploymentRecord)
+        .filter(
+            EmploymentRecord.user_id == requester_id,
+            EmploymentRecord.org_id == org_id,
+        )
+        .order_by(EmploymentRecord.id.desc())
+        .first()
+    )
+    if employment and employment.reporting_manager_id:
+        recipients.append(employment.reporting_manager_id)
+
+    # 2. Anyone else with authority to approve.
+    for candidate in _db_recipients_for_permission(db, org_id, "leave.approve"):
+        if candidate not in recipients:
+            recipients.append(candidate)
+
+    # The requester approving or being notified about their own request is
+    # never useful, and would be the self-approval path the routes block anyway.
+    recipients = [
+        r for r in recipients if r != requester_id and r != actor_id
+    ]
+    if not recipients:
+        return 0
+
+    leave_type = (
+        db.query(LeaveType).filter(LeaveType.id == leave_request.leave_type_id).first()
+    )
+    requester = db.query(User).filter(User.id == requester_id).first()
+    requester_name = (requester.full_name if requester else "An employee")
+
+    start = _fmt_dt(leave_request.start_date)
+    end = _fmt_dt(leave_request.end_date)
+    days = getattr(leave_request, "total_days", None)
+    type_name = (leave_type.name if leave_type else "leave")
+
+    action_url = f"/leave/requests/{leave_request.id}"
+    for user_id in recipients:
+        persist_notification(
+            db,
+            user_id=user_id,
+            org_id=org_id,
+            title=f"Leave request from {requester_name}",
+            message=(
+                f"{requester_name} requested {type_name} from {start} to {end}"
+                + (f" ({days} day{'s' if days != 1 else ''})" if days else "")
+                + ". Review and approve or reject."
+            ),
+            notif_type="info",
+            action_url=action_url,
+            source_event="leave.requested",
+        )
+
+    # Commit rather than flush: these rows must outlive the request transaction,
+    # and a flush would leave them uncommitted if the caller rolled back.
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Could not persist leave notifications")
+        return 0
+
+    logger.info(
+        "Leave %s notified %d approver(s)", leave_request.id, len(recipients)
+    )
+    return len(recipients)
+
+
+def _fmt_dt(value: Any) -> str:
+    if value is None:
+        return "-"
+    if isinstance(value, datetime):
+        return value.strftime("%d %b %Y")
+    return str(value)[:10]

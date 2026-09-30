@@ -48,6 +48,7 @@ def create_workflow(db: Session, wf_data: Dict[str, Any]) -> ApprovalWorkflow:
 
     for stg_idx, stg_in in enumerate(stages_data, start=1):
         approvers_data = stg_in.pop("approvers", [])
+        conditions_data = stg_in.pop("conditions", [])
         stg_order = stg_in.pop("stage_order", stg_idx)
         stg = ApprovalStage(workflow_id=wf.id, stage_order=stg_order, **stg_in)
         db.add(stg)
@@ -58,6 +59,12 @@ def create_workflow(db: Session, wf_data: Dict[str, Any]) -> ApprovalWorkflow:
         for appr_in in approvers_data:
             appr = ApprovalStageApprover(stage_id=stg.id, **appr_in)
             db.add(appr)
+        db.commit()
+
+        # Conditional routing rules. These were readable by the engine but
+        # unreachable through the API, so a chain could not be given a rule.
+        for cond_in in conditions_data:
+            db.add(WorkflowCondition(workflow_id=wf.id, stage_id=stg.id, **cond_in))
         db.commit()
 
     db.refresh(wf)

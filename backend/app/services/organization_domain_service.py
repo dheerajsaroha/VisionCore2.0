@@ -151,6 +151,12 @@ class OrganizationProvisioningService:
             db.commit()
             db.refresh(org)
 
+            # Provision the default plan immediately so the new tenant is not
+            # locked out by subscription enforcement before an admin can act.
+            from app.services.subscription_service import subscription_service
+
+            subscription_service.ensure_default_subscription(db, org.id)
+
         prov = self.start_provisioning(db, org.id, initiated_by_email=admin_email)
         completed_steps = list(prov.steps_completed or [])
 

@@ -15,22 +15,59 @@ ALGORITHM = settings.ALGORITHM
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256", "bcrypt"], deprecated="auto")
 
-_redis_client = None
+_redis_clients: dict = {}
 
 
 def _get_redis():
-    """Return a lazily-initialized async Redis client with connection timeouts."""
-    global _redis_client
-    if _redis_client is None:
-        import redis.asyncio as redis_async
-        _redis_client = redis_async.from_url(
-            settings.REDIS_URL,
-            decode_responses=True,
-            socket_connect_timeout=2,
-            socket_timeout=2,
-            retry_on_timeout=False,
-        )
-    return _redis_client
+    """Return an async Redis client bound to the *current* event loop.
+
+    A single module-level client is only safe while one event loop lives for
+    the life of the process, which is true under uvicorn but not elsewhere:
+    any code that runs the app on a fresh loop (the test client creates one per
+    request) leaves the cached client attached to a dead loop. Every command
+    then raises "Event loop is closed".
+
+    That is not a cosmetic problem here. `consume_one_time_token` fails closed
+    by design, so a stale client turns every *valid* password-reset link into
+    a 400 "This reset link is invalid or has expired" -- indistinguishable from
+    a genuinely expired link, with no hint that Redis is at fault. Keying the
+    client by the running loop keeps a long-lived server identical while
+    making any other loop get a working client of its own.
+    """
+    import asyncio
+
+    import redis.asyncio as redis_async
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:  # no running loop; fall back to an unbound client
+        loop = None
+
+    key = id(loop) if loop is not None else None
+    cached = _redis_clients.get(key)
+    if cached is not None:
+        return cached
+
+    client = redis_async.from_url(
+        settings.REDIS_URL,
+        decode_responses=True,
+        socket_connect_timeout=2,
+        socket_timeout=2,
+        retry_on_timeout=False,
+    )
+    # Drop clients bound to loops that are gone, so the dict cannot grow
+    # without bound when loops churn.
+    for stale_key, stale in list(_redis_clients.items()):
+        if stale_key != key:
+            owner = getattr(stale, "_visioncore_loop", None)
+            if owner is None or owner.is_closed():
+                _redis_clients.pop(stale_key, None)
+    try:
+        client._visioncore_loop = loop
+    except Exception:  # noqa: BLE001 - attribute is best effort
+        pass
+    _redis_clients[key] = client
+    return client
 
 
 async def blacklist_token(token: str, expires_in: int | None = None) -> None:

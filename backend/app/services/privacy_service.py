@@ -64,14 +64,31 @@ class PrivacyService:
         )
 
     def process_request(
-        self, db: Session, request_id: int, processed_by_user_id: int, approve: bool = True, rejection_reason: Optional[str] = None
+        self, db: Session, request_id: int, processed_by_user_id: int, approve: bool = True, rejection_reason: Optional[str] = None, organization_id: Optional[UUID] = None
     ) -> PrivacyRequest:
-        """Processes and fulfills a privacy request."""
+        """Processes and fulfills a privacy request.
+
+        `organization_id` is required. The lookup used to be by primary key
+        alone, so any authenticated caller who guessed or enumerated an id could
+        fulfil another tenant's request — and fulfilment for ACCESS_EXPORT reads
+        that subject's payroll and attendance, making it a cross-tenant data
+        exfiltration path rather than a mere authorization gap.
+        """
+        if organization_id is None:
+            raise ValueError("organization_id is required to process a privacy request.")
+
         req = db.execute(
-            select(PrivacyRequest).where(PrivacyRequest.id == request_id)
+            select(PrivacyRequest).where(
+                and_(
+                    PrivacyRequest.id == request_id,
+                    PrivacyRequest.organization_id == organization_id,
+                )
+            )
         ).scalar_one_or_none()
 
         if not req:
+            # Deliberately "not found" rather than "forbidden": confirming that
+            # an id exists in another tenant is itself a disclosure.
             raise ValueError("Privacy request not found.")
 
         req.processed_by_user_id = processed_by_user_id

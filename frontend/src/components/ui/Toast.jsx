@@ -18,10 +18,10 @@ const icons = {
 };
 
 const styles = {
-  success: 'border-emerald-500/30 bg-emerald-950/80',
-  error:   'border-red-500/30    bg-red-950/80',
-  warning: 'border-amber-500/30  bg-amber-950/80',
-  info:    'border-sky-500/30    bg-gray-900/90',
+  success: 'border-emerald-500/30 bg-emerald-500/10',
+  error:   'border-red-500/30    bg-red-500/10',
+  warning: 'border-amber-500/30  bg-amber-500/10',
+  info:    'border-sky-500/30    bg-sky-500/10',
 };
 
 let _id = 0;
@@ -31,7 +31,10 @@ export function ToastProvider({ children }) {
 
   const addToast = useCallback(({ message, type = 'info', duration = 4000 }) => {
     const id = ++_id;
-    setToasts((prev) => [...prev, { id, message, type }]);
+    const safeMessage = typeof message === 'string'
+      ? message
+      : message?.message || 'An unexpected error occurred.';
+    setToasts((prev) => [...prev, { id, message: safeMessage, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, duration);
@@ -70,7 +73,7 @@ export function ToastProvider({ children }) {
               </p>
               <button
                 onClick={() => removeToast(toast.id)}
-                className="ml-1 text-gray-500 hover:text-gray-300 transition-colors shrink-0 mt-0.5"
+                className="ml-1 text-gray-400 hover:text-gray-200 transition-colors shrink-0 mt-0.5"
                 aria-label="Dismiss"
               >
                 <X className="h-4 w-4" />

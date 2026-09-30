@@ -118,7 +118,7 @@ FEATURES: Dict[str, Dict] = {
         "category": "core",
         "dependencies": ["attendance"],
         "beta": True,
-        "deprecated": False,
+        "deprecated": True,
         "visibility": "public",
     },
     "leave_management": {
@@ -169,7 +169,7 @@ FEATURES: Dict[str, Dict] = {
         "category": "hr",
         "dependencies": ["recruitment"],
         "beta": False,
-        "deprecated": False,
+        "deprecated": True,
         "visibility": "public",
     },
     "performance_reviews": {
@@ -241,7 +241,7 @@ FEATURES: Dict[str, Dict] = {
         "category": "operations",
         "dependencies": None,
         "beta": False,
-        "deprecated": False,
+        "deprecated": True,
         "visibility": "public",
     },
     "visitor_management": {
@@ -251,7 +251,7 @@ FEATURES: Dict[str, Dict] = {
         "category": "operations",
         "dependencies": ["attendance"],
         "beta": True,
-        "deprecated": False,
+        "deprecated": True,
         "visibility": "public",
     },
     "bulk_operations": {
@@ -261,7 +261,7 @@ FEATURES: Dict[str, Dict] = {
         "category": "operations",
         "dependencies": None,
         "beta": False,
-        "deprecated": False,
+        "deprecated": True,
         "visibility": "public",
     },
     # ── Governance Features ─────────────────────────────────────────────────
@@ -366,7 +366,7 @@ FEATURES: Dict[str, Dict] = {
         "category": "platform",
         "dependencies": None,
         "beta": True,
-        "deprecated": False,
+        "deprecated": True,
         "visibility": "public",
     },
     "integrations": {
@@ -416,7 +416,7 @@ FEATURES: Dict[str, Dict] = {
         "category": "platform",
         "dependencies": None,
         "beta": False,
-        "deprecated": False,
+        "deprecated": True,
         "visibility": "public",
     },
     # ── Security Features ──────────────────────────────────────────────────
@@ -427,7 +427,7 @@ FEATURES: Dict[str, Dict] = {
         "category": "security",
         "dependencies": None,
         "beta": False,
-        "deprecated": False,
+        "deprecated": True,
         "visibility": "public",
     },
     "mfa": {
@@ -437,7 +437,7 @@ FEATURES: Dict[str, Dict] = {
         "category": "security",
         "dependencies": None,
         "beta": False,
-        "deprecated": False,
+        "deprecated": True,
         "visibility": "public",
     },
     "audit_trail": {
@@ -457,7 +457,7 @@ FEATURES: Dict[str, Dict] = {
         "category": "security",
         "dependencies": ["audit_trail"],
         "beta": True,
-        "deprecated": False,
+        "deprecated": True,
         "visibility": "public",
     },
     "api_access": {
@@ -789,11 +789,26 @@ def seed_licensing_limits(db: Session, plan_map: Dict[str, int]) -> int:
 
 
 def seed_default_organization_subscriptions(db: Session, plan_map: Dict[str, int]) -> int:
-    """Assign default 'Professional' plan to all existing organizations without a subscription."""
-    professional_plan_id = plan_map.get("professional")
-    if not professional_plan_id:
-        logger.warning("Professional plan not found — skipping org subscription defaults")
+    """Assign the default plan to all existing organizations without a subscription.
+
+    Uses settings.DEFAULT_PLAN_CODE (the free Starter tier) rather than a paid
+    tier: this previously hardcoded 'professional', which silently put every
+    new tenant on a $49.99/mo plan. New subscriptions also get a trial end and a
+    next renewal date so downgrade/renewal logic has something to act on.
+    """
+    from app.core.config import settings
+
+    default_code = settings.DEFAULT_PLAN_CODE
+    default_plan_id = plan_map.get(default_code)
+    if not default_plan_id:
+        logger.warning(
+            "Default plan '%s' not found — skipping org subscription defaults",
+            default_code,
+        )
         return 0
+
+    now = datetime.now(timezone.utc)
+    trial_days = int(settings.DEFAULT_TRIAL_DAYS or 14)
 
     count = 0
     orgs = db.query(Organization).all()
@@ -804,16 +819,22 @@ def seed_default_organization_subscriptions(db: Session, plan_map: Dict[str, int
         if not existing:
             sub = OrganizationSubscription(
                 organization_id=org.id,
-                subscription_plan_id=professional_plan_id,
+                subscription_plan_id=default_plan_id,
                 status="active",
                 billing_cycle="monthly",
-                start_date=datetime.now(timezone.utc),
+                start_date=now,
+                trial_end=now + timedelta(days=trial_days),
+                next_renewal=now + timedelta(days=30),
                 auto_renew=True,
             )
             db.add(sub)
             count += 1
     db.commit()
-    logger.info("Created %d default organization subscriptions", count)
+    logger.info(
+        "Created %d default organization subscriptions on plan '%s'",
+        count,
+        default_code,
+    )
     return count
 
 

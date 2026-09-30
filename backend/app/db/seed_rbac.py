@@ -114,6 +114,11 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
         "is_system": False,
         "permissions": "__org_admin__",  # All org-level permissions
     },
+    "Admin": {
+        "description": "Organization administrator — full org management access",
+        "is_system": False,
+        "permissions": "__org_admin__",  # All org-level permissions
+    },
     "OrgManager": {
         "description": "Organization management — user management, reports, attendance oversight, documents",
         "is_system": False,
@@ -125,11 +130,32 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
             "reports.attendance.export", "reports.employee.export",
             "tickets.read", "tickets.create", "tickets.update",
             "reimbursements.read", "reimbursements.create", "reimbursements.approve",
-            "payroll.generate", "payroll.approve",
+            "payroll.view", "payroll.generate", "payroll.approve",
             "notifications.read",
             "org.settings.view",
             "policy.read", "policy.acknowledge", "policy.compliance.view",
             "leave.view_self", "leave.view_team", "leave.approve",
+            "learning.view", "learning.view_org",
+            "referral.create", "referral.verify",
+            # Performance oversight: managers read the org's reviews, run
+            # calibration and decide promotions. Authoring the framework
+            # (competency, cycles) stays with HR, and `operations.*` stays
+            # with admins because it exposes platform internals.
+            "performance.view",
+            "performance.cycle.read",
+            "performance.analytics.read",
+            "performance.review.create", "performance.review.read",
+            "performance.review.submit",
+            "performance.feedback.create", "performance.feedback.read",
+            "performance.goal.create", "performance.goal.read", "performance.goal.update",
+            "performance.kpi.create", "performance.kpi.read",
+            "performance.kpi.update", "performance.kpi.assign",
+            "performance.pip.create", "performance.pip.read", "performance.pip.update",
+            "performance.promotion.create", "performance.promotion.read",
+            "performance.promotion.approve",
+            "performance.calibration.create", "performance.calibration.read",
+            "performance.calibration.update",
+            "performance.rating.read",
         ],
     },
     "OrgHR": {
@@ -140,7 +166,7 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
             "departments.read",
             "shifts.read",
             "reports.attendance.export", "reports.payroll.export", "reports.employee.export",
-            "payroll.generate", "payroll.approve", "payroll.export",
+            "payroll.view", "payroll.generate", "payroll.approve", "payroll.export",
             "reimbursements.read", "reimbursements.create", "reimbursements.approve",
             "tickets.read",
             "notifications.read",
@@ -149,13 +175,49 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
             "policy.compliance.manage", "policy.reminders.manage", "policy.distribute",
             "policy.analytics.view", "policy.versions.view", "policy.attachments.manage",
             "leave.view_self", "leave.view_team", "leave.view_org", "leave.approve", "leave.manage",
+            "learning.view", "learning.view_org", "learning.create", "learning.update", "learning.manage",
+            "recruitment.view", "recruitment.create", "recruitment.update", "recruitment.manage",
+            "referral.create", "referral.verify", "referral.manage",
+            # Performance is an HR-owned function, so HR holds the full
+            # resource-level set including the authoring verbs
+            # (competency frameworks, cycles) that managers do not get.
+            "performance.view",
+            "performance.cycle.create", "performance.cycle.read", "performance.cycle.update",
+            "performance.analytics.read",
+            "performance.review.create", "performance.review.read", "performance.review.submit",
+            "performance.feedback.create", "performance.feedback.read",
+            "performance.goal.create", "performance.goal.read", "performance.goal.update",
+            "performance.kpi.create", "performance.kpi.read",
+            "performance.kpi.update", "performance.kpi.assign",
+            "performance.pip.create", "performance.pip.read", "performance.pip.update",
+            "performance.promotion.create", "performance.promotion.read",
+            "performance.promotion.approve",
+            "performance.calibration.create", "performance.calibration.read",
+            "performance.calibration.update",
+            "performance.competency.create", "performance.competency.read",
+            "performance.rating.calculate", "performance.rating.read",
+            # Policy Center resource guards, complementing the coarse
+            # policy.create/update/publish verbs already granted above.
+            "policy.document.create", "policy.document.update",
+            "policy.document.publish", "policy.document.archive",
+            "policy.version.create", "policy.template.create", "policy.tag.create",
+            "policy.category.create", "policy.category.update",
+            "policy.attachment.create",
+            "policy.distribution.create", "policy.distribution.read",
+            "policy.distribution.users", "policy.acknowledgement.read",
+            "policy.reminder.create", "policy.reminder.process",
+            "policy.signature.read", "policy.signature.verify",
+            "policy.report.generate",
+            # Compliance register and checks.
+            "compliance.summary.read", "compliance.breaches.read",
+            "compliance.check.run", "compliance.rule.create",
         ],
     },
     "OrgFinance": {
         "description": "Financial operations — payroll, reimbursements, billing reports",
         "is_system": False,
         "permissions": [
-            "payroll.generate", "payroll.approve", "payroll.export",
+            "payroll.view", "payroll.generate", "payroll.approve", "payroll.export",
             "reimbursements.read", "reimbursements.create", "reimbursements.approve", "reimbursements.reject",
             "reports.payroll.export",
             "users.read",
@@ -173,7 +235,8 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
             "tickets.read", "tickets.create", "tickets.update",
             "users.read",
             "notifications.read",
-            "leave.view_self", "leave.view_team", "leave.approve",
+            "leave.view_self", "leave.view_team", "leave.approve", "leave.approve_team",
+            "learning.view",
         ],
     },
     "OrgTeamLead": {
@@ -184,8 +247,10 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
             "reports.attendance.export",
             "tickets.read", "tickets.create", "tickets.update",
             "users.read",
+            "departments.read",
+            "shifts.read",
             "notifications.read",
-            "leave.view_self", "leave.view_team",
+            "leave.view_self", "leave.view_team", "leave.approve", "leave.approve_team",
         ],
     },
     "OrgEmployee": {
@@ -197,6 +262,17 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
             "reimbursements.read", "reimbursements.create",
             "notifications.read",
             "leave.apply", "leave.view_self",
+            "learning.view",
+            "referral.create",
+            # Performance self-service only. `performance.review.read`,
+            # `performance.analytics.read`, `performance.kpi.read` and
+            # `performance.feedback.read` are deliberately absent: each of
+            # those endpoints will return another person's records when handed
+            # a `user_id`, so granting them here would hand every employee
+            # their colleagues' reviews, rankings and feedback. The endpoints
+            # that are self-scoped by default are the ones granted.
+            "performance.goal.read", "performance.goal.update",
+            "performance.review.submit", "performance.feedback.create",
         ],
     },
     "OrgContractor": {
@@ -244,6 +320,7 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
             "reimbursements.read", "reimbursements.approve",
             "notifications.read",
             "policy.read", "policy.acknowledge", "policy.compliance.view",
+            "leave.view_self", "leave.view_team", "leave.approve", "leave.approve_team",
         ],
     },
     "OrgShiftManager": {
@@ -252,8 +329,10 @@ ORGANIZATION_ROLES: Dict[str, Dict] = {
         "permissions": [
             "shifts.read", "shifts.create", "shifts.update", "shifts.delete",
             "attendance.history",
+            "departments.read",
             "users.read",
             "notifications.read",
+            "leave.view_self", "leave.view_team", "leave.approve",
         ],
     },
 }
@@ -389,10 +468,15 @@ ALL_PERMISSIONS: Dict[str, Dict[str, List[Tuple[str, str]]]] = {
     },
     "payroll": {
         "Platform": [
+            # `payroll.view` gates GET /payroll/. It was previously absent from
+            # the catalog, so the route required a permission that no seeded
+            # role held and the payroll list 403'd for every tenant role.
+            ("payroll.view", "View payroll records"),
             ("payroll.generate", "Generate payroll"),
             ("payroll.approve", "Approve payroll"),
             ("payroll.export", "Export payroll data"),
             ("payroll.manage", "Full payroll management"),
+            ("payroll.finalize", "Finalize a payroll run"),
         ],
     },
     "reimbursements": {
@@ -475,6 +559,28 @@ ALL_PERMISSIONS: Dict[str, Dict[str, List[Tuple[str, str]]]] = {
             ("policy.acknowledge", "Acknowledge policy documents"),
             ("policy.sign", "Digitally sign policy documents"),
             ("policy.distribute", "Distribute policy documents"),
+            # Resource-level guards used by the EAAC-gated Policy Center
+            # routes. The coarse verbs above cannot express "may read the
+            # acknowledgement register but not create a document version".
+            ("policy.document.create", "Create a policy document"),
+            ("policy.document.update", "Update a policy document"),
+            ("policy.document.publish", "Publish a policy document"),
+            ("policy.document.archive", "Archive a policy document"),
+            ("policy.version.create", "Create a new policy version"),
+            ("policy.template.create", "Create a policy template"),
+            ("policy.tag.create", "Create a policy tag"),
+            ("policy.category.create", "Create a policy category"),
+            ("policy.category.update", "Update a policy category"),
+            ("policy.attachment.create", "Attach a file to a policy"),
+            ("policy.distribution.create", "Create a policy distribution"),
+            ("policy.distribution.read", "Read a policy distribution"),
+            ("policy.distribution.users", "Read the recipients of a distribution"),
+            ("policy.acknowledgement.read", "Read policy acknowledgements"),
+            ("policy.reminder.create", "Create a policy acknowledgement reminder"),
+            ("policy.reminder.process", "Process due policy reminders"),
+            ("policy.signature.read", "Read policy signature records"),
+            ("policy.signature.verify", "Verify a policy signature"),
+            ("policy.report.generate", "Generate a policy compliance report"),
             ("policy.compliance.view", "View compliance records"),
             ("policy.compliance.manage", "Manage compliance rules"),
             ("policy.reminders.manage", "Manage policy reminders"),
@@ -507,7 +613,8 @@ ALL_PERMISSIONS: Dict[str, Dict[str, List[Tuple[str, str]]]] = {
             ("leave.view_self", "View own leave requests"),
             ("leave.view_team", "View team leave requests"),
             ("leave.view_org", "View organization leave"),
-            ("leave.approve", "Approve leave requests"),
+            ("leave.approve", "Approve leave requests (department-scoped)"),
+            ("leave.approve_team", "Approve leave requests for own team"),
             ("leave.reject", "Reject leave requests"),
             ("leave.cancel", "Cancel leave requests"),
             ("leave.manage", "Full leave management"),
@@ -524,6 +631,10 @@ ALL_PERMISSIONS: Dict[str, Dict[str, List[Tuple[str, str]]]] = {
     "learning": {
         "Platform": [
             ("learning.view", "View courses and enrollments"),
+            # Organization-wide learning analytics and budget spend. Distinct from
+            # `learning.view` because an employee needs to see their own courses
+            # without seeing what the whole organization spends on training.
+            ("learning.view_org", "View organization-wide learning analytics and budget"),
             ("learning.create", "Create courses"),
             ("learning.update", "Update courses"),
             ("learning.manage", "Full learning management"),
@@ -535,6 +646,78 @@ ALL_PERMISSIONS: Dict[str, Dict[str, List[Tuple[str, str]]]] = {
             ("performance.create", "Create performance cycles"),
             ("performance.update", "Update performance reviews"),
             ("performance.manage", "Full performance management"),
+            # The permissions below back the EAAC-guarded Performance
+            # Management Center routes. They are named per resource rather than
+            # by the four coarse verbs above because the router guards each
+            # endpoint individually, and a single `performance.manage` cannot
+            # express "may read goals but not run calibration".
+            ("performance.cycle.read", "Read performance cycles"),
+            ("performance.cycle.create", "Create performance cycles"),
+            ("performance.cycle.update", "Update performance cycles"),
+            ("performance.analytics.read", "Read the performance analytics dashboard and rankings"),
+            ("performance.review.create", "Create performance reviews"),
+            ("performance.review.read", "Read performance reviews across the organization"),
+            ("performance.review.submit", "Submit a performance review you were asked to write"),
+            ("performance.feedback.create", "Give feedback to a colleague"),
+            ("performance.feedback.read", "Read feedback received by a user"),
+            ("performance.goal.create", "Create goals for a user"),
+            ("performance.goal.read", "Read goals"),
+            ("performance.goal.update", "Update goals"),
+            ("performance.kpi.create", "Define KPIs"),
+            ("performance.kpi.read", "Read KPIs"),
+            ("performance.kpi.update", "Update KPI definitions"),
+            ("performance.kpi.assign", "Assign KPIs to users"),
+            ("performance.pip.create", "Create a performance improvement plan"),
+            ("performance.pip.read", "Read performance improvement plans"),
+            ("performance.pip.update", "Update a performance improvement plan"),
+            ("performance.promotion.create", "Open a promotion case"),
+            ("performance.promotion.read", "Read promotion cases"),
+            ("performance.promotion.approve", "Approve or reject a promotion"),
+            ("performance.calibration.create", "Open a calibration session"),
+            ("performance.calibration.read", "Read calibration sessions"),
+            ("performance.calibration.update", "Update a calibration session"),
+            ("performance.competency.create", "Define competency frameworks"),
+            ("performance.competency.read", "Read competency frameworks"),
+            ("performance.rating.calculate", "Trigger a rating calculation"),
+            ("performance.rating.read", "Read calculated ratings"),
+        ],
+    },
+    "operations": {
+        "Platform": [
+            # Back the EAAC-guarded Operations / Platform routes. Read-heavy by
+            # design: these expose queue, event, cache and health internals, so
+            # the write verbs are separated from the readers deliberately.
+            ("operations.dashboard.read", "Read the operations dashboard"),
+            ("operations.jobs.read", "List background jobs"),
+            ("operations.jobs.create", "Enqueue a background job"),
+            ("operations.jobs.cancel", "Cancel a background job"),
+            ("operations.scheduler.manage", "Manage scheduled jobs"),
+            ("operations.queues.read", "Inspect queue depths"),
+            ("operations.events.read", "Read the event stream"),
+            ("operations.cache.read", "Inspect cache state"),
+            ("operations.cache.manage", "Evict or warm cache entries"),
+            ("operations.config.read", "Read runtime configuration"),
+            ("operations.config.write", "Change runtime configuration"),
+            ("operations.cluster.read", "Inspect cluster membership"),
+            ("operations.health.read", "Read service health"),
+            ("operations.metrics.read", "Read service metrics"),
+            ("operations.observability.read", "Read observability data"),
+            ("operations.analytics.read", "Read operational analytics"),
+            ("operations.intelligence.read", "Read operational intelligence"),
+            ("operations.integrations.read", "Read integration status"),
+            ("operations.reports.read", "Read operational reports"),
+            ("operations.reports.generate", "Generate an operational report"),
+            ("operations.search.read", "Run an operational search"),
+            ("operations.dr.read", "Read disaster-recovery status"),
+            ("operations.dr.manage", "Run a disaster-recovery action"),
+        ],
+    },
+    "compliance": {
+        "Platform": [
+            ("compliance.summary.read", "Read the compliance summary"),
+            ("compliance.breaches.read", "Read recorded compliance breaches"),
+            ("compliance.check.run", "Run a compliance check"),
+            ("compliance.rule.create", "Define a compliance rule"),
         ],
     },
     "recruitment": {
@@ -543,6 +726,19 @@ ALL_PERMISSIONS: Dict[str, Dict[str, List[Tuple[str, str]]]] = {
             ("recruitment.create", "Create job postings"),
             ("recruitment.update", "Update recruitment records"),
             ("recruitment.manage", "Full recruitment management"),
+        ],
+    },
+    "referral": {
+        "Platform": [
+            # Split deliberately. `referral.create` is the broad grant: an
+            # employee nominating a colleague's cousin is the whole point of
+            # the feature and carries no read access to the candidate pool.
+            ("referral.create", "Refer a candidate to a vacancy"),
+            # `referral.verify` is the narrow one: seeing the tenant's whole
+            # referral book, moving referrals between states and approving
+            # reward payouts.
+            ("referral.verify", "View and verify organization referrals"),
+            ("referral.manage", "Full referral programme management"),
         ],
     },
     "hcm": {
@@ -556,6 +752,32 @@ ALL_PERMISSIONS: Dict[str, Dict[str, List[Tuple[str, str]]]] = {
         "Platform": [
             ("workforce.view", "View workforce data"),
             ("workforce.manage", "Manage workforce operations"),
+        ],
+    },
+    "integration": {
+        "Platform": [
+            ("integration.view", "View integrations"),
+            ("integration.create", "Create integrations"),
+            ("integration.update", "Update integrations"),
+            ("integration.manage", "Full integration management"),
+        ],
+    },
+    "ai": {
+        "Platform": [
+            ("ai.studio.use", "Use AI Studio"),
+            ("ai.copilot.use", "Use AI Copilot"),
+            ("ai.analytics.read", "View AI analytics"),
+            ("ai.prompt.manage", "Manage AI prompts"),
+            ("ai.model.manage", "Manage AI models"),
+            ("ai.governance.manage", "Manage AI governance"),
+        ],
+    },
+    "knowledge": {
+        "Platform": [
+            ("knowledge.read", "Read knowledge base"),
+            ("knowledge.create", "Create knowledge articles"),
+            ("knowledge.update", "Update knowledge articles"),
+            ("knowledge.manage", "Full knowledge management"),
         ],
     },
 }

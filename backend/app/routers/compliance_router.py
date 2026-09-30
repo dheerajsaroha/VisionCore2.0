@@ -29,6 +29,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# Compliance state is organization-wide and includes other people's data subject
+# requests and legal holds. Every endpoint here previously required nothing but
+# an active session, so mounting the router as written would have let any
+# employee — including an intern or a viewer — read every privacy request in the
+# organization and rewrite its retention policy.
+#
+# Submitting one's own DSAR is deliberately left open to any active user, since
+# exercising a data subject right is not an administrative act.
+_can_view = deps.require_permission("policy.compliance.view")
+_can_manage = deps.require_permission("policy.compliance.manage")
+
+
 # ── Schemas ───────────────────────────────────────────────────────────────────
 
 class RetentionPolicyCreate(BaseModel):
@@ -59,7 +71,7 @@ class PrivacyRequestProcess(BaseModel):
 @router.post("/retention-policies", summary="Create or update retention policy", tags=["compliance"])
 async def upsert_retention_policy(
     body: RetentionPolicyCreate,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(_can_manage),
     db: Session = Depends(deps.get_db),
 ):
     """Creates or updates a data retention policy for an entity category."""
@@ -83,7 +95,7 @@ async def upsert_retention_policy(
 
 @router.get("/retention-policies", summary="List retention policies", tags=["compliance"])
 async def list_retention_policies(
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(_can_view),
     db: Session = Depends(deps.get_db),
 ):
     """Lists data retention policies for organization."""
@@ -106,7 +118,7 @@ async def list_retention_policies(
 @router.post("/legal-holds", summary="Place a legal hold", tags=["compliance"])
 async def create_legal_hold(
     body: LegalHoldCreate,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(_can_manage),
     db: Session = Depends(deps.get_db),
 ):
     """Places a legal hold on a data category or user."""
@@ -132,7 +144,7 @@ async def create_legal_hold(
 
 @router.get("/legal-holds", summary="List active legal holds", tags=["compliance"])
 async def list_legal_holds(
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(_can_view),
     db: Session = Depends(deps.get_db),
 ):
     """Lists active legal holds for organization."""
@@ -180,7 +192,7 @@ async def submit_privacy_request(
 @router.get("/privacy-requests", summary="List privacy requests", tags=["compliance"])
 async def list_privacy_requests(
     status_filter: Optional[str] = Query(None),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(_can_view),
     db: Session = Depends(deps.get_db),
 ):
     """Lists privacy requests for organization."""
@@ -205,10 +217,12 @@ async def list_privacy_requests(
 async def process_privacy_request(
     request_id: int,
     body: PrivacyRequestProcess,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(_can_manage),
     db: Session = Depends(deps.get_db),
 ):
     """Approve or reject a DSAR privacy request."""
+    if not current_user.org_id:
+        raise HTTPException(status_code=400, detail="User has no organization context.")
     try:
         req = privacy_service.process_request(
             db=db,
@@ -216,6 +230,7 @@ async def process_privacy_request(
             processed_by_user_id=current_user.id,
             approve=body.approve,
             rejection_reason=body.rejection_reason,
+            organization_id=current_user.org_id,
         )
         return {
             "id": req.id,

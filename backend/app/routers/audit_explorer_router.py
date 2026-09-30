@@ -25,6 +25,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# Audit and security-event records expose who did what, from which IP, with what
+# payload. This router previously required only an active session, so mounting
+# it unchanged would have handed the full audit trail to every employee in the
+# organization, including interns and viewers. `audit.view` / `audit.write` are
+# held only by platform roles, which is the correct boundary: an organization's
+# payroll edits and permission grants are a platform-audit concern.
+_can_view_audit = deps.require_permission("audit.view")
+_can_write_audit = deps.require_permission("audit.write")
+
+
 class SecurityEventCreate(BaseModel):
     event_type: str = Field(..., min_length=1, max_length=80)
     severity: str = Field("INFO", pattern="^(INFO|WARNING|ERROR|CRITICAL)$")
@@ -42,7 +52,7 @@ async def search_audit_logs(
     module: Optional[str] = Query(None),
     action: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=500),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(_can_view_audit),
     db: Session = Depends(deps.get_db),
 ):
     """Searches tamper-evident platform audit logs for tenant."""
@@ -65,7 +75,7 @@ async def search_audit_logs(
 )
 async def create_security_event(
     body: SecurityEventCreate,
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(_can_write_audit),
     db: Session = Depends(deps.get_db),
 ):
     """Records a classified security event (e.g., failed auth, policy breach)."""
@@ -97,7 +107,7 @@ async def create_security_event(
 async def list_security_events(
     severity: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=200),
-    current_user: User = Depends(deps.get_current_active_user),
+    current_user: User = Depends(_can_view_audit),
     db: Session = Depends(deps.get_db),
 ):
     """Retrieves classified security event logs for organization."""

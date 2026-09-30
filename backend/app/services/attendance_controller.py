@@ -11,9 +11,8 @@ from sqlalchemy import orm
 from sqlalchemy.orm import joinedload
 
 
-
 from app.db.models.all_models import AttendanceLog, User
-from app.schema.attendance import AttendanceLogResponse, CheckInRequest
+from app.schema.attendance import AttendanceLogResponse, CheckInRequest, CheckOutRequest
 from app.crud.crud_attendance import attendance as crud_attendance
 
 from app.services.analytics import analytics_service  # noqa: F401 (kept for future hooks)
@@ -23,8 +22,11 @@ from app.services.blockchain import background_blockchain_anchor
 from app.repositories.attendance_repo import attendance_repo
 from app.repositories.user_repo import user_repo
 
-from app.services.attendance_pipeline.pipeline import FaceAttendancePipeline
-
+from app.services.attendance_pipeline.pipeline import (
+    FaceAttendancePipeline,
+    LivenessFailedError,
+    LivenessUnavailableError,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -127,6 +129,12 @@ class AttendanceController:
                 org_id=current_user.org_id,
             )
 
+        except LivenessUnavailableError:
+            # Anti-spoofing engine is not runnable; let the router answer 503.
+            raise
+        except LivenessFailedError as e:
+            # Re-raise with structured error info preserved
+            raise PermissionError(f"{{\"code\": \"{e.code}\", \"message\": \"{e.args[0]}\", \"score\": {e.score}}}")
         except ValueError as e:
             raise e
         except LookupError as e:
@@ -157,6 +165,7 @@ class AttendanceController:
 
 
 
+
         # In unit/integration tests we may run without a real DB.
         # Production callers still use a real session; this fallback keeps the
         # check-in pipeline robust while preserving authorization/identity logic.
@@ -169,7 +178,6 @@ class AttendanceController:
                 req.user_id,
                 exc,
             )
-
 
 
 
@@ -189,6 +197,63 @@ class AttendanceController:
 
         return log
 
+    def handle_check_out(
+        self,
+        db: Session,
+        *,
+        req: CheckOutRequest,
+        current_user: User,
+    ) -> AttendanceLog:
+        """
+        Handle check-out for the current user's active attendance session.
+        Optionally verifies face if image_base64 is provided.
+        """
+        # SECURITY: Never let client-supplied user_id bypass authorization
+        req.user_id = None
+
+        # Determine target user_id
+        target_user_id = current_user.id
+
+        # If image provided, run face verification
+        if req.image_base64:
+            image_bytes = self.extract_image_bytes(req.image_base64)
+            if image_bytes:
+                try:
+                    pipeline_result = self.run_face_pipeline(
+                        db,
+                        image_bytes=image_bytes,
+                        existing_user_id=None,
+                        org_id=current_user.org_id,
+                    )
+                    if pipeline_result.user_id:
+                        target_user_id = pipeline_result.user_id
+                except LivenessUnavailableError:
+                    raise
+                except LivenessFailedError as e:
+                    logger.warning(f"Liveness failed during check-out: {e}")
+                    raise PermissionError(f"{{\"code\": \"{e.code}\", \"message\": \"{e.args[0]}\", \"score\": {e.score}}}")
+                except (ValueError, LookupError) as e:
+                    logger.warning(f"Face verification failed during check-out: {e}")
+                    raise ValueError("Face verification failed during check-out")
+
+        # Prevent check-out spoofing — users can only check out for themselves unless privileged
+        from app.api.deps import has_any_role
+
+        is_privileged = has_any_role(
+            current_user,
+            "Admin",
+            "Manager",
+            "SuperAdmin",
+            "Super Admin",
+        )
+
+        if not is_privileged and target_user_id != current_user.id:
+            raise PermissionError("You can only check out for yourself")
+
+        # Log check-out using CRUD
+        log = crud_attendance.log_check_out(db, user_id=target_user_id, timestamp=req.timestamp)
+
+        return log
 
 
 attendance_controller = AttendanceController()

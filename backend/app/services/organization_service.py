@@ -7,6 +7,7 @@ from uuid import UUID
 
 import logging
 
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -112,18 +113,27 @@ class OrganizationService:
             role.name,
         )
 
-        # Idempotency: if the workspace owner user already exists by email,
-        # reuse it instead of attempting to insert (prevents unique constraint
-        # violations on users.email / users.username / users.employee_id).
+        # Idempotency: reuse the owner only if they are already in *this*
+        # workspace. The lookup is deliberately tenant-scoped.
+        #
+        # It used to match on email alone and then reassign `org_id`, which
+        # with a globally unique email was merely redundant but is now a
+        # takeover: the same person may legitimately hold an account in
+        # another organisation, and silently moving them into this one would
+        # strip them of their existing tenancy. A clash across tenants is now
+        # a different account, not an idempotent re-run.
         existing_owner = (
             db.query(User)
-            .filter(User.email == owner_email, User.is_deleted == 0)
+            .filter(
+                func.lower(User.email) == (owner_email or "").strip().lower(),
+                User.org_id == org_id,
+                User.is_deleted == 0,
+            )
             .first()
         )
 
         if existing_owner:
-            # Ensure the owner points to the current org and has the expected role.
-            existing_owner.org_id = org_id
+            # Ensure the owner has the expected role and name.
             existing_owner.role_id = role.id
             if existing_owner.full_name != owner_name:
                 existing_owner.full_name = owner_name
@@ -149,7 +159,7 @@ class OrganizationService:
         return crud_user.create(
             db,
             obj_in={
-                "email": owner_email,
+                "email": (owner_email or "").strip().lower(),
                 "password": password,
                 "full_name": owner_name,
                 "username": username,

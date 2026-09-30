@@ -1,50 +1,18 @@
-// Route access is deliberately explicit. Dashboard and self-service routes are
-// authenticated-only; every administrative route is mapped to an effective
-// backend permission. This is UI defense in depth -- APIs remain authoritative.
-export const routePolicies = {
-  '/dashboard': { authenticated: true },
-  '/dashboard/leave': { authenticated: true },
-  '/dashboard/settings': { authenticated: true },
-  '/dashboard/organization': { permission: 'org.view' },
-  '/dashboard/org-hierarchy': { permission: 'org.view' },
-  '/dashboard/business-units': { permission: 'departments.read' },
-  '/dashboard/branches': { permission: 'org.view' },
-  '/dashboard/positions': { permission: 'departments.read' },
-  '/dashboard/identity-directory': { permission: 'users.read' },
-  '/dashboard/workforce/attendance': { permission: 'attendance.history' },
-  '/dashboard/workforce/timeline': { permission: 'attendance.history' },
-  '/dashboard/workforce/devices': { permission: 'platform.settings.manage' },
-  '/dashboard/workforce/shifts': { permission: 'shifts.read' },
-  '/dashboard/workforce/rosters': { permission: 'shifts.read' },
-  '/dashboard/workforce/leave-calendar': { permission: 'attendance.history' },
-  '/dashboard/workforce/leave-requests': { permission: 'attendance.history' },
-  '/dashboard/workforce/planning': { permission: 'users.read' },
-  '/dashboard/workforce/capacity': { permission: 'users.read' },
-  '/dashboard/workforce/analytics': { permission: 'reports.attendance.export' },
-  '/dashboard/workforce/holidays': { permission: 'org.settings.manage' },
-  '/dashboard/scope-ownership': { permission: 'platform.settings.manage' },
-  '/dashboard/approval-workflows': { permission: 'platform.settings.manage' },
-  '/dashboard/dynamic-roles': { permission: 'roles.view' },
-  '/dashboard/hr': { permission: 'users.read' },
-  '/dashboard/performance': { permission: 'performance.cycle.read' },
-  '/dashboard/learning': { permission: 'learning.course.read' },
-  '/dashboard/succession': { permission: 'succession.plan.read' },
-  '/dashboard/policies': { permission: 'policy.read' },
-  '/dashboard/assets': { permission: 'asset.read' },
-  '/dashboard/enterprise': { permission: 'integration.manage' },
-  '/dashboard/operations': { permission: 'platform.settings.manage' },
-  '/dashboard/ai-studio': { permission: 'ai.studio.use' },
-  '/dashboard/knowledge-center': { permission: 'knowledge.read' },
-  '/dashboard/ai-copilot-hub': { permission: 'ai.copilot.use' },
-  '/dashboard/ai-analytics': { permission: 'ai.analytics.read' },
-  '/dashboard/prompt-manager': { permission: 'ai.prompt.manage' },
-  '/dashboard/model-manager': { permission: 'ai.model.manage' },
-  '/dashboard/ai-usage': { permission: 'ai.analytics.read' },
-  '/dashboard/ai-governance': { permission: 'ai.governance.manage' },
-  '/dashboard/open-positions': { permission: 'recruitment.read' },
-  '/dashboard/candidate-pipeline': { permission: 'recruitment.read' },
-  '/dashboard/org-settings': { permission: 'org.settings.view' },
-};
-
-export const routeAccessForPath = (path) => routePolicies[path] || null;
-export const permissionForPath = (path) => routeAccessForPath(path)?.permission || null;
+/**
+ * Re-exported from the unified access layer.
+ *
+ * This module previously held its own policy table that drifted from both the
+ * nav array and the `requiredPermission` props in App.jsx. It now re-exports
+ * the single table in `accessControl.js` so the two cannot disagree again.
+ */
+export {
+  routePolicies,
+  routeAccessForPath,
+  permissionForPath,
+  featureForPath,
+  resolvePolicy,
+  canAccess,
+  createEvaluator,
+  accessReasons,
+  MODULE_FEATURES,
+} from './accessControl';

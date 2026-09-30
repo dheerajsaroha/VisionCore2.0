@@ -52,8 +52,12 @@ class CRUDAttendance(CRUDBase[AttendanceLog, CheckInRequest, CheckInUpdate]):
     ) -> AttendanceLog:
         """
         Record check-out for the user's active check-in record.
+
+        The recorded time is always the server's clock. A client-supplied
+        timestamp would let an employee claim a check-out hours after the fact
+        (or before the shift started), which payroll then treats as worked time.
         """
-        now = timestamp or datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
         stmt = (
             db.query(AttendanceLog)
             .filter(
@@ -66,6 +70,11 @@ class CRUDAttendance(CRUDBase[AttendanceLog, CheckInRequest, CheckInUpdate]):
         active_log = stmt.first()
         if not active_log:
             raise ValueError("No active check-in found for check-out.")
+
+        if now < active_log.check_in:
+            # A clock skew this large would otherwise produce negative worked
+            # time, which payroll would happily carry into the payslip.
+            raise ValueError("Check-out cannot precede check-in.")
 
         active_log.check_out = now
         db.commit()
@@ -154,7 +163,7 @@ class CRUDAttendance(CRUDBase[AttendanceLog, CheckInRequest, CheckInUpdate]):
         row = db.execute(stmt).first()
 
         if not row or row.distance is None:
-            return True, None
+            return False, None
 
         is_match = row.distance <= threshold
         return is_match, float(row.distance)

@@ -3,6 +3,7 @@ import {
   CheckCircle2, Clock, AlertTriangle, Users, RefreshCw,
   Calendar, Wifi, Smartphone, Monitor, MapPin, Plus, X,
   TrendingUp, TrendingDown, Activity
+  , FileEdit
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -15,6 +16,8 @@ import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
+import { usePermission } from '../hooks/usePermission';
+import { useToast } from '../components/ui/Toast';
 
 const CHANNEL_ICONS = {
   FACE: <Users className="h-3 w-3" />,
@@ -165,22 +168,34 @@ export default function AttendanceDashboardPage() {
   const [markOpen, setMarkOpen] = useState(false);
   const [days, setDays] = useState(30);
   const [statusFilter, setStatusFilter] = useState('');
+  const [pendingCorrections, setPendingCorrections] = useState([]);
+  const [reviewRequest, setReviewRequest] = useState(null);
+  const [reviewNote, setReviewNote] = useState('');
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+  const { hasPermission } = usePermission();
+  const toast = useToast();
+  const canReviewCorrections = hasPermission('attendance_correction:approve');
 
   const refresh = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [analyticsRes, sessionsRes] = await Promise.all([
+      const [analyticsRes, sessionsRes, correctionsRes] = await Promise.all([
         workforceService.analytics.dashboard({ days }),
         workforceService.attendance.sessions({ status: statusFilter || undefined, limit: 50 }),
+        canReviewCorrections
+          ? workforceService.corrections.listPending()
+          : Promise.resolve({ data: { requests: [] } }),
       ]);
       setAnalytics(analyticsRes.data);
       setSessions(Array.isArray(sessionsRes.data) ? sessionsRes.data : []);
+      setPendingCorrections(correctionsRes.data?.requests || []);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to load attendance data');
     } finally {
       setLoading(false);
     }
-  }, [days, statusFilter]);
+  }, [days, statusFilter, canReviewCorrections]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -197,6 +212,32 @@ export default function AttendanceDashboardPage() {
   ].filter(d => d.value > 0);
 
   const trends = (a.trends || []).slice(-14);
+
+  const reviewCorrection = async (action) => {
+    if (!reviewRequest) return;
+    if (action === 'reject' && !reviewNote.trim()) {
+      setReviewError('A rejection reason is required.');
+      return;
+    }
+    setReviewLoading(true);
+    setReviewError('');
+    try {
+      if (action === 'approve') {
+        await workforceService.corrections.approve(reviewRequest.id, reviewNote.trim());
+      } else {
+        await workforceService.corrections.reject(reviewRequest.id, reviewNote.trim());
+      }
+      toast({ message: `Correction request ${action}d.`, type: 'success' });
+      setReviewRequest(null);
+      setReviewNote('');
+      await refresh();
+    } catch (err) {
+      const detail = err?.response?.data?.detail;
+      setReviewError(typeof detail === 'string' ? detail : detail?.message || 'Unable to review correction request.');
+    } finally {
+      setReviewLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -325,6 +366,74 @@ export default function AttendanceDashboardPage() {
       </div>
 
       {/* Session Table */}
+      {canReviewCorrections && (
+        <Card className="overflow-hidden p-0">
+          <CardHeader className="border-b border-gray-800 px-6 py-5">
+            <div className="flex items-center justify-between">
+              <CardTitle>Pending Correction Requests</CardTitle>
+              <Badge variant={pendingCorrections.length ? 'warning' : 'default'}>
+                {pendingCorrections.length} pending
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="overflow-x-auto p-0">
+            {pendingCorrections.length === 0 ? (
+              <div className="p-8 text-center text-sm text-gray-500">No pending correction requests.</div>
+            ) : (
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-gray-950/60 text-xs uppercase tracking-wider text-gray-500">
+                  <tr>
+                    <th className="px-6 py-3 font-medium">Employee</th>
+                    <th className="px-6 py-3 font-medium">Attendance log</th>
+                    <th className="px-6 py-3 font-medium">Requested values</th>
+                    <th className="px-6 py-3 font-medium">Submitted</th>
+                    <th className="px-6 py-3 font-medium">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800">
+                  {pendingCorrections.map((request) => (
+                    <tr key={request.id}>
+                      <td className="px-6 py-4 text-white">Employee #{request.employee_user_id}</td>
+                      <td className="px-6 py-4 text-gray-300">{request.attendance_log_id ?? 'Missing log'}</td>
+                      <td className="px-6 py-4 text-xs text-gray-400">
+                        {request.request_payload?.requested_clock_in || '—'}
+                        {' → '}
+                        {request.request_payload?.requested_clock_out || '—'}
+                        <p className="mt-1 text-gray-500">{request.request_payload?.reason || 'No reason supplied'}</p>
+                      </td>
+                      <td className="px-6 py-4 text-xs text-gray-400">{request.submitted_at ? new Date(request.submitted_at).toLocaleString() : '—'}</td>
+                      <td className="px-6 py-4">
+                        <Button type="button" variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => { setReviewRequest(request); setReviewNote(''); setReviewError(''); }}>
+                          <FileEdit className="h-3.5 w-3.5" /> Review
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <Modal isOpen={!!reviewRequest} onClose={() => setReviewRequest(null)} title="Review Attendance Correction">
+        <div className="space-y-4">
+          {reviewError && <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{reviewError}</div>}
+          <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 text-sm text-gray-300">
+            <p>Employee #{reviewRequest?.employee_user_id} · Log #{reviewRequest?.attendance_log_id ?? 'missing'}</p>
+            <p className="mt-2 text-xs text-gray-400">Current attendance values are validated and applied by the server.</p>
+            <p className="mt-2 text-xs text-gray-400">Requested: {reviewRequest?.request_payload?.requested_clock_in || '—'} → {reviewRequest?.request_payload?.requested_clock_out || '—'}</p>
+            <p className="mt-2 text-xs text-gray-400">Reason: {reviewRequest?.request_payload?.reason || '—'}</p>
+          </div>
+          <Input label="Decision notes" value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} placeholder="Optional for approval; required for rejection" />
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="secondary" onClick={() => setReviewRequest(null)}>Cancel</Button>
+            <Button type="button" variant="danger" isLoading={reviewLoading} onClick={() => reviewCorrection('reject')}>Reject</Button>
+            <Button type="button" isLoading={reviewLoading} onClick={() => reviewCorrection('approve')}>Approve</Button>
+          </div>
+        </div>
+      </Modal>
+
       <Card className="overflow-hidden p-0">
         <CardHeader className="border-b border-gray-800 px-6 py-5">
           <div className="flex items-center justify-between">

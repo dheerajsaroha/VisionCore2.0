@@ -1,9 +1,63 @@
+import functools
 import logging
 import io
 import numpy as np
 from typing import Tuple
 
 logger = logging.getLogger(__name__)
+
+
+class LivenessEngineUnavailableError(RuntimeError):
+    """Raised when the anti-spoofing backend itself cannot run.
+
+    This is an infrastructure/dependency fault, not a spoof verdict. It must
+    never be reported to the caller as "LIVENESS_FAILED", otherwise a missing
+    package looks identical to a presentation-attack rejection.
+    """
+
+
+@functools.lru_cache(maxsize=1)
+def _load_deepface():
+    """Import DeepFace once and cache the result (success or failure)."""
+    try:
+        from deepface import DeepFace  # type: ignore[import-untyped]
+    except Exception as exc:
+        raise LivenessEngineUnavailableError(
+            "Anti-spoofing backend is not installed or failed to import. "
+            "Install the biometric extras (deepface/tensorflow) or set "
+            "LIVENESS_STRICT_MODE=False for local development. "
+            f"Import error: {exc}"
+        ) from exc
+    return DeepFace
+
+
+_ENGINE_FAULT_MARKERS = (
+    "no module named",
+    "cannot import name",
+    "modulenotfounderror",
+    "importerror",
+    "failed to download",
+    "downloaderror",
+    "connectionerror",
+    "max retries exceeded",
+    "urlopen error",
+    "urlerror",
+    "temporary failure in name resolution",
+    "unauthorized",
+    "confirm that opencv is installed",
+)
+
+
+def _is_engine_fault(exc: BaseException) -> bool:
+    """True when the anti-spoofing backend could not run at all.
+
+    Distinguishes a broken/uninstalled model stack or an unreachable weight
+    download from a genuine "this is a spoof" verdict.
+    """
+    if isinstance(exc, (ImportError, OSError, ConnectionError)):
+        return True
+    text = f"{type(exc).__name__}: {exc}".lower()
+    return any(marker in text for marker in _ENGINE_FAULT_MARKERS)
 
 
 class LivenessService:
@@ -13,10 +67,14 @@ class LivenessService:
 
         Uses DeepFace's MiniFASNet anti-spoofing model.
         Returns (is_live, confidence_score).
+
+        Raises LivenessEngineUnavailableError when the anti-spoofing backend
+        cannot run; any genuine detection/decoding failure returns (False, 0.0).
         """
         try:
             from PIL import Image
-            from deepface import DeepFace
+
+            DeepFace = _load_deepface()
 
             if not image_bytes:
                 logger.warning("Liveness detect_liveness: empty image_bytes")
@@ -98,11 +156,18 @@ class LivenessService:
             logger.info("Liveness score=%s is_live=%s", confidence, is_live)
             return bool(is_live), float(confidence)
 
+        except LivenessEngineUnavailableError:
+            raise
         except ValueError as e:
             logger.warning("Liveness detection: No face detected. %s", e)
             return False, 0.0
         except Exception as e:
-            logger.error("Liveness detection error: %s", e)
+            if _is_engine_fault(e):
+                logger.error("Liveness engine fault: %s", e)
+                raise LivenessEngineUnavailableError(
+                    "Anti-spoofing backend failed to run: %s" % e
+                ) from e
+            logger.exception("Liveness detection error: %s", e)
             return False, 0.0
 
 

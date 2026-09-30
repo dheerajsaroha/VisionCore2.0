@@ -267,6 +267,66 @@ def test_approve_request_success(service, mock_repo, mock_db):
         audit_service_instance.log_update.assert_called_once()
 
 
+def test_approve_request_applies_requested_times_to_attendance_log(service, mock_repo, mock_db):
+    org_id = uuid.uuid4()
+    approver_id = 99
+    employee_id = 42
+    approver = User(id=approver_id, org_id=org_id, is_deleted=0)
+    employee = User(id=employee_id, org_id=org_id, is_deleted=0)
+    request = AttendanceRequest(
+        id=500,
+        org_id=org_id,
+        employee_user_id=employee_id,
+        attendance_log_id=101,
+        request_payload={
+            "requested_clock_in": "2026-09-26T09:15:00+00:00",
+            "requested_clock_out": "2026-09-26T17:30:00+00:00",
+            "reason": "Forgot to clock in",
+        },
+        status="pending",
+    )
+    attendance_log = AttendanceLog(
+        id=101,
+        user_id=employee_id,
+        is_deleted=0,
+        check_in=datetime(2026, 9, 26, 9, 0, tzinfo=timezone.utc),
+        status="late",
+    )
+    attendance_log.user = employee
+
+    def mock_query_fn(model):
+        q = MagicMock()
+        q.filter.return_value = q
+        if model == User:
+            q.first.return_value = approver
+        elif model == AttendanceRequest:
+            q.first.return_value = request
+        elif model == AttendanceLog:
+            q.first.return_value = attendance_log
+        return q
+
+    mock_db.query.side_effect = mock_query_fn
+    mock_repo.approve_request.return_value = AttendanceApproval(
+        id=77,
+        attendance_request_id=500,
+        org_id=org_id,
+        approver_user_id=approver_id,
+        approval_status="approved",
+    )
+
+    with patch("app.services.attendance_correction_service.AuditService"):
+        service.approve_request(
+            mock_db,
+            org_id=org_id,
+            request_id=500,
+            approver_user_id=approver_id,
+        )
+
+    assert attendance_log.check_in == datetime(2026, 9, 26, 9, 15, tzinfo=timezone.utc)
+    assert attendance_log.check_out == datetime(2026, 9, 26, 17, 30, tzinfo=timezone.utc)
+    assert attendance_log.status == "manual_override"
+
+
 def test_approve_request_not_found(service, mock_db):
     org_id = uuid.uuid4()
     approver = User(id=99, org_id=org_id, is_deleted=0)

@@ -42,6 +42,14 @@ export const useSubscriptionStore = create(
       // UI States
       isLoading: false,
       isCacheHydrated: false,
+      // Two separate flags, because "have we finished asking?" and "did the
+      // answer come back?" are different questions and need different handling:
+      //   featuresResolved  - the lookup has settled, one way or the other.
+      //                       Governs whether gated UI should wait.
+      //   featuresAvailable - the plan's feature list is authoritative.
+      //                       Governs whether the set can be trusted to deny.
+      featuresResolved: false,
+      featuresAvailable: false,
       error: null,
 
       // ── Fetch Subscription ──────────────────────────────────────────────
@@ -72,12 +80,20 @@ export const useSubscriptionStore = create(
             usageStats: data.usage_stats || null,
             isLoading: false,
             isCacheHydrated: true,
+            featuresResolved: true,
+            featuresAvailable: true,
           });
           return data;
         } catch (error) {
           set({
             isLoading: false,
             isCacheHydrated: true,
+            // Settled, but the answer is unknown — not "the plan lacks these".
+            // Gated UI must stop waiting (otherwise it would block forever), and
+            // must not trust the empty set to deny. The API stays authoritative,
+            // so failing open only means the backend gets the final say.
+            featuresResolved: true,
+            featuresAvailable: false,
             error: error.response?.data?.detail || error.message || 'Failed to load subscription',
           });
           return null;
@@ -92,15 +108,23 @@ export const useSubscriptionStore = create(
        */
       hasFeature: (featureCode) => {
         if (!featureCode) return true;
-        const { enabledFeatureSet, featureFlags } = get();
+        const { enabledFeatureSet, featureFlags, featuresAvailable } = get();
 
-        // Check feature flags first (org-level overrides)
+        // Check feature flags first (org-level overrides). An override is
+        // authoritative even when the plan lookup failed.
         if (featureFlags[featureCode] !== undefined) {
           return featureFlags[featureCode];
         }
 
-        // Check subscription plan features
-        return enabledFeatureSet.has(featureCode);
+        if (featuresAvailable) {
+          return enabledFeatureSet.has(featureCode);
+        }
+
+        // Still loading, or the lookup failed. Do not assert the plan lacks the
+        // feature: that produced a false "Not included in your plan" on the
+        // attendance page, which was both wrong and locked the user out. Allow
+        // the item to render and let the API refuse it authoritatively.
+        return true;
       },
 
       /**

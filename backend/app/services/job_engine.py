@@ -188,26 +188,83 @@ class JobEngine:
                 job.completed_at = datetime.now(timezone.utc).isoformat()
 
     def _register_default_handlers(self) -> None:
-        """Register built-in system handlers."""
+        """Register built-in system handlers.
+
+        Every handler here previously returned invented numbers — payroll
+        reported `processed_records: 42`, attendance sync `synced_count: 128`,
+        cleanup `purged_mb: 256` — and the email handler reported `sent: True`
+        without sending anything. A scheduled job that reports success it did
+        not achieve is worse than one that fails, because the failure is silent
+        and the numbers are indistinguishable from real ones downstream.
+
+        Each now does the work it can actually do, and reports plainly what it
+        did not. Wiring the real payroll calculation and biometric ingestion
+        belongs with those modules; until then these say so rather than
+        inventing a result.
+        """
         def email_handler(job: JobRecord) -> Dict[str, Any]:
             recipient = job.payload.get("recipient")
             subject = job.payload.get("subject")
-            logger.info(f"[JobHandler:Email] Sending email '{subject}' to {recipient}")
-            return {"sent": True, "recipient": recipient}
+            message = job.payload.get("message", "")
+            if not recipient:
+                return {"sent": False, "reason": "no recipient supplied"}
+
+            # Deliver through the notification platform, which is the only
+            # outbound path this codebase has.
+            try:
+                from app.services.notification_service import notification_service
+                notification_service.send(
+                    user_id=job.payload.get("user_id"),
+                    organization_id=job.organization_id or "",
+                    title=subject or "Notification",
+                    message=message,
+                    source_module="jobs",
+                    source_event="email_delivery",
+                    source_id=str(job.id),
+                )
+                return {"sent": True, "recipient": recipient}
+            except Exception as exc:
+                logger.warning("email_delivery could not send to %s: %s", recipient, exc)
+                return {"sent": False, "recipient": recipient, "reason": str(exc)}
 
         def payroll_handler(job: JobRecord) -> Dict[str, Any]:
             period = job.payload.get("period")
-            logger.info(f"[JobHandler:Payroll] Auto-calculating payroll for period {period}")
-            return {"processed_records": 42, "period": period}
+            logger.warning(
+                "payroll_auto_calc ran for period %s but performs no calculation; "
+                "payroll generation is driven by the payroll service, not this job.",
+                period,
+            )
+            return {
+                "processed_records": 0,
+                "period": period,
+                "implemented": False,
+                "reason": "no payroll calculation is performed by this handler",
+            }
 
         def attendance_sync_handler(job: JobRecord) -> Dict[str, Any]:
             sync_date = job.payload.get("date")
-            logger.info(f"[JobHandler:AttendanceSync] Syncing biometric logs for {sync_date}")
-            return {"synced_count": 128, "date": sync_date}
+            logger.warning(
+                "attendance_sync ran for %s but ingests no biometric logs; "
+                "device sync is performed by the attendance sync endpoint.",
+                sync_date,
+            )
+            return {
+                "synced_count": 0,
+                "date": sync_date,
+                "implemented": False,
+                "reason": "no biometric ingestion is performed by this handler",
+            }
 
         def cleanup_handler(job: JobRecord) -> Dict[str, Any]:
-            logger.info(f"[JobHandler:Cleanup] Running platform garbage collection & temporary file purge")
-            return {"purged_mb": 256}
+            logger.warning(
+                "system_cleanup ran but purges nothing; no retention or temporary "
+                "file policy is implemented for this handler."
+            )
+            return {
+                "purged_mb": 0,
+                "implemented": False,
+                "reason": "no cleanup is performed by this handler",
+            }
 
         self.register_handler("email_delivery", email_handler)
         self.register_handler("payroll_auto_calc", payroll_handler)

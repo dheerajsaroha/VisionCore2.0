@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { usePermission } from '../hooks/usePermission';
+import { canAccess, resolvePolicy } from '../lib/accessControl';
 import api from '../services/apiClient';
 import {
   Users, Calendar, DollarSign, Briefcase, Clock, TrendingUp,
@@ -150,7 +152,7 @@ const QUICK_LINKS = [
   { label: 'Leave Requests', icon: Calendar, href: '/dashboard/leave', desc: 'Manage approvals & balances', color: 'from-indigo-600 to-violet-700' },
   { label: 'Attendance Logs', icon: Activity, href: '/dashboard/attendance', desc: 'Corrections & regularization', color: 'from-emerald-600 to-teal-700' },
   { label: 'Payroll Center', icon: DollarSign, href: '/dashboard/payroll', desc: 'Slips, advances & grades', color: 'from-cyan-600 to-sky-700' },
-  { label: 'Recruitment ATS', icon: Briefcase, href: '/dashboard/recruitment', desc: 'Jobs, candidates & interviews', color: 'from-purple-600 to-fuchsia-700' },
+  { label: 'Recruitment ATS', icon: Briefcase, href: '/dashboard/open-positions', desc: 'Jobs, candidates & interviews', color: 'from-purple-600 to-fuchsia-700' },
   { label: 'Performance System', icon: Trophy, href: '/dashboard/performance', desc: 'OKRs, KPIs, 360° reviews & PIPs', color: 'from-fuchsia-600 to-pink-700' },
   { label: 'L&D & Training Suite', icon: Target, href: '/dashboard/learning', desc: 'Courses, quizzes, skills & certs', color: 'from-teal-600 to-emerald-700' },
   { label: 'Succession & Career', icon: Shield, href: '/dashboard/succession', desc: '9-box matrix, IDPs & bench strength', color: 'from-rose-600 to-pink-700' },
@@ -168,6 +170,13 @@ function formatMetricValue(key, value, card) {
 }
 
 export default function HRDashboardPage() {
+  const { hasPermission, hasFeature } = usePermission();
+
+  // One gate, shared by the metric cards and the quick links below, so both
+  // lists agree with the sidebar and with the route guards.
+  const canReach = (href) =>
+    canAccess(resolvePolicy(href), { hasPermission, hasFeature, isAuthenticated: true }).allowed;
+
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -295,7 +304,12 @@ export default function HRDashboardPage() {
           animate="visible"
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5"
         >
-          {METRIC_CARDS.map((card) => {
+          {/* Metric cards and quick links link into modules the caller may not
+              hold a permission for, or that their plan does not include. Both
+              were rendered unconditionally, so the page advertised Payroll,
+              Assets and ATS to users who were refused on click. Filter both
+              lists through the same gate the sidebar uses. */}
+          {METRIC_CARDS.filter((card) => canReach(card.href)).map((card) => {
             const Icon = card.icon;
             const raw = metrics?.[card.key];
             const value = formatMetricValue(card.key, raw, card);
@@ -357,7 +371,7 @@ export default function HRDashboardPage() {
           </div>
           <div>
             <h2 className="text-lg font-bold text-white">HR Modules</h2>
-            <p className="text-xs text-slate-500">Sprint 3 {'\u2014'} All modules active</p>
+            <p className="text-xs text-slate-500">Sprint 3 {'\u2014'} Modules you can access</p>
           </div>
         </div>
         <motion.div
@@ -366,7 +380,7 @@ export default function HRDashboardPage() {
           animate="visible"
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
         >
-          {QUICK_LINKS.map((link) => {
+          {QUICK_LINKS.filter((link) => canReach(link.href)).map((link) => {
             const Icon = link.icon;
             return (
               <motion.div

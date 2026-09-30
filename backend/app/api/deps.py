@@ -298,6 +298,27 @@ def has_any_role(user: User, *roles: str) -> bool:
     # return current_user
 
 
+async def get_current_superadmin(
+    current_user: User = Depends(get_current_active_user),
+) -> User:
+    """Require a platform SuperAdmin.
+
+    This is deliberately stricter than `require_admin`, which also admits
+    OrgAdmin. The endpoints guarded by this dependency are cross-tenant: they
+    list, provision, suspend and reconfigure *every* organization. An OrgAdmin
+    passing them would be a privilege escalation from one tenant to all of them.
+
+    Referenced by `tenant_admin.py`, which could not import until this existed
+    and so was silently never mounted.
+    """
+    if not has_any_role(current_user, "SuperAdmin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="SuperAdmin privileges required.",
+        )
+    return current_user
+
+
 async def require_admin(
     current_user: User = Depends(get_current_active_user),
 ) -> User:
@@ -399,11 +420,6 @@ def require_permission(*permission_names: str):
         except Exception:
             pass
 
-        # Fallback check if user.role.permissions list attribute exists (e.g. in test fixtures or legacy JSON roles)
-        if current_user.role and hasattr(current_user.role, "permissions") and isinstance(current_user.role.permissions, (list, set, tuple)):
-            if any(p in current_user.role.permissions for p in perm_list):
-                return current_user
-
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Missing required permission: {', '.join(permission_names)}",
@@ -431,9 +447,6 @@ def has_permission(user: User, permission: str, db: Session) -> bool:
             return True
     except Exception:
         pass
-    if user.role and hasattr(user.role, "permissions") and isinstance(user.role.permissions, (list, set, tuple)):
-        if permission in user.role.permissions:
-            return True
     return False
 
 
@@ -634,16 +647,27 @@ def require_trial():
     return _check
 
 
-def require_limit(limit_type: str):
+def _enforcement_enabled() -> bool:
+    """Whether plan features and licensing limits gate business routes."""
+    from app.core.config import settings
+
+    return bool(getattr(settings, "ENFORCE_SUBSCRIPTION_LIMITS", True))
+
+
+def require_limit(limit_type: str, *, increment_by: int = 0):
     """
     FastAPI dependency that checks the current user's organization has not
     exceeded a specific licensing limit.
+
+    ``increment_by`` projects the usage that will exist *after* the request
+    completes, so a create route at exactly the hard limit is rejected rather
+    than being allowed to overshoot by one.
 
     Usage::
 
         @router.post("/employees")
         async def create_employee(
-            _limit: None = Depends(require_limit("employees")),
+            _limit: None = Depends(require_limit("employees", increment_by=1)),
             current_user: User = Depends(get_current_active_user),
         ):
             ...
@@ -652,6 +676,9 @@ def require_limit(limit_type: str):
         current_user: User = Depends(get_current_active_user),
         db: Session = Depends(get_db),
     ) -> None:
+        if not _enforcement_enabled():
+            return
+
         from app.services.subscription_service import subscription_service
         from app.db.models.all_models import User
 
@@ -665,7 +692,7 @@ def require_limit(limit_type: str):
             current_usage = 0
 
         result = subscription_service.check_licensing_limit(
-            db, current_user.org_id, limit_type, current_usage
+            db, current_user.org_id, limit_type, current_usage + increment_by
         )
         if not result["allowed"]:
             raise HTTPException(
@@ -693,16 +720,61 @@ def require_feature(feature_code: str):
         current_user: User = Depends(get_current_active_user),
         db: Session = Depends(get_db),
     ) -> None:
+        if not _enforcement_enabled():
+            return
+
         from app.services.subscription_service import subscription_service
 
         result = subscription_service.check_feature_access(
             db, current_user.org_id, feature_code
         )
         if not result["allowed"]:
+            plan_name = result.get("plan_name")
+            reason = result.get("reason") or (
+                f"Feature '{feature_code}' is not available on your current plan."
+            )
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail=result.get("reason", f"Feature '{feature_code}' is not available on your current plan."),
+                detail=reason,
+                headers={
+                    "X-Subscription-Feature": feature_code,
+                    "X-Subscription-Plan": plan_name or "none",
+                },
             )
+    return _check
+
+
+def require_features(*feature_codes: str):
+    """
+    FastAPI dependency that requires every one of the given features.
+
+    Equivalent to stacking several ``require_feature`` dependencies, but issues
+    a single check against the org's resolved feature set instead of one query
+    per code.
+    """
+    async def _check(
+        current_user: User = Depends(get_current_active_user),
+        db: Session = Depends(get_db),
+    ) -> None:
+        if not _enforcement_enabled():
+            return
+
+        from app.services.subscription_service import subscription_service
+
+        for code in feature_codes:
+            result = subscription_service.check_feature_access(
+                db, current_user.org_id, code
+            )
+            if not result["allowed"]:
+                raise HTTPException(
+                    status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                    detail=result.get("reason")
+                    or f"Feature '{code}' is not available on your current plan.",
+                    headers={
+                        "X-Subscription-Feature": code,
+                        "X-Subscription-Plan": result.get("plan_name") or "none",
+                    },
+                )
     return _check
 
 

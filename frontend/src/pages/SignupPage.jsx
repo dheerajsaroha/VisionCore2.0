@@ -1,11 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShieldCheck, ArrowRight, ArrowLeft } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { ShieldCheck, ArrowRight, ArrowLeft, Building2, CheckCircle2, AlertCircle } from "lucide-react";
+import { motion } from "framer-motion";
 import { authService } from "../services/authService";
+import { Button, Input, Card, CardContent } from "../components/ui";
+import { useAuthStore } from "../store/authStore";
 
 export default function SignupPage() {
   const navigate = useNavigate();
+  const { isAuthenticated, isHydrated } = useAuthStore();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -23,6 +26,15 @@ export default function SignupPage() {
     setFormData((prev) => ({ ...prev, [field]: value }));
     setError("");
   };
+
+  // Same guard as LoginPage: a signed-in visitor landing here (e.g. via the
+  // browser Back button) must be sent to their workspace, not shown a
+  // registration form for a tenant they already belong to.
+  useEffect(() => {
+    if (isHydrated && isAuthenticated) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [isHydrated, isAuthenticated, navigate]);
 
   const passwordStrength = (pwd) => {
     let score = 0;
@@ -56,238 +68,213 @@ export default function SignupPage() {
         city: formData.city || undefined,
       };
       await authService.register(payload);
-      navigate("/login");
+      navigate("/login", { state: { registered: true } });
     } catch (err) {
-      setError(err.response?.data?.detail || "Registration failed. Please try again.");
+      setError(err.response?.data?.detail || "Registration failed. Please verify input.");
     } finally {
       setLoading(false);
     }
   };
 
-  const canProceedStep1 =
-    formData.name && formData.email && formData.password && strength >= 2;
+  const canProceedStep1 = formData.name && formData.email && formData.password && strength >= 2;
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4 py-12 font-sans">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
-      >
-        {/* Card */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-xl">
-          {/* Logo */}
-          <div className="flex items-center justify-center gap-2 mb-8">
-            <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+    <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center px-4 py-12 font-sans relative overflow-hidden">
+      {/* Background Ambient Light */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[450px] bg-purple-600/15 rounded-full blur-[130px] pointer-events-none" />
+
+      <div className="w-full max-w-md relative z-10">
+        {/* Logo */}
+        <div className="flex items-center justify-center gap-3 mb-8">
+          <Link to="/" className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/30">
               <ShieldCheck className="h-6 w-6 text-white" />
             </div>
-            <span className="text-2xl font-bold tracking-tight text-white">
+            <span className="text-2xl font-extrabold tracking-tight text-white">
               VisionCore
             </span>
-          </div>
+          </Link>
+        </div>
 
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold text-white mb-2">
-              Create an account
-            </h1>
-            <p className="text-sm text-gray-400">
-              Step {step} of 2 —{" "}
-              {step === 1 ? "Your details" : "Workspace setup"}
-            </p>
+        {/* Card */}
+        <Card className="bg-gray-900/90 border-gray-800 shadow-2xl backdrop-blur-xl">
+          <CardContent className="p-8">
+            <div className="mb-6">
+              <div className="flex items-center justify-between">
+                <h1 className="text-2xl font-extrabold text-white">
+                  Create Workspace
+                </h1>
+                <Link to="/onboarding" className="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1">
+                  <Building2 className="h-3.5 w-3.5" />
+                  <span>Onboarding Wizard</span>
+                </Link>
+              </div>
+              <p className="text-xs text-gray-400 mt-1">
+                Step {step} of 2 — {step === 1 ? "Administrator credentials" : "Organization workspace"}
+              </p>
 
-            {/* Progress */}
-            <div className="w-full bg-gray-800 rounded-full h-1.5 mt-4 overflow-hidden">
-              <motion.div
-                className="bg-indigo-500 h-1.5 rounded-full"
-                initial={{ width: "0%" }}
-                animate={{ width: step === 1 ? "50%" : "100%" }}
-                transition={{ duration: 0.3 }}
-              />
+              {/* Progress Bar */}
+              <div className="w-full bg-gray-800 rounded-full h-1.5 mt-3 overflow-hidden">
+                <div
+                  className="bg-indigo-500 h-1.5 rounded-full transition-all duration-300"
+                  style={{ width: step === 1 ? "50%" : "100%" }}
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Error */}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={step}
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.3 }}
-            >
-              {error && (
-                <div className="mb-6 rounded-lg bg-red-500/10 border border-red-500/20 p-4 text-sm text-red-400 font-medium flex items-start">
-                  <span className="mr-2">⚠️</span> {error}
-                </div>
-              )}
+            {error && (
+              <div className="mb-6 rounded-xl bg-red-500/10 border border-red-500/20 p-4 text-xs text-red-400 font-medium flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
 
-              <form onSubmit={handleSignup} className="space-y-5">
-                {step === 1 ? (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Full Name
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.name}
-                        onChange={(e) => updateField("name", e.target.value)}
-                        placeholder="John Doe"
-                        required
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
-                      />
-                    </div>
+            <form onSubmit={handleSignup} className="space-y-4">
+              {step === 1 ? (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-300 mb-2">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => updateField("name", e.target.value)}
+                      placeholder="Jane Doe"
+                      required
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Email Address
-                      </label>
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => updateField("email", e.target.value)}
-                        placeholder="john@company.com"
-                        required
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-300 mb-2">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => updateField("email", e.target.value)}
+                      placeholder="jane@company.com"
+                      required
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Password
-                      </label>
-                      <input
-                        type="password"
-                        value={formData.password}
-                        onChange={(e) =>
-                          updateField("password", e.target.value)
-                        }
-                        placeholder="Min. 8 characters"
-                        required
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
-                      />
-                      {formData.password && (
-                        <div className="mt-3">
-                          <div className="flex gap-1.5 h-1.5">
-                            {[0, 1, 2, 3].map((i) => (
-                              <div
-                                key={i}
-                                className={`flex-1 rounded-full transition-colors duration-300 ${
-                                  i < strength
-                                    ? strengthColors[strength - 1]
-                                    : "bg-gray-700"
-                                }`}
-                              />
-                            ))}
-                          </div>
-                          <p className="mt-1.5 text-xs text-gray-500 font-medium">
-                            {strengthLabels[strength - 1] || "Too short"}
-                          </p>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-300 mb-2">
+                      Password
+                    </label>
+                    <input
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => updateField("password", e.target.value)}
+                      placeholder="Min. 8 characters"
+                      required
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+                    />
+                    {formData.password && (
+                      <div className="mt-2">
+                        <div className="flex gap-1.5 h-1.5">
+                          {[0, 1, 2, 3].map((i) => (
+                            <div
+                              key={i}
+                              className={`flex-1 rounded-full transition-colors ${
+                                i < strength ? strengthColors[strength - 1] : "bg-gray-800"
+                              }`}
+                            />
+                          ))}
                         </div>
-                      )}
-                    </div>
+                        <p className="mt-1 text-[11px] text-gray-400">
+                          Strength: {strengthLabels[strength - 1] || "Too weak"}
+                        </p>
+                      </div>
+                    )}
+                  </div>
 
-                    <button
-                      type="submit"
-                      disabled={!canProceedStep1}
-                      className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl px-6 py-3 text-white font-semibold transition-all duration-200 flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20"
+                  <Button
+                    type="submit"
+                    disabled={!canProceedStep1}
+                    variant="primary"
+                    className="w-full py-3.5 rounded-xl font-bold shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 mt-4"
+                  >
+                    <span>Continue Workspace Setup</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-300 mb-2">
+                      Organization Name
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.organization}
+                      onChange={(e) => updateField("organization", e.target.value)}
+                      placeholder="Acme Global Inc"
+                      required
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-300 mb-2">
+                      Department <span className="text-gray-500 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.department}
+                      onChange={(e) => updateField("department", e.target.value)}
+                      placeholder="Engineering / Operations"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-gray-300 mb-2">
+                      City Location <span className="text-gray-500 font-normal">(Optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.city}
+                      onChange={(e) => updateField("city", e.target.value)}
+                      placeholder="San Francisco"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div className="flex gap-3 pt-3">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setStep(1)}
+                      className="flex-1 py-3 rounded-xl font-semibold border border-gray-800"
                     >
-                      Continue
-                      <ArrowRight className="h-5 w-5" />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Workspace / Organization Name
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.organization}
-                        onChange={(e) =>
-                          updateField("organization", e.target.value)
-                        }
-                        placeholder="Acme Corp"
-                        required
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
-                      />
-                    </div>
+                      <ArrowLeft className="h-4 w-4" />
+                      Back
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={loading}
+                      variant="primary"
+                      className="flex-1 py-3 rounded-xl font-bold shadow-lg shadow-indigo-600/30"
+                    >
+                      {loading ? "Creating..." : "Create Account"}
+                    </Button>
+                  </div>
+                </>
+              )}
+            </form>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Department{" "}
-                        <span className="text-gray-500 font-normal">
-                          (Optional)
-                        </span>
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.department}
-                        onChange={(e) =>
-                          updateField("department", e.target.value)
-                        }
-                        placeholder="Engineering"
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        City{" "}
-                        <span className="text-gray-500 font-normal">
-                          (Optional)
-                        </span>
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.city}
-                        onChange={(e) => updateField("city", e.target.value)}
-                        placeholder="San Francisco"
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
-                      />
-                    </div>
-
-                    <div className="flex gap-3 pt-2">
-                      <button
-                        type="button"
-                        onClick={() => setStep(1)}
-                        className="flex-1 py-3 rounded-xl bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white font-semibold transition-all duration-200 flex items-center justify-center gap-2"
-                      >
-                        <ArrowLeft className="h-5 w-5" />
-                        Back
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl px-6 py-3 text-white font-semibold transition-all duration-200 shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2"
-                      >
-                        {loading ? "Creating..." : "Create Account"}
-                      </button>
-                    </div>
-                  </>
-                )}
-              </form>
-            </motion.div>
-          </AnimatePresence>
-
-          {/* Footer */}
-          <div className="mt-8 text-center">
-            <p className="text-sm text-gray-500">
+            <div className="mt-8 text-center pt-6 border-t border-gray-800 text-xs text-gray-400">
               Already have an account?{" "}
-              <Link
-                to="/login"
-                className="font-semibold text-indigo-400 hover:text-indigo-300 transition-colors duration-200"
-              >
+              <Link to="/login" className="font-bold text-indigo-400 hover:text-indigo-300">
                 Sign in
               </Link>
-            </p>
-          </div>
-        </div>
-      </motion.div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
-

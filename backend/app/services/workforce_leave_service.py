@@ -20,6 +20,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.db.models.all_models import (
+    ApprovalRequest,
     HolidayCalendar,
     HolidayEntry,
     LeaveBalance,
@@ -67,9 +68,12 @@ class LeaveService:
         total_days = self._compute_leave_days(db, org_id, start_date, end_date)
         if total_days <= 0:
             raise ValueError("Leave duration spans no working days")
-        if total_days > float(leave_type.max_days_per_request):
+        # NULL means the type places no limit on a single request. Comparing
+        # against it unconditionally raised a TypeError.
+        per_request = leave_type.max_days_per_request
+        if per_request is not None and total_days > float(per_request):
             raise ValueError(
-                f"Request exceeds max single request limit of {leave_type.max_days_per_request} days"
+                f"Request exceeds max single request limit of {per_request} days"
             )
 
         # Verify balance availability
@@ -227,7 +231,35 @@ class LeaveService:
             source_event="LeaveApproved",
             source_id=str(request.id),
         )
+        self._sync_workflow_request(db, request, "approved")
         return request
+
+    def _sync_workflow_request(self, db: Session, request: LeaveRequest, outcome: str) -> None:
+        """Mirror a domain decision onto the linked workflow request.
+
+        Leave can be approved through its own endpoint or through the workflow
+        engine, and the Command Center surfaces both — so the same leave appears
+        twice in the approval queue. With the engine now resolving the domain
+        entity, a leave approved directly would otherwise leave its workflow
+        request `pending` forever: a phantom item no one can clear.
+
+        The status is written directly rather than routed back through
+        `WorkflowEngine.process_action`, which would re-enter this service and
+        recurse.
+        """
+        if not request.workflow_request_id:
+            return
+        wf_req = db.query(ApprovalRequest).filter(
+            ApprovalRequest.id == request.workflow_request_id,
+            ApprovalRequest.organization_id == request.organization_id,
+        ).first()
+        if wf_req is None:
+            return
+        if wf_req.status in ("approved", "rejected", "cancelled"):
+            return
+        wf_req.status = outcome
+        wf_req.completed_at = datetime.now(timezone.utc)
+        db.commit()
 
     def reject_leave(
         self, db: Session, org_id: UUID, request_id: int, approver_user_id: int, note: Optional[str] = None
@@ -266,6 +298,7 @@ class LeaveService:
             },
             actor_id=approver_user_id,
         )
+        self._sync_workflow_request(db, request, "rejected")
         return request
 
     def cancel_leave(self, db: Session, org_id: UUID, request_id: int, cancelled_by_user_id: int) -> LeaveRequest:
@@ -444,8 +477,20 @@ class HolidayService:
         ).first()
         if not entry:
             return False
+        raw = entry.holiday_date
+        iso = raw.isoformat() if hasattr(raw, "isoformat") else str(raw)[:10]
         db.delete(entry)
         db.commit()
+
+        # Also drop it from the in-memory calendar. Deleting the row alone left
+        # the entry cached, so a removed holiday kept excluding working days for
+        # the rest of the process's life.
+        try:
+            from app.services.business_calendar_service import business_calendar_service
+
+            business_calendar_service.remove_holiday(str(org_id), iso)
+        except Exception:
+            logger.warning("Could not evict holiday %s from the calendar cache", iso)
         return True
 
 

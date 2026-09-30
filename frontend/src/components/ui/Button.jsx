@@ -1,17 +1,20 @@
 import React from 'react';
 import { cn } from '../../lib/utils';
 
+// `on-accent` pins true white on saturated backgrounds; the light theme
+// otherwise re-maps literal white foregrounds to dark ink for readability on
+// neutral surfaces.
 const variants = {
   primary:
-    'bg-indigo-600 text-white hover:bg-indigo-700 active:bg-indigo-800 shadow-sm',
+    'bg-indigo-600 text-white on-accent hover:bg-indigo-700 active:bg-indigo-800 shadow-sm',
   secondary:
     'bg-gray-800 text-gray-200 hover:bg-gray-700 active:bg-gray-600 border border-gray-700',
   ghost:
     'bg-transparent text-gray-400 hover:bg-gray-800 active:bg-gray-700',
   outline:
-    'bg-transparent text-indigo-400 border border-indigo-500 hover:bg-indigo-500/10 active:bg-indigo-500/20',
+    'bg-transparent text-indigo-400 border border-indigo-500 hover:bg-indigo-500/10 hover:text-indigo-300 active:bg-indigo-500/20',
   destructive:
-    'bg-red-600 text-white hover:bg-red-700 active:bg-red-800 shadow-sm',
+    'bg-red-600 text-white on-accent hover:bg-red-700 active:bg-red-800 shadow-sm',
   link: 'bg-transparent text-indigo-400 hover:underline hover:text-indigo-300 p-0 h-auto',
 };
 
@@ -72,7 +75,7 @@ export const Button = React.forwardRef(
           </svg>
         )}
         {children}
-</button>
+      </button>
     );
   }
 );

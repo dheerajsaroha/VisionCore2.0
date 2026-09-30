@@ -20,7 +20,7 @@ export const EmptyState = ({
     <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-gray-800">
       <Inbox className="h-6 w-6 text-gray-500" />
     </div>
-    <h3 className="text-base font-semibold text-white">{title}</h3>
+    <h3 className="text-base font-semibold text-gray-100">{title}</h3>
     <p className="mt-1 max-w-xs text-sm text-gray-400">{description}</p>
     {actionText && onAction && (
       <Button variant="primary" size="sm" className="mt-4" onClick={onAction}>

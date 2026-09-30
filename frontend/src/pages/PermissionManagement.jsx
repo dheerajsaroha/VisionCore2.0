@@ -43,8 +43,11 @@ export default function PermissionManagement() {
   const [actionFeedback, setActionFeedback] = useState(null);
 
   // Fetch permissions
+  const [loadError, setLoadError] = useState(null);
+
   const fetchPermissions = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const params = {
         skip: page * PAGE_SIZE,
@@ -58,6 +61,17 @@ export default function PermissionManagement() {
         setPermissions(data.permissions || []);
         setTotal(data.total || 0);
       }
+    } catch (error) {
+      // Surface the failure instead of leaving the table empty, which is
+      // indistinguishable from "no permissions exist" and previously left the
+      // page looking blank when the list request failed.
+      setPermissions([]);
+      setTotal(0);
+      setLoadError(
+        error?.response?.data?.detail ||
+          error?.message ||
+          'Could not load permissions. Please retry.'
+      );
     } finally {
       setLoading(false);
     }
@@ -151,10 +165,10 @@ export default function PermissionManagement() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+          <h1 className="text-3xl font-extrabold text-white tracking-tight">
             Permission Management
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-sm text-slate-400 mt-1">
             {total} permissions across {modules.length} modules
           </p>
         </div>
@@ -198,8 +212,8 @@ export default function PermissionManagement() {
           className={cn(
             'px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2',
             actionFeedback.type === 'success'
-              ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-              : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
+              ? 'bg-emerald-900/20 text-emerald-400 border border-emerald-800'
+              : 'bg-red-900/20 text-red-400 border border-red-800'
           )}
         >
           {actionFeedback.type === 'success' ? (
@@ -228,9 +242,9 @@ export default function PermissionManagement() {
           animate={{ height: 'auto', opacity: 1 }}
           className="overflow-hidden"
         >
-          <Card className="border border-slate-200 dark:border-slate-800">
+          <Card className="border border-slate-800">
             <CardContent className="p-6">
-              <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+              <h3 className="text-lg font-semibold text-white mb-4">
                 Permission Modules
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -243,10 +257,10 @@ export default function PermissionManagement() {
                   moduleStats.map((mod) => (
                     <div
                       key={mod.module}
-                      className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700"
+                      className="p-4 rounded-xl bg-slate-800/50 border border-slate-700"
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-semibold text-slate-900 dark:text-white capitalize">
+                        <span className="text-sm font-semibold text-white capitalize">
                           {mod.module.replace(/_/g, ' ')}
                         </span>
                         <Badge variant={mod.active > 0 ? 'success' : 'default'}>
@@ -283,7 +297,7 @@ export default function PermissionManagement() {
             placeholder="Search permissions by name or description..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all shadow-sm"
+            className="w-full pl-11 pr-4 py-3 rounded-xl border border-slate-800 bg-slate-900 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all shadow-sm"
           />
         </form>
         <select
@@ -292,7 +306,7 @@ export default function PermissionManagement() {
             setModuleFilter(e.target.value);
             setPage(0);
           }}
-          className="px-3 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 outline-none min-w-[140px]"
+          className="px-3 py-3 rounded-xl border border-slate-800 bg-slate-900 text-sm text-slate-300 outline-none min-w-[140px]"
         >
           <option value="">All Modules</option>
           {modules.map((mod) => (
@@ -307,7 +321,7 @@ export default function PermissionManagement() {
             setActiveFilter(e.target.value);
             setPage(0);
           }}
-          className="px-3 py-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm text-slate-700 dark:text-slate-300 outline-none min-w-[140px]"
+          className="px-3 py-3 rounded-xl border border-slate-800 bg-slate-900 text-sm text-slate-300 outline-none min-w-[140px]"
         >
           <option value="">All Status</option>
           <option value="true">Active</option>
@@ -321,57 +335,76 @@ export default function PermissionManagement() {
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.1 }}
       >
-        <Card className="overflow-hidden border-0 shadow-xl shadow-slate-200/50 dark:shadow-none">
+        <Card className="overflow-hidden border-0 shadow-xl shadow-none">
           <CardContent className="p-0">
             {loading ? (
               <div className="flex items-center justify-center py-32">
                 <Spinner size="xl" className="text-indigo-500" />
               </div>
             ) : permissions.length === 0 ? (
-              <EmptyState
-                icon={Shield}
-                title="No permissions found"
-                description="Try adjusting your filters or search terms."
-              />
+              loadError ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-24 px-6 text-center">
+                  <AlertTriangle className="h-8 w-8 text-amber-400" />
+                  <p className="text-sm font-semibold text-white">
+                    Could not load permissions
+                  </p>
+                  <p className="text-xs text-slate-400 max-w-md break-words">
+                    {loadError}
+                  </p>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => fetchPermissions()}
+                  >
+                    Retry
+                  </Button>
+                </div>
+              ) : (
+                <EmptyState
+                  icon={Shield}
+                  title="No permissions found"
+                  description="Try adjusting your filters or search terms."
+                />
+              )
             ) : (
               <>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-slate-50/80 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800">
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <tr className="bg-slate-800/50 border-b border-slate-800">
+                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">
                           Permission
                         </th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">
                           Module
                         </th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">
                           Description
                         </th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">
                           Status
                         </th>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">
+                        <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">
                           Actions
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 bg-white dark:bg-transparent">
+                    <tbody className="divide-y divide-slate-800/60 bg-transparent">
                       {permissions.map((perm) => (
                         <tr
                           key={perm.id}
-                          className="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors group cursor-pointer"
+                          className="hover:bg-slate-800/30 transition-colors group cursor-pointer"
                           onClick={() => setSelectedPermission(
                             selectedPermission?.id === perm.id ? null : perm
                           )}
                         >
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-900/20">
+                              <div className="p-2 rounded-lg bg-indigo-900/20">
                                 <Lock className="h-4 w-4 text-indigo-500" />
                               </div>
                               <div>
-                                <code className="text-sm font-mono font-semibold text-slate-900 dark:text-white">
+                                <code className="text-sm font-mono font-semibold text-white">
                                   {perm.name}
                                 </code>
                               </div>
@@ -382,7 +415,7 @@ export default function PermissionManagement() {
                               {perm.module?.replace(/_/g, ' ')}
                             </Badge>
                           </td>
-                          <td className="px-6 py-4 text-sm text-slate-500 dark:text-slate-400 max-w-xs truncate">
+                          <td className="px-6 py-4 text-sm text-slate-400 max-w-xs truncate">
                             {perm.description || '—'}
                           </td>
                           <td className="px-6 py-4">
@@ -392,10 +425,10 @@ export default function PermissionManagement() {
                                   'h-2.5 w-2.5 rounded-full shadow-sm',
                                   perm.is_active
                                     ? 'bg-emerald-500 shadow-emerald-500/20'
-                                    : 'bg-slate-300 dark:bg-slate-600'
+                                    : 'bg-slate-600'
                                 )}
                               />
-                              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                              <span className="text-sm font-medium text-slate-300">
                                 {perm.is_active ? 'Active' : 'Inactive'}
                               </span>
                             </div>
@@ -412,8 +445,8 @@ export default function PermissionManagement() {
                                 className={cn(
                                   'text-xs',
                                   perm.is_active
-                                    ? 'text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10'
-                                    : 'text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10'
+                                    ? 'text-red-500 hover:bg-red-500/10'
+                                    : 'text-emerald-500 hover:bg-emerald-500/10'
                                 )}
                               >
                                 {perm.is_active ? 'Deactivate' : 'Activate'}
@@ -428,25 +461,25 @@ export default function PermissionManagement() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 dark:border-slate-800">
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                  <div className="flex items-center justify-between px-6 py-4 border-t border-slate-800">
+                    <p className="text-sm text-slate-400">
                       Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
                     </p>
                     <div className="flex items-center gap-2">
                       <button
                         disabled={page === 0}
                         onClick={() => setPage(page - 1)}
-                        className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        className="p-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                       >
                         <ChevronLeft className="h-4 w-4" />
                       </button>
-                      <span className="text-sm font-medium text-slate-700 dark:text-slate-300 px-2">
+                      <span className="text-sm font-medium text-slate-300 px-2">
                         {page + 1} / {totalPages}
                       </span>
                       <button
                         disabled={page >= totalPages - 1}
                         onClick={() => setPage(page + 1)}
-                        className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        className="p-2 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                       >
                         <ChevronRight className="h-4 w-4" />
                       </button>
@@ -466,15 +499,15 @@ export default function PermissionManagement() {
           animate={{ opacity: 1, y: 0 }}
           className="mt-4"
         >
-          <Card className="border border-indigo-200 dark:border-indigo-800">
+          <Card className="border border-indigo-800">
             <CardContent className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-white flex items-center gap-2">
                     <Lock className="h-5 w-5 text-indigo-500" />
                     {selectedPermission.name}
                   </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  <p className="text-sm text-slate-400 mt-1">
                     {selectedPermission.description || 'No description'}
                   </p>
                 </div>
@@ -485,26 +518,26 @@ export default function PermissionManagement() {
                 </Badge>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Module</p>
-                  <p className="font-medium text-slate-900 dark:text-white capitalize mt-1">
+                <div className="p-3 rounded-lg bg-slate-800/50">
+                  <p className="text-xs text-slate-400">Module</p>
+                  <p className="font-medium text-white capitalize mt-1">
                     {selectedPermission.module?.replace(/_/g, ' ') || '—'}
                   </p>
                 </div>
-                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Group</p>
-                  <p className="font-medium text-slate-900 dark:text-white capitalize mt-1">
+                <div className="p-3 rounded-lg bg-slate-800/50">
+                  <p className="text-xs text-slate-400">Group</p>
+                  <p className="font-medium text-white capitalize mt-1">
                     {selectedPermission.group || '—'}
                   </p>
                 </div>
-                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Permission ID</p>
-                  <p className="font-medium text-slate-900 dark:text-white mt-1 font-mono">
+                <div className="p-3 rounded-lg bg-slate-800/50">
+                  <p className="text-xs text-slate-400">Permission ID</p>
+                  <p className="font-medium text-white mt-1 font-mono">
                     #{selectedPermission.id}
                   </p>
                 </div>
-                <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Status</p>
+                <div className="p-3 rounded-lg bg-slate-800/50">
+                  <p className="text-xs text-slate-400">Status</p>
                   <p className="font-medium mt-1 flex items-center gap-1">
                     <span
                       className={cn(
@@ -516,7 +549,7 @@ export default function PermissionManagement() {
                   </p>
                 </div>
               </div>
-              <div className="flex gap-2 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <div className="flex gap-2 mt-6 pt-4 border-t border-slate-800">
                 <Button
                   size="sm"
                   variant={selectedPermission.is_active ? 'danger' : 'primary'}

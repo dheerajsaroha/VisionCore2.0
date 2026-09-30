@@ -9,7 +9,7 @@ from app.db.models.all_models import User, Reimbursement, BlockchainAuditLog
 from app.db.database import get_db, SessionLocal
 from app.services.blockchain import blockchain_service
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(deps.require_feature("expenses"))])
 
 
 async def background_blockchain_anchor(ref_id: int, payload: dict, ref_type: str):
