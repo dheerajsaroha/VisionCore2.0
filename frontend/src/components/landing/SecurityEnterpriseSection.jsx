@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ShieldCheck, Lock, Key, Server, Database, Activity, CheckCircle2, ArrowRight } from "lucide-react";
+import { ShieldCheck, Lock, Key, Server, Database, ArrowRight } from "lucide-react";
 import { motion } from "framer-motion";
 
 const SECURITY_HIGHLIGHTS = [

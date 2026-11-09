@@ -1,16 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
-  Trophy, Target, BarChart3, FileText, MessageSquare, Shield, AlertTriangle,
-  TrendingUp, RefreshCw, Plus, CheckCircle2, AlertCircle, Clock, User, Layers,
-  Award, Star, ChevronRight, Activity, Percent
+  Trophy, Target, BarChart3, FileText, MessageSquare, AlertTriangle,
+  TrendingUp, RefreshCw, Plus, CheckCircle2, AlertCircle, Layers, Star, Activity
 } from 'lucide-react';
 import { performanceService } from '../services/performanceService';
-import { useAuthStore } from '../store/authStore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { Spinner } from '../components/ui/Spinner';
+import '../components/ui/Spinner';
 import { formatDate } from '../lib/utils';
 
 export default function PerformanceManagementPage() {
@@ -27,7 +25,6 @@ export default function PerformanceManagementPage() {
   const [errorMsg, setErrorMsg] = useState('');
   const [actionSuccess, setActionSuccess] = useState('');
 
-  const { user } = useAuthStore();
 
   // Forms
   const [newGoal, setNewGoal] = useState({ title: '', description: '', goal_framework: 'smart', target_value: 100, current_value: 0, unit: '%' });

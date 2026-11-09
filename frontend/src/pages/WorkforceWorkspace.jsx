@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Activity, CalendarDays, CheckCircle2, Clock3, RefreshCw, Users } from 'lucide-react';
+import { Activity, CheckCircle2, Clock3, RefreshCw, Users } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';

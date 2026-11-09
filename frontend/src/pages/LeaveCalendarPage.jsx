@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Calendar, RefreshCw, ChevronLeft, ChevronRight,
-  Clock, User, Loader2
+  Calendar, RefreshCw, ChevronLeft, ChevronRight, User, Loader2
 } from 'lucide-react';
 import { leaveService } from '../services/leaveService';
 import { Button } from '../components/ui/Button';
@@ -67,7 +66,7 @@ function MonthCalendar({ year, month, requests }) {
             }`}>
               <span className={`text-xs font-semibold ${isToday ? 'text-indigo-300' : 'text-gray-400'}`}>{day}</span>
               <div className="mt-1 space-y-0.5">
-                {dayRequests.slice(0, 3).map((r, ri) => (
+                {dayRequests.slice(0, 3).map((r) => (
                   <div key={r.id} className="truncate rounded px-1 py-0.5 text-xs font-medium"
                     style={{ background: `${LEAVE_TYPE_COLORS[r.leave_type_id % LEAVE_TYPE_COLORS.length]}22`, color: LEAVE_TYPE_COLORS[r.leave_type_id % LEAVE_TYPE_COLORS.length] }}>
                     #{r.user_id}

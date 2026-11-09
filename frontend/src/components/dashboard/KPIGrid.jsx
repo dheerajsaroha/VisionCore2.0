@@ -4,11 +4,11 @@
  */
 import React from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Users, UserCheck, UserX, Clock, 
-  Calendar, CheckSquare, Award, Briefcase, 
-  Activity, ShieldCheck, FileCheck, Ticket, 
-  DollarSign, TrendingUp, TrendingDown 
+import {
+  Users, UserCheck, UserX, Clock,
+  Calendar, CheckSquare, Award, Briefcase,
+  Activity, ShieldCheck, FileCheck,
+  DollarSign, TrendingUp, TrendingDown
 } from 'lucide-react';
 import { Card, CardContent } from '../ui/Card';
 import { SkeletonCard } from '../ui/Skeleton';
@@ -24,7 +24,7 @@ const cardVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
 };
 
-export function KPICard({ title, value, subtitle, icon: Icon, accent = 'indigo', trend, trendLabel, onClick }) {
+export function KPICard({ title, value, subtitle, icon: Icon, accent = 'indigo', trend, onClick }) {
   const accentStyles = {
     indigo: {
       bar: 'bg-indigo-500',
@@ -67,7 +67,7 @@ export function KPICard({ title, value, subtitle, icon: Icon, accent = 'indigo',
 
   return (
     <motion.div variants={cardVariants}>
-      <Card 
+      <Card
         className={cn(
           "relative overflow-hidden group h-full border-slate-800/80 bg-slate-900/60 hover:bg-slate-900/90 transition-all duration-300",
           onClick && "cursor-pointer hover:border-slate-700"
@@ -84,8 +84,8 @@ export function KPICard({ title, value, subtitle, icon: Icon, accent = 'indigo',
             {trend !== undefined && (
               <div className={cn(
                 "flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded-full border",
-                trend >= 0 
-                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" 
+                trend >= 0
+                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                   : "bg-rose-500/10 text-rose-400 border-rose-500/20"
               )}>
                 {trend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -129,7 +129,7 @@ export function KPIGrid({ stats, roleName, loading }) {
   // SuperAdmin KPI Config
   if (role.includes('super')) {
     return (
-      <motion.div 
+      <motion.div
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
         variants={containerVariants}
         initial="hidden"
@@ -170,7 +170,7 @@ export function KPIGrid({ stats, roleName, loading }) {
   // Manager KPI Config
   if (role.includes('manager')) {
     return (
-      <motion.div 
+      <motion.div
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
         variants={containerVariants}
         initial="hidden"
@@ -211,7 +211,7 @@ export function KPIGrid({ stats, roleName, loading }) {
   // Employee KPI Config
   if (role.includes('employee')) {
     return (
-      <motion.div 
+      <motion.div
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
         variants={containerVariants}
         initial="hidden"
@@ -252,7 +252,7 @@ export function KPIGrid({ stats, roleName, loading }) {
   // HR Role KPI Config
   if (role.includes('hr')) {
     return (
-      <motion.div 
+      <motion.div
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
         variants={containerVariants}
         initial="hidden"
@@ -292,7 +292,7 @@ export function KPIGrid({ stats, roleName, loading }) {
 
   // Default / OrgAdmin KPI Config
   return (
-    <motion.div 
+    <motion.div
       className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
       variants={containerVariants}
       initial="hidden"

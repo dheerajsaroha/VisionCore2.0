@@ -4,7 +4,7 @@
  * Strictly adheres to Phase 2 theme engine (Dark, Light, Midnight, Nordic).
  */
 import React from 'react';
-import { Search, X, RotateCcw, ArrowUpDown, ArrowUp, ArrowDown, SlidersHorizontal } from 'lucide-react';
+import { Search, X, RotateCcw, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '../ui/Button';
 
 export function DirectoryFilters({

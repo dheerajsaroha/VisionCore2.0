@@ -4,13 +4,13 @@ import { usePermission } from '../hooks/usePermission';
 import { canAccess, resolvePolicy } from '../lib/accessControl';
 import api from '../services/apiClient';
 import {
-  Users, Calendar, DollarSign, Briefcase, Clock, TrendingUp,
+  Users, Calendar, DollarSign, Briefcase, TrendingUp,
   AlertCircle, CheckCircle2, RefreshCw, ChevronRight,
-  BarChart3, Building2, Target, Zap, Activity, ArrowUpRight, Shield, Trophy, Package
+  BarChart3, Target, Zap, Activity, ArrowUpRight, Shield, Trophy, Package
 } from 'lucide-react';
-import { Card } from '../components/ui/Card';
+import '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Badge } from '../components/ui/Badge';
+import '../components/ui/Badge';
 import { Spinner } from '../components/ui/Spinner';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';

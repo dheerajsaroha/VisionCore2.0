@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
-  BarChart2, Users, Target, TrendingUp, AlertTriangle, Heart, RefreshCw,
-  Star, MapPin, GitBranch, ClipboardList, Shield, Award
+  BarChart2, Users, Target, AlertTriangle, Heart, RefreshCw, GitBranch, ClipboardList, Shield
 } from 'lucide-react';
 import { successionService } from '../services/successionService';
 
@@ -271,7 +270,7 @@ export default function SuccessionCareerPage() {
                       <p className="text-xs text-slate-400 mt-1">{path.description}</p>
                     </div>
                     <div className="flex overflow-x-auto gap-3 pb-2">
-                      {path.levels?.map((lvl, i) => (
+                      {path.levels?.map((lvl) => (
                         <div key={lvl.id} className="flex-shrink-0 bg-slate-900/60 border border-slate-700 rounded-lg p-3 w-44 space-y-1.5">
                           <div className="text-xs text-slate-500">Level {lvl.level_number}</div>
                           <div className="text-sm font-semibold text-white">{lvl.level_title}</div>

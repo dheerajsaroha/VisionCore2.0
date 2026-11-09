@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { BrainCircuit, Sparkles, BookOpen, ShieldCheck, ArrowRight, Bot, Cpu, Lock, CheckCircle2 } from "lucide-react";
+import { Sparkles, BookOpen, ShieldCheck, ArrowRight, Bot, Cpu, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 const AI_FEATURE_CARDS = [

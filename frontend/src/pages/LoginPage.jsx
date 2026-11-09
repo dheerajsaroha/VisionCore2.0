@@ -2,8 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Eye, EyeOff, ShieldCheck, ArrowRight, Lock, Mail, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useAuthStore } from "../store/authStore";
-import { Button, Input, Card, CardContent } from "../components/ui";
-import { useTheme } from "../hooks/useTheme";
+import { Button, Card, CardContent } from "../components/ui";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -19,7 +18,6 @@ export default function LoginPage() {
   const { login, isLoading, isAuthenticated, isHydrated } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
-  const { theme } = useTheme();
 
   const from = location.state?.from?.pathname || "/dashboard";
   const resetSuccess = location.state?.reset;

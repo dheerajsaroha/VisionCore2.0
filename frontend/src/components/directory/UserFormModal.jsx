@@ -6,8 +6,8 @@
 import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { Select } from '../ui/Select';
+import '../ui/Input';
+import '../ui/Select';
 import { User, Mail, Lock, Phone, Hash, Building2, Clock, Briefcase, Shield, AlertCircle, MapPin } from 'lucide-react';
 
 export function UserFormModal({
@@ -19,7 +19,6 @@ export function UserFormModal({
   shifts = [],
   branches = [],
   managers = [],
-  roles = [],
   canAssignRole = false,
   onSubmit,
   loading = false,
@@ -46,6 +45,7 @@ export function UserFormModal({
 
   useEffect(() => {
     if (isEdit && initialUser) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Synchronizes editable form state with the selected record.
       setFormData({
         full_name: initialUser.full_name || '',
         email: initialUser.email || '',

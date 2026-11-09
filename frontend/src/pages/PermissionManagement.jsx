@@ -3,12 +3,10 @@ import { motion } from 'framer-motion';
 import {
   Shield,
   Search,
-  Filter,
   CheckCircle,
   XCircle,
   RefreshCw,
   Download,
-  Eye,
   AlertTriangle,
   ChevronLeft,
   ChevronRight,

@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, Receipt, DollarSign, CheckCircle2, XCircle, ExternalLink } from 'lucide-react';
 import { reimbursementService } from '../services/reimbursementService';
 import { useAuthStore } from '../store/authStore';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
@@ -28,11 +28,7 @@ export default function Reimbursements() {
     category: 'travel',
   });
 
-  useEffect(() => {
-    fetchClaims();
-  }, [statusFilter]);
-
-  const fetchClaims = async () => {
+  const fetchClaims = useCallback(async () => {
     setLoading(true);
     try {
       const params = statusFilter ? { status: statusFilter } : {};
@@ -41,7 +37,11 @@ export default function Reimbursements() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter]);
+
+  useEffect(() => {
+    fetchClaims();
+  }, [fetchClaims]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -320,4 +320,3 @@ export default function Reimbursements() {
     </div>
   );
 }
-

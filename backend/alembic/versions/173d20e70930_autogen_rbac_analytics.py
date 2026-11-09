@@ -124,7 +124,7 @@ def upgrade() -> None:
                existing_comment='1 = current active embedding, 0 = superseded by re-enrollment',
                existing_nullable=False,
                existing_server_default=sa.text('1'))
-    op.drop_index(op.f('idx_face_embeddings_hnsw'), table_name='face_embeddings', postgresql_ops={'embedding': 'vector_cosine_ops'}, postgresql_with={'m': '16', 'ef_construction': '64'}, postgresql_using='hnsw')
+    op.drop_index(op.f('idx_face_embeddings_hnsw'), table_name='face_embeddings', if_exists=True, postgresql_ops={'embedding': 'vector_cosine_ops'}, postgresql_with={'m': '16', 'ef_construction': '64'}, postgresql_using='hnsw')
     op.alter_column('manual_overrides', 'target_user_id',
                existing_type=sa.INTEGER(),
                comment=None,
@@ -166,7 +166,7 @@ def upgrade() -> None:
                comment=None,
                existing_comment='Timestamp of employee ZKP approval — NULL until approved',
                existing_nullable=True)
-    op.create_index('ix_override_pending', 'manual_overrides', ['target_user_id'], unique=False, postgresql_where=sa.text('employee_approved = 0'))
+    op.create_index('ix_override_pending', 'manual_overrides', ['target_user_id'], unique=False, postgresql_where=sa.text('employee_approved = 0'), if_not_exists=True)
     op.alter_column('monthly_growth_summary', 'month_year',
                existing_type=sa.VARCHAR(length=7),
                comment="'2026-03'",
@@ -198,10 +198,9 @@ def upgrade() -> None:
                comment=None,
                existing_comment='Percentage change in productivity vs prior month',
                existing_nullable=True)
-    op.drop_index(op.f('ix_monthly_burnout'), table_name='monthly_growth_summary', postgresql_where='(burnout_risk_score > (40)::numeric)')
-    op.drop_constraint(op.f('uq_monthly_summary_user_month'), 'monthly_growth_summary', type_='unique')
-    op.create_index('ix_monthly_burnout_risk', 'monthly_growth_summary', ['burnout_risk_score'], unique=False, postgresql_where=sa.text('burnout_risk_score > 40'))
-    op.create_unique_constraint('uq_monthly_user_month', 'monthly_growth_summary', ['user_id', 'month_year'])
+    op.drop_index(op.f('ix_monthly_burnout'), table_name='monthly_growth_summary', if_exists=True, postgresql_where='(burnout_risk_score > (40)::numeric)')
+    # uq_monthly_user_month already created in initial migration
+    op.create_index('ix_monthly_burnout_risk', 'monthly_growth_summary', ['burnout_risk_score'], unique=False, postgresql_where=sa.text('burnout_risk_score > 40'), if_not_exists=True)
     op.alter_column('offline_sync_queue', 'payload',
                existing_type=postgresql.JSONB(astext_type=sa.Text()),
                comment=None,
@@ -247,7 +246,7 @@ def upgrade() -> None:
     #            existing_nullable=False,
     #            postgresql_using='CASE WHEN is_revoked THEN 1 ELSE 0 END')
     # op.execute("ALTER TABLE org_api_keys ALTER COLUMN is_revoked SET DEFAULT 0;")
-    op.create_index(op.f('ix_org_api_keys_id'), 'org_api_keys', ['id'], unique=False)
+    op.create_index(op.f('ix_org_api_keys_id'), 'org_api_keys', ['id'], unique=False, if_not_exists=True)
     op.alter_column('organizations', 'id',
                existing_type=sa.UUID(),
                comment=None,
@@ -341,8 +340,8 @@ def upgrade() -> None:
                existing_comment='1 = active, 0 = suspended',
                existing_nullable=False,
                existing_server_default=sa.text('1'))
-    op.drop_index(op.f('ix_users_active'), table_name='users', postgresql_where='(is_deleted = 0)')
-    op.create_index('ix_users_active_org', 'users', ['org_id'], unique=False, postgresql_where=sa.text('is_deleted = 0'))
+    op.drop_index(op.f('ix_users_active'), table_name='users', if_exists=True, postgresql_where='(is_deleted = 0)')
+    op.create_index('ix_users_active_org', 'users', ['org_id'], unique=False, postgresql_where=sa.text('is_deleted = 0'), if_not_exists=True)
     # ### end Alembic commands ###
 
 

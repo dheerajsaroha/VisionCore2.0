@@ -15,6 +15,8 @@ completed with a code refuses the link too.
 from typing import Sequence, Union
 
 from alembic import op
+import sqlalchemy as sa
+
 
 revision: str = "a1c4e7b93d15"
 down_revision: Union[str, None] = "f7b3d9c1ae42"
@@ -23,14 +25,22 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.alter_column(
-        "password_reset_requests", "otp_consumed_at",
-        new_column_name="satisfied_at",
-    )
+    conn = op.get_bind()
+    insp = sa.inspect(conn)
+    cols = [c["name"] for c in insp.get_columns("password_reset_requests")]
+    if "otp_consumed_at" in cols and "satisfied_at" not in cols:
+        op.alter_column(
+            "password_reset_requests", "otp_consumed_at",
+            new_column_name="satisfied_at",
+        )
 
 
 def downgrade() -> None:
-    op.alter_column(
-        "password_reset_requests", "satisfied_at",
-        new_column_name="otp_consumed_at",
-    )
+    conn = op.get_bind()
+    insp = sa.inspect(conn)
+    cols = [c["name"] for c in insp.get_columns("password_reset_requests")]
+    if "satisfied_at" in cols and "otp_consumed_at" not in cols:
+        op.alter_column(
+            "password_reset_requests", "satisfied_at",
+            new_column_name="otp_consumed_at",
+        )

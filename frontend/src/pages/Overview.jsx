@@ -20,7 +20,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { RefreshCw, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 import { useAuthStore } from '../store/authStore';
 import { usePermission } from '../hooks/usePermission';

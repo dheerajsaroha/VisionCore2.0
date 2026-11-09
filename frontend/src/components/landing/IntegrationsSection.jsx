@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Network, Globe, Key, Cpu, Zap, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Network, ArrowRight, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 const INTEGRATION_CATEGORIES = [

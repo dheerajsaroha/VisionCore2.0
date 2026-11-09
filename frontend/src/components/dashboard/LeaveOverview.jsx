@@ -10,12 +10,11 @@
  */
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Calendar, CheckCircle2, Clock, XCircle, 
-  ArrowRight, UserCheck, Palmtree, AlertCircle, TrendingUp 
+import {
+  ArrowRight, Palmtree
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card';
-import { Badge } from '../ui/Badge';
+import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
+import '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Skeleton } from '../ui/Skeleton';
 import { formatDate } from '../../lib/utils';
@@ -40,7 +39,6 @@ export function LeaveOverview({ leaveSummary, userRole = 'employee', loading }) 
   // a user with no leave requests at all still saw a populated card.
   const pendingCount = leaveSummary?.pendingCount ?? 0;
   const approvedCount = leaveSummary?.approvedCount ?? 0;
-  const rejectedCount = leaveSummary?.rejectedCount ?? 0;
   const leaveUtilization = leaveSummary?.leaveUtilization ?? 0;
 
   const currentlyOnLeave = leaveSummary?.currentlyOnLeave || [];
@@ -88,7 +86,7 @@ export function LeaveOverview({ leaveSummary, userRole = 'employee', loading }) 
                     </div>
                     {/* Progress Bar */}
                     <div className="w-full h-1.5 bg-slate-800 rounded-full mt-2.5 overflow-hidden">
-                      <div 
+                      <div
                         className={`h-full rounded-full ${b.color}`}
                         style={{ width: `${Math.min(100, (b.remaining / Math.max(1, b.total)) * 100)}%` }}
                       />
@@ -116,7 +114,7 @@ export function LeaveOverview({ leaveSummary, userRole = 'employee', loading }) 
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-xs">
                 <span className="text-indigo-300 font-medium">Planning time off soon?</span>
-                <Button 
+                <Button
                   size="sm"
                   onClick={() => navigate('/dashboard/leave-requests')}
                   className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs h-8 px-3"

@@ -181,68 +181,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_ownership_histories_entity_type'), 'ownership_histories', ['entity_type'], unique=False)
     op.create_index(op.f('ix_ownership_histories_id'), 'ownership_histories', ['id'], unique=False)
     op.create_index(op.f('ix_ownership_histories_resource_ownership_id'), 'ownership_histories', ['resource_ownership_id'], unique=False)
-    op.drop_index(op.f('ix_user_roles_id'), table_name='user_roles')
-    op.drop_index(op.f('ix_user_roles_role_id'), table_name='user_roles')
-    op.drop_index(op.f('ix_user_roles_user_id'), table_name='user_roles')
-    op.drop_table('user_roles')
-    op.drop_index(op.f('ix_spoof_detection_logs_created_at'), table_name='spoof_detection_logs')
-    op.drop_index(op.f('ix_spoof_detection_logs_id'), table_name='spoof_detection_logs')
-    op.drop_index(op.f('ix_spoof_detection_logs_org_id'), table_name='spoof_detection_logs')
-    op.drop_index(op.f('ix_spoof_detection_logs_user_id'), table_name='spoof_detection_logs')
-    op.drop_index(op.f('ix_spoof_logs_org_time'), table_name='spoof_detection_logs')
-    op.drop_table('spoof_detection_logs')
-    op.drop_index(op.f('ix_emotion_logs_attendance_log_id'), table_name='emotion_logs')
-    op.drop_index(op.f('ix_emotion_logs_id'), table_name='emotion_logs')
-    op.drop_index(op.f('ix_emotion_logs_user_id'), table_name='emotion_logs')
-    op.drop_index(op.f('ix_emotion_user_time'), table_name='emotion_logs')
-    op.drop_table('emotion_logs')
-    op.drop_index(op.f('ix_attendance_approvals_approver_user_id'), table_name='attendance_approvals')
-    op.drop_index(op.f('ix_attendance_approvals_attendance_request_id'), table_name='attendance_approvals')
-    op.drop_index(op.f('ix_attendance_approvals_created_by_correlation_id'), table_name='attendance_approvals')
-    op.drop_index(op.f('ix_attendance_approvals_decided_at'), table_name='attendance_approvals')
-    op.drop_index(op.f('ix_attendance_approvals_id'), table_name='attendance_approvals')
-    op.drop_index(op.f('ix_attendance_approvals_org_id'), table_name='attendance_approvals')
-    op.drop_index(op.f('ix_attendance_approvals_request_time'), table_name='attendance_approvals')
-    op.drop_table('attendance_approvals')
-    op.drop_index(op.f('ix_recognition_events_created_at'), table_name='recognition_events')
-    op.drop_index(op.f('ix_recognition_events_id'), table_name='recognition_events')
-    op.drop_index(op.f('ix_recognition_events_org_id'), table_name='recognition_events')
-    op.drop_index(op.f('ix_recognition_events_org_time'), table_name='recognition_events')
-    op.drop_index(op.f('ix_recognition_events_user_id'), table_name='recognition_events')
-    op.drop_table('recognition_events')
-    op.drop_index(op.f('ix_enrollment_events_created_at'), table_name='enrollment_events')
-    op.drop_index(op.f('ix_enrollment_events_id'), table_name='enrollment_events')
-    op.drop_index(op.f('ix_enrollment_events_org_id'), table_name='enrollment_events')
-    op.drop_index(op.f('ix_enrollment_events_org_time'), table_name='enrollment_events')
-    op.drop_index(op.f('ix_enrollment_events_user_id'), table_name='enrollment_events')
-    op.drop_table('enrollment_events')
-    op.drop_index(op.f('ix_attendance_requests_attendance_log_id'), table_name='attendance_requests')
-    op.drop_index(op.f('ix_attendance_requests_employee_status'), table_name='attendance_requests')
-    op.drop_index(op.f('ix_attendance_requests_employee_user_id'), table_name='attendance_requests')
-    op.drop_index(op.f('ix_attendance_requests_id'), table_name='attendance_requests')
-    op.drop_index(op.f('ix_attendance_requests_org_id'), table_name='attendance_requests')
-    op.drop_index(op.f('ix_attendance_requests_org_time'), table_name='attendance_requests')
-    op.drop_index(op.f('ix_attendance_requests_submitted_at'), table_name='attendance_requests')
-    op.drop_table('attendance_requests')
-    op.drop_index(op.f('ix_audit_logs_action'), table_name='audit_logs')
-    op.drop_index(op.f('ix_audit_logs_actor_user_id'), table_name='audit_logs')
-    op.drop_index(op.f('ix_audit_logs_correlation_id'), table_name='audit_logs')
-    op.drop_index(op.f('ix_audit_logs_id'), table_name='audit_logs')
-    op.drop_index(op.f('ix_audit_logs_occurred_at'), table_name='audit_logs')
-    op.drop_index(op.f('ix_audit_logs_target_id'), table_name='audit_logs')
-    op.drop_index(op.f('ix_audit_logs_target_type'), table_name='audit_logs')
-    op.drop_index(op.f('ix_audit_logs_tenant_occurred'), table_name='audit_logs')
-    op.drop_index(op.f('ix_audit_logs_tenant_org_id'), table_name='audit_logs')
-    op.drop_table('audit_logs')
-    op.drop_index(op.f('ix_reports_id'), table_name='reports')
-    op.drop_index(op.f('ix_reports_org_id'), table_name='reports')
-    op.drop_index(op.f('ix_reports_org_status'), table_name='reports')
-    op.drop_index(op.f('ix_reports_requested_by'), table_name='reports')
-    op.drop_table('reports')
-    op.drop_index(op.f('idx_face_embeddings_hnsw'), table_name='face_embeddings', postgresql_ops={'embedding': 'vector_cosine_ops'}, postgresql_with={'m': '16', 'ef_construction': '64'}, postgresql_using='hnsw')
-    op.drop_column('face_embeddings', 'created_at')
-    op.drop_column('face_embeddings', 'quality_score')
-    op.drop_column('face_embeddings', 'embedding_version')
+    # Retain existing branch tables and biometric metadata
     op.alter_column('feature_flags', 'enabled',
                existing_type=sa.BOOLEAN(),
                comment='Override value: True=enable, False=disable',
@@ -298,7 +237,7 @@ def upgrade() -> None:
                comment='public|hidden|internal|admin',
                existing_nullable=False,
                existing_server_default=sa.text("'public'::character varying"))
-    op.drop_index(op.f('ix_features_deprecated'), table_name='features')
+    op.drop_index(op.f('ix_features_deprecated'), table_name='features', if_exists=True)
     op.create_index('ix_features_active', 'features', ['deprecated'], unique=False)
     op.create_index(op.f('ix_features_id'), 'features', ['id'], unique=False)
     op.alter_column('licensing_limits', 'limit_type',
@@ -365,8 +304,8 @@ def upgrade() -> None:
                existing_type=sa.VARCHAR(length=500),
                comment='Reason for cancellation',
                existing_nullable=True)
-    op.drop_index(op.f('ix_org_subscriptions_org'), table_name='organization_subscriptions')
-    op.drop_index(op.f('ix_org_subscriptions_renewed_at'), table_name='organization_subscriptions')
+    op.drop_index(op.f('ix_org_subscriptions_org'), table_name='organization_subscriptions', if_exists=True)
+    op.drop_index(op.f('ix_org_subscriptions_renewed_at'), table_name='organization_subscriptions', if_exists=True)
     op.create_index(op.f('ix_organization_subscriptions_id'), 'organization_subscriptions', ['id'], unique=False)
     op.create_index(op.f('ix_organization_subscriptions_organization_id'), 'organization_subscriptions', ['organization_id'], unique=False)
     op.create_index(op.f('ix_organization_subscriptions_subscription_plan_id'), 'organization_subscriptions', ['subscription_plan_id'], unique=False)
@@ -380,6 +319,8 @@ def upgrade() -> None:
                existing_type=sa.TEXT(),
                comment='Human-readable description',
                existing_nullable=True)
+    op.add_column('permissions', sa.Column('module', sa.String(length=50), nullable=True))
+    op.add_column('permissions', sa.Column('group', sa.String(length=50), nullable=True))
     op.alter_column('permissions', 'module',
                existing_type=sa.VARCHAR(length=50),
                comment='Grouping: auth | users | attendance | payroll | etc',
@@ -442,12 +383,12 @@ def upgrade() -> None:
                existing_type=postgresql.TIMESTAMP(timezone=True),
                nullable=False,
                existing_server_default=sa.text('now()'))
-    op.drop_index(op.f('ix_roles_org_id'), table_name='roles')
-    op.drop_constraint(op.f('uq_role_name_org'), 'roles', type_='unique')
-    op.drop_index(op.f('ix_roles_name'), table_name='roles')
-    op.create_index(op.f('ix_roles_name'), 'roles', ['name'], unique=True)
-    op.drop_constraint(op.f('roles_org_id_fkey'), 'roles', type_='foreignkey')
-    op.drop_column('roles', 'org_id')
+    op.drop_index(op.f('ix_roles_org_id'), table_name='roles', if_exists=True)
+    op.execute("ALTER TABLE roles DROP CONSTRAINT IF EXISTS uq_role_name_org;")
+    op.drop_index(op.f('ix_roles_name'), table_name='roles', if_exists=True)
+    op.create_index(op.f('ix_roles_name'), 'roles', ['name'], unique=True, if_not_exists=True)
+    op.execute("ALTER TABLE roles DROP CONSTRAINT IF EXISTS roles_org_id_fkey;")
+    op.execute("ALTER TABLE roles DROP COLUMN IF EXISTS org_id;")
     op.alter_column('subscription_plans', 'code',
                existing_type=sa.VARCHAR(length=50),
                comment='Unique plan code: starter|professional|enterprise',
@@ -515,7 +456,7 @@ def downgrade() -> None:
                existing_type=postgresql.TIMESTAMP(timezone=True),
                nullable=True,
                existing_server_default=sa.text('now()'))
-    op.drop_index(op.f('ix_subscription_plans_id'), table_name='subscription_plans')
+    op.drop_index(op.f('ix_subscription_plans_id'), table_name='subscription_plans', if_exists=True)
     op.alter_column('subscription_plans', 'display_order',
                existing_type=sa.INTEGER(),
                comment=None,
@@ -581,7 +522,7 @@ def downgrade() -> None:
                existing_nullable=False)
     op.add_column('roles', sa.Column('org_id', sa.UUID(), autoincrement=False, nullable=True, comment='Null implies a global system role'))
     op.create_foreign_key(op.f('roles_org_id_fkey'), 'roles', 'organizations', ['org_id'], ['id'], ondelete='CASCADE')
-    op.drop_index(op.f('ix_roles_name'), table_name='roles')
+    op.drop_index(op.f('ix_roles_name'), table_name='roles', if_exists=True)
     op.create_index(op.f('ix_roles_name'), 'roles', ['name'], unique=False)
     op.create_unique_constraint(op.f('uq_role_name_org'), 'roles', ['name', 'org_id'], postgresql_nulls_not_distinct=False)
     op.create_index(op.f('ix_roles_org_id'), 'roles', ['org_id'], unique=False)
@@ -620,11 +561,11 @@ def downgrade() -> None:
                comment='Admin | Manager | Employee | Device',
                existing_comment='Unique role name across all tiers',
                existing_nullable=False)
-    op.drop_index('ix_role_permissions_role', table_name='role_permissions')
-    op.drop_index('ix_role_permissions_permission', table_name='role_permissions')
-    op.drop_index(op.f('ix_plan_features_plan_id'), table_name='plan_features')
-    op.drop_index(op.f('ix_plan_features_id'), table_name='plan_features')
-    op.drop_index(op.f('ix_plan_features_feature_id'), table_name='plan_features')
+    op.drop_index('ix_role_permissions_role', table_name='role_permissions', if_exists=True)
+    op.drop_index('ix_role_permissions_permission', table_name='role_permissions', if_exists=True)
+    op.drop_index(op.f('ix_plan_features_plan_id'), table_name='plan_features', if_exists=True)
+    op.drop_index(op.f('ix_plan_features_id'), table_name='plan_features', if_exists=True)
+    op.drop_index(op.f('ix_plan_features_feature_id'), table_name='plan_features', if_exists=True)
     op.alter_column('plan_features', 'configurable',
                existing_type=sa.BOOLEAN(),
                comment=None,
@@ -645,7 +586,7 @@ def downgrade() -> None:
                existing_server_default=sa.text('true'))
     op.add_column('permissions', sa.Column('category', sa.VARCHAR(length=80), autoincrement=False, nullable=True, comment='Permission domain such as auth, attendance, analytics'))
     op.drop_constraint('uq_permissions_name', 'permissions', type_='unique')
-    op.drop_index(op.f('ix_permissions_module'), table_name='permissions')
+    op.drop_index(op.f('ix_permissions_module'), table_name='permissions', if_exists=True)
     op.alter_column('permissions', 'group',
                existing_type=sa.VARCHAR(length=50),
                comment=None,
@@ -667,9 +608,9 @@ def downgrade() -> None:
                comment='Resource + action identifier, e.g. attendance.view | user.manage',
                existing_comment="Dot-notation: e.g. 'users.read', 'attendance.checkin'",
                existing_nullable=False)
-    op.drop_index(op.f('ix_organization_subscriptions_subscription_plan_id'), table_name='organization_subscriptions')
-    op.drop_index(op.f('ix_organization_subscriptions_organization_id'), table_name='organization_subscriptions')
-    op.drop_index(op.f('ix_organization_subscriptions_id'), table_name='organization_subscriptions')
+    op.drop_index(op.f('ix_organization_subscriptions_subscription_plan_id'), table_name='organization_subscriptions', if_exists=True)
+    op.drop_index(op.f('ix_organization_subscriptions_organization_id'), table_name='organization_subscriptions', if_exists=True)
+    op.drop_index(op.f('ix_organization_subscriptions_id'), table_name='organization_subscriptions', if_exists=True)
     op.create_index(op.f('ix_org_subscriptions_renewed_at'), 'organization_subscriptions', ['renewed_at'], unique=False)
     op.create_index(op.f('ix_org_subscriptions_org'), 'organization_subscriptions', ['organization_id'], unique=False)
     op.alter_column('organization_subscriptions', 'cancellation_reason',
@@ -721,9 +662,9 @@ def downgrade() -> None:
                existing_comment='active|trialing|canceled|expired|past_due|paused',
                existing_nullable=False,
                existing_server_default=sa.text("'active'::character varying"))
-    op.drop_index(op.f('ix_licensing_limits_plan_id'), table_name='licensing_limits')
-    op.drop_index(op.f('ix_licensing_limits_limit_type'), table_name='licensing_limits')
-    op.drop_index(op.f('ix_licensing_limits_id'), table_name='licensing_limits')
+    op.drop_index(op.f('ix_licensing_limits_plan_id'), table_name='licensing_limits', if_exists=True)
+    op.drop_index(op.f('ix_licensing_limits_limit_type'), table_name='licensing_limits', if_exists=True)
+    op.drop_index(op.f('ix_licensing_limits_id'), table_name='licensing_limits', if_exists=True)
     op.alter_column('licensing_limits', 'description',
                existing_type=sa.TEXT(),
                comment=None,
@@ -750,8 +691,8 @@ def downgrade() -> None:
                comment=None,
                existing_comment='employees|departments|teams|projects|storage_gb|api_calls_per_min|api_keys|camera_devices|biometric_devices|reports_per_day|exports_per_day|concurrent_sessions|notification_templates|training_courses|workflow_definitions|automation_rules|marketplace_apps|integrations|custom_roles|custom_dashboards',
                existing_nullable=False)
-    op.drop_index(op.f('ix_features_id'), table_name='features')
-    op.drop_index('ix_features_active', table_name='features')
+    op.drop_index(op.f('ix_features_id'), table_name='features', if_exists=True)
+    op.drop_index('ix_features_active', table_name='features', if_exists=True)
     op.create_index(op.f('ix_features_deprecated'), 'features', ['deprecated'], unique=False)
     op.alter_column('features', 'visibility',
                existing_type=sa.VARCHAR(length=20),
@@ -802,9 +743,9 @@ def downgrade() -> None:
                comment=None,
                existing_comment='Unique feature key: attendance|payroll|recruitment|etc',
                existing_nullable=False)
-    op.drop_index(op.f('ix_feature_flags_organization_id'), table_name='feature_flags')
-    op.drop_index(op.f('ix_feature_flags_id'), table_name='feature_flags')
-    op.drop_index(op.f('ix_feature_flags_feature_id'), table_name='feature_flags')
+    op.drop_index(op.f('ix_feature_flags_organization_id'), table_name='feature_flags', if_exists=True)
+    op.drop_index(op.f('ix_feature_flags_id'), table_name='feature_flags', if_exists=True)
+    op.drop_index(op.f('ix_feature_flags_feature_id'), table_name='feature_flags', if_exists=True)
     op.alter_column('feature_flags', 'expires_at',
                existing_type=postgresql.TIMESTAMP(timezone=True),
                comment=None,
@@ -1018,50 +959,50 @@ def downgrade() -> None:
     op.create_index(op.f('ix_user_roles_user_id'), 'user_roles', ['user_id'], unique=False)
     op.create_index(op.f('ix_user_roles_role_id'), 'user_roles', ['role_id'], unique=False)
     op.create_index(op.f('ix_user_roles_id'), 'user_roles', ['id'], unique=False)
-    op.drop_index(op.f('ix_ownership_histories_resource_ownership_id'), table_name='ownership_histories')
-    op.drop_index(op.f('ix_ownership_histories_id'), table_name='ownership_histories')
-    op.drop_index(op.f('ix_ownership_histories_entity_type'), table_name='ownership_histories')
-    op.drop_index(op.f('ix_ownership_histories_entity_id'), table_name='ownership_histories')
-    op.drop_index(op.f('ix_ownership_histories_actor_user_id'), table_name='ownership_histories')
-    op.drop_index(op.f('ix_ownership_histories_action'), table_name='ownership_histories')
+    op.drop_index(op.f('ix_ownership_histories_resource_ownership_id'), table_name='ownership_histories', if_exists=True)
+    op.drop_index(op.f('ix_ownership_histories_id'), table_name='ownership_histories', if_exists=True)
+    op.drop_index(op.f('ix_ownership_histories_entity_type'), table_name='ownership_histories', if_exists=True)
+    op.drop_index(op.f('ix_ownership_histories_entity_id'), table_name='ownership_histories', if_exists=True)
+    op.drop_index(op.f('ix_ownership_histories_actor_user_id'), table_name='ownership_histories', if_exists=True)
+    op.drop_index(op.f('ix_ownership_histories_action'), table_name='ownership_histories', if_exists=True)
     op.drop_table('ownership_histories')
-    op.drop_index(op.f('ix_resource_ownerships_owner_user_id'), table_name='resource_ownerships')
-    op.drop_index(op.f('ix_resource_ownerships_owner_type'), table_name='resource_ownerships')
-    op.drop_index(op.f('ix_resource_ownerships_owner_org_id'), table_name='resource_ownerships')
-    op.drop_index(op.f('ix_resource_ownerships_id'), table_name='resource_ownerships')
-    op.drop_index(op.f('ix_resource_ownerships_entity_type'), table_name='resource_ownerships')
-    op.drop_index(op.f('ix_resource_ownerships_entity_id'), table_name='resource_ownerships')
-    op.drop_index('ix_resource_ownership_user', table_name='resource_ownerships')
-    op.drop_index('ix_resource_ownership_lookup', table_name='resource_ownerships')
+    op.drop_index(op.f('ix_resource_ownerships_owner_user_id'), table_name='resource_ownerships', if_exists=True)
+    op.drop_index(op.f('ix_resource_ownerships_owner_type'), table_name='resource_ownerships', if_exists=True)
+    op.drop_index(op.f('ix_resource_ownerships_owner_org_id'), table_name='resource_ownerships', if_exists=True)
+    op.drop_index(op.f('ix_resource_ownerships_id'), table_name='resource_ownerships', if_exists=True)
+    op.drop_index(op.f('ix_resource_ownerships_entity_type'), table_name='resource_ownerships', if_exists=True)
+    op.drop_index(op.f('ix_resource_ownerships_entity_id'), table_name='resource_ownerships', if_exists=True)
+    op.drop_index('ix_resource_ownership_user', table_name='resource_ownerships', if_exists=True)
+    op.drop_index('ix_resource_ownership_lookup', table_name='resource_ownerships', if_exists=True)
     op.drop_table('resource_ownerships')
-    op.drop_index(op.f('ix_ownership_exceptions_user_id'), table_name='ownership_exceptions')
-    op.drop_index(op.f('ix_ownership_exceptions_permission_code'), table_name='ownership_exceptions')
-    op.drop_index(op.f('ix_ownership_exceptions_id'), table_name='ownership_exceptions')
-    op.drop_index(op.f('ix_ownership_exceptions_entity_type'), table_name='ownership_exceptions')
-    op.drop_index(op.f('ix_ownership_exceptions_entity_id'), table_name='ownership_exceptions')
-    op.drop_index('ix_ownership_exception_lookup', table_name='ownership_exceptions')
+    op.drop_index(op.f('ix_ownership_exceptions_user_id'), table_name='ownership_exceptions', if_exists=True)
+    op.drop_index(op.f('ix_ownership_exceptions_permission_code'), table_name='ownership_exceptions', if_exists=True)
+    op.drop_index(op.f('ix_ownership_exceptions_id'), table_name='ownership_exceptions', if_exists=True)
+    op.drop_index(op.f('ix_ownership_exceptions_entity_type'), table_name='ownership_exceptions', if_exists=True)
+    op.drop_index(op.f('ix_ownership_exceptions_entity_id'), table_name='ownership_exceptions', if_exists=True)
+    op.drop_index('ix_ownership_exception_lookup', table_name='ownership_exceptions', if_exists=True)
     op.drop_table('ownership_exceptions')
-    op.drop_index(op.f('ix_ownership_delegations_organization_id'), table_name='ownership_delegations')
-    op.drop_index(op.f('ix_ownership_delegations_id'), table_name='ownership_delegations')
-    op.drop_index(op.f('ix_ownership_delegations_delegator_user_id'), table_name='ownership_delegations')
-    op.drop_index(op.f('ix_ownership_delegations_delegatee_user_id'), table_name='ownership_delegations')
-    op.drop_index('ix_ownership_delegation_active', table_name='ownership_delegations')
+    op.drop_index(op.f('ix_ownership_delegations_organization_id'), table_name='ownership_delegations', if_exists=True)
+    op.drop_index(op.f('ix_ownership_delegations_id'), table_name='ownership_delegations', if_exists=True)
+    op.drop_index(op.f('ix_ownership_delegations_delegator_user_id'), table_name='ownership_delegations', if_exists=True)
+    op.drop_index(op.f('ix_ownership_delegations_delegatee_user_id'), table_name='ownership_delegations', if_exists=True)
+    op.drop_index('ix_ownership_delegation_active', table_name='ownership_delegations', if_exists=True)
     op.drop_table('ownership_delegations')
-    op.drop_index(op.f('ix_role_data_scopes_role_id'), table_name='role_data_scopes')
-    op.drop_index(op.f('ix_role_data_scopes_permission_id'), table_name='role_data_scopes')
-    op.drop_index(op.f('ix_role_data_scopes_organization_id'), table_name='role_data_scopes')
-    op.drop_index('ix_role_data_scopes_lookup', table_name='role_data_scopes')
-    op.drop_index(op.f('ix_role_data_scopes_id'), table_name='role_data_scopes')
-    op.drop_index(op.f('ix_role_data_scopes_data_scope_id'), table_name='role_data_scopes')
+    op.drop_index(op.f('ix_role_data_scopes_role_id'), table_name='role_data_scopes', if_exists=True)
+    op.drop_index(op.f('ix_role_data_scopes_permission_id'), table_name='role_data_scopes', if_exists=True)
+    op.drop_index(op.f('ix_role_data_scopes_organization_id'), table_name='role_data_scopes', if_exists=True)
+    op.drop_index('ix_role_data_scopes_lookup', table_name='role_data_scopes', if_exists=True)
+    op.drop_index(op.f('ix_role_data_scopes_id'), table_name='role_data_scopes', if_exists=True)
+    op.drop_index(op.f('ix_role_data_scopes_data_scope_id'), table_name='role_data_scopes', if_exists=True)
     op.drop_table('role_data_scopes')
-    op.drop_index(op.f('ix_ownership_policies_organization_id'), table_name='ownership_policies')
-    op.drop_index(op.f('ix_ownership_policies_id'), table_name='ownership_policies')
+    op.drop_index(op.f('ix_ownership_policies_organization_id'), table_name='ownership_policies', if_exists=True)
+    op.drop_index(op.f('ix_ownership_policies_id'), table_name='ownership_policies', if_exists=True)
     op.drop_table('ownership_policies')
-    op.drop_index(op.f('ix_ownership_rules_id'), table_name='ownership_rules')
-    op.drop_index(op.f('ix_ownership_rules_entity_type'), table_name='ownership_rules')
+    op.drop_index(op.f('ix_ownership_rules_id'), table_name='ownership_rules', if_exists=True)
+    op.drop_index(op.f('ix_ownership_rules_entity_type'), table_name='ownership_rules', if_exists=True)
     op.drop_table('ownership_rules')
-    op.drop_index(op.f('ix_data_scopes_scope_level'), table_name='data_scopes')
-    op.drop_index(op.f('ix_data_scopes_id'), table_name='data_scopes')
-    op.drop_index(op.f('ix_data_scopes_code'), table_name='data_scopes')
+    op.drop_index(op.f('ix_data_scopes_scope_level'), table_name='data_scopes', if_exists=True)
+    op.drop_index(op.f('ix_data_scopes_id'), table_name='data_scopes', if_exists=True)
+    op.drop_index(op.f('ix_data_scopes_code'), table_name='data_scopes', if_exists=True)
     op.drop_table('data_scopes')
     # ### end Alembic commands ###

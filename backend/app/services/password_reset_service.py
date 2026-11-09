@@ -34,7 +34,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlencode
 
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session
 
 from app.core import security
@@ -422,13 +422,21 @@ def is_request_closed(db: Session, jti: Optional[str]) -> bool:
     ).first() is not None
 
 
-def close_request_for_token(db: Session, jti: Optional[str]) -> None:
-    """Mark the request behind a used link as satisfied, retiring its code."""
-    if not jti:
-        return
-    row = db.query(PasswordResetRequest).filter(
-        PasswordResetRequest.token_jti == jti,
-        PasswordResetRequest.satisfied_at.is_(None),
-    ).first()
-    if row is not None:
-        row.satisfied_at = _now()
+def consume_reset_link(db: Session, jti: str, user_id: int) -> bool:
+    """Atomically claim an issued reset link in the database.
+
+    Keeping the single-use state beside the reset request avoids making a
+    valid link depend on Redis availability. The caller commits this update
+    together with the password change.
+    """
+    result = db.execute(
+        update(PasswordResetRequest)
+        .where(
+            PasswordResetRequest.token_jti == jti,
+            PasswordResetRequest.user_id == user_id,
+            PasswordResetRequest.satisfied_at.is_(None),
+        )
+        .values(satisfied_at=_now())
+        .execution_options(synchronize_session=False)
+    )
+    return result.rowcount == 1

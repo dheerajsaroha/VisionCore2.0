@@ -9,13 +9,13 @@
  */
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  Clock, CheckCircle2, AlertTriangle, UserX, 
-  ArrowRight, Activity, Calendar, Camera, Building2, TrendingUp 
+import {
+  Clock,
+  ArrowRight, Activity, Building2, TrendingUp
 } from 'lucide-react';
-import { 
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, 
-  Tooltip, CartesianGrid, BarChart, Bar 
+import {
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
+  Tooltip, CartesianGrid, BarChart, Bar
 } from 'recharts';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -124,7 +124,7 @@ export function AttendanceOverview({ logs = [], chartData = [], departmentData =
         {/* Status Badges Bar */}
         <div className="flex items-center flex-wrap gap-2.5 mb-6">
           {todayStatusBadges.map((b) => (
-            <div 
+            <div
               key={b.label}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-medium ${b.color}`}
             >

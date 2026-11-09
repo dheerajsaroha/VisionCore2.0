@@ -5,7 +5,6 @@ import {
   ChevronRight,
   ChevronDown,
   Layers,
-  Users,
   Briefcase,
   RefreshCw,
   Shield

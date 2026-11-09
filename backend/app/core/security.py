@@ -27,12 +27,8 @@ def _get_redis():
     request) leaves the cached client attached to a dead loop. Every command
     then raises "Event loop is closed".
 
-    That is not a cosmetic problem here. `consume_one_time_token` fails closed
-    by design, so a stale client turns every *valid* password-reset link into
-    a 400 "This reset link is invalid or has expired" -- indistinguishable from
-    a genuinely expired link, with no hint that Redis is at fault. Keying the
-    client by the running loop keeps a long-lived server identical while
-    making any other loop get a working client of its own.
+    Keying the client by the running loop keeps a long-lived server identical
+    while making any other loop get a working client of its own.
     """
     import asyncio
 
@@ -94,11 +90,7 @@ async def is_token_blacklisted(token: str) -> bool:
 
 
 async def consume_one_time_token(token: str, expires_in: int) -> bool:
-    """Atomically consume a short-lived credential.
-
-    Password-reset tokens are security-sensitive, so a Redis outage is a
-    fail-closed condition rather than allowing a token to be reused.
-    """
+    """Atomically consume a short-lived credential using Redis."""
     try:
         client = _get_redis()
         return bool(await client.set(f"one-time:{token}", "used", ex=expires_in, nx=True))

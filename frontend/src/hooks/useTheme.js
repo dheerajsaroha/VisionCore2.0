@@ -10,7 +10,7 @@
  * Usage:
  *   const { theme, setTheme, cycleTheme, availableThemes } = useTheme();
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useSyncExternalStore, useCallback } from 'react';
 
 const STORAGE_KEY = 'visioncore_theme';
 export const VALID_THEMES = ['dark', 'light', 'midnight', 'nordic'];
@@ -59,16 +59,15 @@ function notifyListeners(theme) {
   _listeners.forEach((fn) => fn(theme));
 }
 
-export function useTheme() {
-  const [theme, setThemeState] = useState(_currentTheme);
+function subscribeToTheme(listener) {
+  _listeners.push(listener);
+  return () => {
+    _listeners = _listeners.filter((fn) => fn !== listener);
+  };
+}
 
-  useEffect(() => {
-    _listeners.push(setThemeState);
-    setThemeState(_currentTheme);
-    return () => {
-      _listeners = _listeners.filter((fn) => fn !== setThemeState);
-    };
-  }, []);
+export function useTheme() {
+  const theme = useSyncExternalStore(subscribeToTheme, () => _currentTheme, () => DEFAULT_THEME);
 
   const setTheme = useCallback((newTheme) => {
     if (!VALID_THEMES.includes(newTheme)) return;

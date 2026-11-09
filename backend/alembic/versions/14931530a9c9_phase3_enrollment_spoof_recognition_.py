@@ -40,7 +40,7 @@ def upgrade() -> None:
         batch_op.add_column(
             sa.Column(
                 "embedding_version",
-                sa.NVARCHAR(length=50),
+                sa.String(length=50),
                 nullable=True,
                 comment="Version tag for the embedding/extraction pipeline/model",
             )
@@ -61,11 +61,11 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column("user_id", sa.Integer(), nullable=False, index=True),
         sa.Column("org_id", sa.UUID(as_uuid=True), nullable=False, index=True),
-        sa.Column("status", sa.NVARCHAR(length=20), nullable=False),
+        sa.Column("status", sa.String(length=20), nullable=False),
         sa.Column("failure_reason", sa.Text(), nullable=True),
         sa.Column("quality_score", sa.Numeric(5, 2), nullable=True),
-        sa.Column("embedding_version", sa.NVARCHAR(length=50), nullable=True),
-        sa.Column("image_resolution", sa.NVARCHAR(length=30), nullable=True),
+        sa.Column("embedding_version", sa.String(length=50), nullable=True),
+        sa.Column("image_resolution", sa.String(length=30), nullable=True),
         sa.Column("brightness_score", sa.Numeric(5, 2), nullable=True),
         sa.Column("blur_score", sa.Numeric(6, 3), nullable=True),
         sa.Column(
@@ -91,10 +91,10 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column("user_id", sa.Integer(), nullable=True, index=True),
         sa.Column("org_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=False, index=True),
-        sa.Column("attempt_type", sa.NVARCHAR(length=20), nullable=False),
+        sa.Column("attempt_type", sa.String(length=20), nullable=False),
         sa.Column("is_spoof", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("spoof_score", sa.Numeric(5, 2), nullable=True),
-        sa.Column("model_name", sa.NVARCHAR(length=50), nullable=True),
+        sa.Column("model_name", sa.String(length=50), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -118,13 +118,13 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column("org_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=False, index=True),
         sa.Column("user_id", sa.Integer(), nullable=True, index=True),
-        sa.Column("status", sa.NVARCHAR(length=20), nullable=False),
+        sa.Column("status", sa.String(length=20), nullable=False),
         sa.Column("distance", sa.Numeric(6, 4), nullable=True),
         sa.Column("confidence", sa.Numeric(5, 3), nullable=True),
         sa.Column("is_live", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("liveness_score", sa.Numeric(5, 3), nullable=True),
-        sa.Column("model_name", sa.NVARCHAR(length=50), nullable=True),
-        sa.Column("embedding_version", sa.NVARCHAR(length=50), nullable=True),
+        sa.Column("model_name", sa.String(length=50), nullable=True),
+        sa.Column("embedding_version", sa.String(length=50), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

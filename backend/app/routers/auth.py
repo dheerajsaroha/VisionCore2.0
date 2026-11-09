@@ -412,10 +412,9 @@ async def reset_password(
 
     used_code = False
     if payload.has_token:
-        user_obj, expires_in, jti = _resolve_reset_token(db, payload.token)
+        user_obj, jti = _resolve_reset_token(db, payload.token)
     elif payload.has_otp:
         user_obj = _resolve_reset_otp(db, payload.email, payload.otp)
-        expires_in = None
         used_code = True
     else:
         # Neither credential is usable. Answered here rather than by a schema
@@ -434,9 +433,8 @@ async def reset_password(
     # in an old mailbox or a proxy log -- succeeds a second time, which is the
     # one thing a one-time token exists to prevent.
     if not used_code:
-        already_used = await security.consume_one_time_token(
-            payload.token, expires_in)
-        if not already_used:
+        if not password_reset_service.consume_reset_link(db, jti, user_obj.id):
+            db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="This reset link is invalid, expired, or has already "
@@ -463,11 +461,6 @@ async def reset_password(
         if row is not None:
             password_reset_service.consume_otp(row)
             db.commit()
-    else:
-        # Symmetry: using the link also retires the code delivered with it.
-        password_reset_service.close_request_for_token(db, jti)
-        db.commit()
-
     user_session.revoke_all_for_user(db, user_id=user_obj.id, reason="password_reset", logout=True)
     _audit_password_event(
         db, user_obj,
@@ -492,7 +485,6 @@ def _resolve_reset_token(db: Session, token: str):
         if claims.get("type") != "password_reset" or not claims.get("jti"):
             raise ValueError("invalid token type")
         user_id = int(claims["sub"])
-        expires_in = max(1, int(claims["exp"] - datetime.now(timezone.utc).timestamp()))
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -511,7 +503,7 @@ def _resolve_reset_token(db: Session, token: str):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This reset link is invalid, expired, or has already been used.")
-    return user_obj, expires_in, claims["jti"]
+    return user_obj, claims["jti"]
 
 
 def _resolve_reset_otp(db: Session, email: str | None, otp: str | None):
@@ -558,7 +550,10 @@ async def refresh_access_token(
     # emitted by login/refresh responses.
     token = request.cookies.get(settings.REFRESH_COOKIE_NAME) or (body.refresh_token if body else None) or refresh_token
     if not token:
-        raise HTTPException(status_code=422, detail="refresh_token is required")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh session is unavailable",
+        )
 
     # 1) Validate token type
     if not security.verify_token_type(token, "refresh"):

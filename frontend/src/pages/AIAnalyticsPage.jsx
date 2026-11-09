@@ -6,7 +6,7 @@ import React, { useState, useEffect } from 'react';
 import aiService from '../services/aiService';
 import { Card } from '../components/ui/Card';
 import { Spinner } from '../components/ui/Spinner';
-import { Tabs } from '../components/ui/Tabs';
+import '../components/ui/Tabs';
 
 const AIAnalyticsPage = () => {
   const [usage, setUsage] = useState(null);

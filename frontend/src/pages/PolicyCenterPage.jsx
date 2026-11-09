@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
-  FileText, Shield, CheckCircle2, AlertTriangle, Search, Filter,
-  RefreshCw, Plus, BookOpen, Clock, Activity, Download, BarChart3,
-  Layers, Users, Building2, Tag, X, ChevronRight, Eye, MessageSquare,
-  PenSquare, Archive, TrendingUp, Percent, AlertCircle
+  FileText, Shield, CheckCircle2, AlertTriangle, Search,
+  RefreshCw, Plus, BookOpen, Download, BarChart3,
+  Layers, Eye, MessageSquare,
+  PenSquare, TrendingUp, Percent, AlertCircle
 } from 'lucide-react';
 import { policyService } from '../services/policyService';
 import { useAuthStore } from '../store/authStore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { Spinner } from '../components/ui/Spinner';
+import '../components/ui/Spinner';
 import { formatDate } from '../lib/utils';
 
 const TABS = [
@@ -32,7 +32,7 @@ export default function PolicyCenterPage() {
   const [complianceSummary, setComplianceSummary] = useState(null);
   const [complianceBreaches, setComplianceBreaches] = useState([]);
   const [pendingAcks, setPendingAcks] = useState([]);
-const [signatures, setSignatures] = useState([]);
+const [signatures] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -89,7 +89,7 @@ const [signatures, setSignatures] = useState([]);
       const res = await policyService.searchDocuments({ search: searchQuery, limit: 50 });
       const docs = Array.isArray(res) ? res : (res.data || res?.items || []);
       setDocuments(docs);
-    } catch (err) {
+    } catch {
       setErrorMsg('Search failed.');
     } finally {
       setLoading(false);
@@ -521,4 +521,3 @@ const [signatures, setSignatures] = useState([]);
     </motion.div>
   );
 }
-

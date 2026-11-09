@@ -3,7 +3,6 @@ import {
   MapPin,
   Plus,
   RefreshCw,
-  Globe,
   Clock,
   Navigation
 } from 'lucide-react';
@@ -11,7 +10,6 @@ import api from '../services/apiClient';
 
 export default function BranchManagementPage() {
   const [branches, setBranches] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({
     code: '',
@@ -24,17 +22,15 @@ export default function BranchManagementPage() {
 
   const fetchBranches = async () => {
     try {
-      setLoading(true);
       const res = await api.get('/branches');
       setBranches(res.data);
     } catch (err) {
       console.error('Failed to load branches:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetch remote branches after mount.
     fetchBranches();
   }, []);
 

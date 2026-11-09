@@ -15,7 +15,7 @@ export const PASSWORD_REQUIREMENTS = [
   { id: 'upper', label: 'One uppercase letter', test: (v) => /[A-Z]/.test(v) },
   { id: 'lower', label: 'One lowercase letter', test: (v) => /[a-z]/.test(v) },
   { id: 'digit', label: 'One number', test: (v) => /[0-9]/.test(v) },
-  { id: 'special', label: 'One special character', test: (v) => /[!@#$%^&*(),.?":{}|<>\-_=+\[\]\\/;`~]/.test(v) },
+  { id: 'special', label: 'One special character', test: (v) => /[!@#$%^&*(),.?":{}|<>\-_=+\x5B\]\\/;`~]/.test(v) },
 ];
 
 export function checkPassword(value) {

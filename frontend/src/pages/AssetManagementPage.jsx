@@ -6,7 +6,7 @@ import {
   Search, Filter, Download, Upload,
   HardDrive, Key, Truck, Users
 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Spinner } from '../components/ui/Spinner';
@@ -45,13 +45,17 @@ export default function AssetManagementPage() {
     try {
       switch (activeTab) {
         case 'overview':
+        {
           const analytics = await assetService.getAnalytics();
           setMetrics(analytics);
           break;
+        }
         case 'inventory':
+        {
           const assetList = await assetService.getAssets({ search: search || undefined });
           setAssets(assetList);
           break;
+        }
         default:
           break;
       }
@@ -344,4 +348,3 @@ export default function AssetManagementPage() {
     </motion.div>
   );
 }
-

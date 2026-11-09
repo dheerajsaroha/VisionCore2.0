@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Mail, User, Shield, Building2, Calendar, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Mail, User, Clock, AlertCircle } from 'lucide-react';
 import { userService } from '../services/userService';
 import { attendanceService } from '../services/attendanceService';
 import { Avatar } from './ui/Avatar';
@@ -13,6 +13,7 @@ export function EmployeeDetailModal({ userId, isOpen, onClose }) {
 
   useEffect(() => {
     if (!isOpen || !userId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Clear stale detail data when the modal closes or target is missing.
       setEmployee(null);
       setSummary(null);
       return;

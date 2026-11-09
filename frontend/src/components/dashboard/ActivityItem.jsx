@@ -3,11 +3,11 @@
  * Reusable activity row component displaying actor, description, timestamp, and category badge.
  */
 import React from 'react';
-import { 
-  UserPlus, Clock, Package, FileCheck, 
-  ShieldCheck, AlertCircle, CheckCircle2, Activity 
+import {
+  UserPlus, Clock, Package, FileCheck,
+  ShieldCheck, CheckCircle2, Activity
 } from 'lucide-react';
-import { Badge } from '../ui/Badge';
+import '../ui/Badge';
 import { cn } from '../../lib/utils';
 
 const iconMap = {

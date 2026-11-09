@@ -58,7 +58,7 @@ export function getCurrentLocation({ enableHighAccuracy = false } = {}) {
           accuracy: round(accuracy) ?? null,
         });
       },
-      (error) => {
+      () => {
         clearTimeout(timer);
         // Denied, unavailable, or timed out: all mean "punch without a location".
         finish(null);

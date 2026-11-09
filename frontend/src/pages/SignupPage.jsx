@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ShieldCheck, ArrowRight, ArrowLeft, Building2, CheckCircle2, AlertCircle } from "lucide-react";
+import { ShieldCheck, ArrowRight, ArrowLeft, Building2, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { authService } from "../services/authService";
-import { Button, Input, Card, CardContent } from "../components/ui";
+import { Button, Card, CardContent } from "../components/ui";
 import { useAuthStore } from "../store/authStore";
 
 export default function SignupPage() {

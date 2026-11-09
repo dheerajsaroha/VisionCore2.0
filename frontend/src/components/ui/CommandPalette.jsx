@@ -16,7 +16,6 @@ import {
   Trophy,
   Briefcase,
   BookOpen,
-  TrendingUp,
   BrainCircuit,
   Database,
   Bot,
@@ -83,6 +82,7 @@ export function CommandPalette({ isOpen, onClose }) {
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 50);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Start at the first result whenever the palette opens.
       setSelectedIndex(0);
     } else {
       setQuery('');

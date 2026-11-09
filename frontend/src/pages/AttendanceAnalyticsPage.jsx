@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { BarChart2, RefreshCw, TrendingUp, Users, Clock, Activity, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { BarChart2, RefreshCw, Users, Activity, CheckCircle2, AlertTriangle } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend

@@ -3,9 +3,9 @@
  * Reusable actionable item for the approval queue with approve and reject actions.
  */
 import React from 'react';
-import { 
-  Palmtree, DollarSign, Clock, Package, 
-  Award, CheckSquare, CheckCircle, XCircle, FileText 
+import {
+  Palmtree, DollarSign, Clock, Package,
+  Award, CheckCircle, XCircle, FileText
 } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';

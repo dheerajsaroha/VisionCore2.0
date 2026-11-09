@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Gauge, RefreshCw, Plus, Users, UserCheck, UserX,
-  TrendingUp, CheckCircle2, AlertCircle
+  Gauge, Plus, UserCheck,
+  TrendingUp
 } from 'lucide-react';
 import { workforceService } from '../services/workforceService';
 import { Button } from '../components/ui/Button';

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, Calendar, Users, Clock, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Download, Users, Clock, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { attendanceService } from '../services/attendanceService';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';

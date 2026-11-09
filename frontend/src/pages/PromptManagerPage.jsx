@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import aiService from '../services/aiService';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -20,9 +20,7 @@ const PromptManagerPage = () => {
     temperature: 0.7, max_tokens: 1024, version: '1.0',
   });
 
-  useEffect(() => { loadPrompts(); }, []);
-
-  const loadPrompts = async () => {
+  const loadPrompts = useCallback(async () => {
     setIsLoading(true);
     try {
       const category = activeTab !== 'all' ? activeTab : undefined;
@@ -30,9 +28,9 @@ const PromptManagerPage = () => {
       setPrompts(data || []);
     } catch (err) { setError(err.message); }
     finally { setIsLoading(false); }
-  };
+  }, [activeTab]);
 
-  useEffect(() => { loadPrompts(); }, [activeTab]);
+  useEffect(() => { loadPrompts(); }, [loadPrompts]);
 
   const handleCreate = async () => {
     if (!newPrompt.name.trim() || !newPrompt.template.trim()) return;
@@ -114,4 +112,3 @@ const PromptManagerPage = () => {
 };
 
 export default PromptManagerPage;
-

@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
-import { Shield, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 const ROLE_DESCRIPTIONS = {
   SuperAdmin: 'Platform-level administrator with unrestricted global access across all tenants.',

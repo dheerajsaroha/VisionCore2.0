@@ -3,32 +3,25 @@ import {
   Settings,
   Palette,
   ShieldAlert,
-  Building2,
-  Save,
-  RefreshCw,
-  CheckCircle2
+  RefreshCw
 } from 'lucide-react';
 import api from '../services/apiClient';
 
 export default function OrganizationSettingsPage() {
   const [hierarchy, setHierarchy] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [primaryColor, setPrimaryColor] = useState('#4F46E5');
-  const [saving, setSaving] = useState(false);
 
   const fetchSettings = async () => {
     try {
-      setLoading(true);
       const res = await api.get('/organizations/hierarchy');
       setHierarchy(res.data);
     } catch (err) {
       console.error('Failed to load settings:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetch organization settings after mount.
     fetchSettings();
   }, []);
 

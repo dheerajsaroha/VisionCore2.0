@@ -2,8 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Clock, ChevronRight, User, CheckCircle2, AlertTriangle, Activity, RefreshCw, Calendar } from 'lucide-react';
 import { workforceService } from '../services/workforceService';
 import { Button } from '../components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
-import { Input } from '../components/ui/Input';
+import { Card, CardContent } from '../components/ui/Card';
+import '../components/ui/Input';
 
 const STATUS_COLORS = {
   PRESENT: '#22c55e', LATE: '#f59e0b', ABSENT: '#ef4444',

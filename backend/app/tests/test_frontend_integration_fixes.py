@@ -179,7 +179,8 @@ def test_checkin_success_returns_200():
     assert data["user_id"] == 1
 
 
-def test_refresh_endpoint_returns_422_without_token():
-    """Refresh without token must return 422, not 500."""
+def test_refresh_endpoint_returns_401_without_token():
+    """An anonymous browser without a refresh cookie has no restorable session."""
     response = client.post("/api/v1/auth/refresh")
-    assert response.status_code == 422
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Refresh session is unavailable"

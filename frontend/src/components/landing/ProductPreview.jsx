@@ -3,20 +3,12 @@ import {
   BrainCircuit,
   CheckCircle2,
   Cpu,
-  Clock,
   ShieldCheck,
   Users,
   DollarSign,
-  TrendingUp,
-  Activity,
-  Calendar,
   Layers,
   Sparkles,
-  Lock,
-  ChevronRight,
   UserCheck,
-  AlertCircle,
-  FileText,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 

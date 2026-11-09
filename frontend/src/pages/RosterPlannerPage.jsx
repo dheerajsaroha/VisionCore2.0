@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  FileSpreadsheet, Plus, RefreshCw, CheckCircle2, Clock,
-  Users, ArrowLeftRight, Check, X, AlertCircle
+  FileSpreadsheet, Plus, RefreshCw, CheckCircle2, ArrowLeftRight, Check, X, AlertCircle
 } from 'lucide-react';
 import { workforceService } from '../services/workforceService';
 import { Button } from '../components/ui/Button';

@@ -5,8 +5,9 @@ import json
 import os
 import secrets
 import logging
+import tempfile
 from functools import lru_cache
-from typing import List, Literal
+from typing import List, Literal, Optional
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from urllib.parse import quote_plus
@@ -90,20 +91,36 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str = Field(default="", min_length=0)
     POSTGRES_DB: str = "attendance_db"
     DB_ECHO: bool = False
+    DATABASE_URL_OVERRIDE: Optional[str] = Field(default=None, alias="DATABASE_URL")
 
     @property
     def DATABASE_URL(self) -> str:
-        # Encode the password here!
+        if self.DATABASE_URL_OVERRIDE:
+            url = self.DATABASE_URL_OVERRIDE
+            if url.startswith("postgresql://"):
+                url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+            elif url.startswith("postgres://"):
+                url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+            return url
         password = quote_plus(self.POSTGRES_PASSWORD)
         return (f"postgresql+psycopg2://{self.POSTGRES_USER}:{password}"
                 f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}")
 
     @property
     def ASYNC_DATABASE_URL(self) -> str:
-        # Encode the password here too — consistent with DATABASE_URL.
+        if self.DATABASE_URL_OVERRIDE:
+            url = self.DATABASE_URL_OVERRIDE
+            if url.startswith("postgresql://"):
+                url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            elif url.startswith("postgres://"):
+                url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+            elif url.startswith("postgresql+psycopg2://"):
+                url = url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+            return url
         password = quote_plus(self.POSTGRES_PASSWORD)
         return (f"postgresql+asyncpg://{self.POSTGRES_USER}:{password}"
                 f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}")
+
     # CORS
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
 
@@ -220,7 +237,7 @@ class Settings(BaseSettings):
     AUDIT_ENABLED: bool = True
 
     # Cache & Rate Limiting
-    CACHE_DIR: str = "/tmp/visioncore_cache"
+    CACHE_DIR: str = Field(default_factory=lambda: os.path.join(tempfile.gettempdir(), "visioncore_cache"))
     REDIS_URL: str = "redis://localhost:6379/0"
 
 

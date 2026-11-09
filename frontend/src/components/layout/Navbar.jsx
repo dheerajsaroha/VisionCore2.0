@@ -152,6 +152,7 @@ export const Navbar = () => {
 
   // Close the menus on navigation and when focus leaves the navbar.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Close transient navigation menus after route changes.
     setMobileOpen(false);
     setOpenDropdown(false);
   }, [location.pathname, location.hash]);

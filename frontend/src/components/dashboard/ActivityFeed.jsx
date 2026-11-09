@@ -5,12 +5,11 @@
  */
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Activity, UserPlus, Clock, CheckCircle2, 
-  FileCheck, ShieldAlert, Package, DollarSign, Filter 
+import {
+  Activity
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card';
-import { Badge } from '../ui/Badge';
+import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
+import '../ui/Badge';
 import { Skeleton } from '../ui/Skeleton';
 import { EmptyState } from '../ui/EmptyState';
 import { ActivityItem } from './ActivityItem';
@@ -55,8 +54,8 @@ export function ActivityFeed({ activities = [], loading, onFilterChange }) {
                 key={f}
                 onClick={() => handleFilterClick(f)}
                 className={`px-2.5 py-1 rounded-lg capitalize transition-colors font-medium ${
-                  filter === f 
-                    ? 'bg-indigo-600 text-white shadow-sm' 
+                  filter === f
+                    ? 'bg-indigo-600 text-white shadow-sm'
                     : 'bg-slate-950/40 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
                 }`}
               >

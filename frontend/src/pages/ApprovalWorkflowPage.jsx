@@ -2,10 +2,10 @@
  * ApprovalWorkflowPage.jsx — Enterprise Approval Workflow Center
  * Sprint 2 — Entity 4
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  GitPullRequest, CheckCircle2, XCircle, RotateCcw, Clock, ShieldCheck,
-  Zap, UserCheck, Layers, AlertTriangle, BarChart3, Plus, RefreshCw, Eye
+  GitPullRequest, CheckCircle2, XCircle, RotateCcw, Clock,
+  Zap, UserCheck, Layers, BarChart3, RefreshCw
 } from 'lucide-react';
 import workflowService from '../services/workflowService';
 
@@ -26,11 +26,7 @@ export default function ApprovalWorkflowPage() {
   const [actionComments, setActionComments] = useState('');
   const [actionType, setActionType] = useState('approve');
 
-  useEffect(() => {
-    loadData();
-  }, [activeTab]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setMessage(null);
     try {
@@ -55,7 +51,11 @@ export default function ApprovalWorkflowPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleExecuteAction = async () => {
     if (!selectedRequest) return;
@@ -78,7 +78,7 @@ export default function ApprovalWorkflowPage() {
       await workflowService.seedWorkflows();
       setMessage({ type: 'success', text: 'Workflows & blueprint templates seeded successfully!' });
       loadData();
-    } catch (err) {
+    } catch {
       setMessage({ type: 'error', text: 'Seeding failed' });
     }
   };

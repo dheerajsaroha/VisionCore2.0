@@ -78,10 +78,9 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (refreshError) {
         const status = refreshError.response?.status;
-        // 422 from refresh means the cookie is invalid/malformed.
-        // Treat it the same as an expired cookie: clear state and redirect.
-        if (status === 422) {
-          console.warn('Refresh token invalid (422). Clearing session.');
+        // A missing refresh cookie means this browser has no restorable session.
+        if (status === 401) {
+          console.warn('Refresh session unavailable. Clearing session.');
         }
         setAccessToken(null);
         clearAuthStorage();

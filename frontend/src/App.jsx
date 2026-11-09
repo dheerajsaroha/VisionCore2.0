@@ -99,6 +99,7 @@ const AppRoutes = () => {
   const toast = useToast();
   const { fetchMyPermissions, myPermissions } = usePermissionStore();
   const refreshSubscription = useSubscriptionStore((s) => s.fetchMySubscription);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   useEffect(() => {
     const handler = (e) => {
@@ -125,6 +126,8 @@ const AppRoutes = () => {
   const permissionKey = myPermissions.join('|');
 
   const syncAccess = useCallback(async () => {
+    if (!isAuthenticated) return;
+
     const before = permissionKey;
     // `silent` keeps the last known-good permissions rendered, so polling never
     // flashes the UI into an unresolved state.
@@ -133,7 +136,7 @@ const AppRoutes = () => {
     if (after && after !== before) {
       toast?.({ message: 'Your access has been updated.', type: 'success', duration: 4000 });
     }
-  }, [permissionKey, fetchMyPermissions, refreshSubscription, toast]);
+  }, [isAuthenticated, permissionKey, fetchMyPermissions, refreshSubscription, toast]);
 
   useEffect(() => {
     const onFocus = () => { syncAccess(); };

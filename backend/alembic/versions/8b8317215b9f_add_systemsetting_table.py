@@ -26,6 +26,7 @@ def upgrade() -> None:
     sa.Column('setting_key', sa.String(length=100), nullable=False),
     sa.Column('setting_value', sa.Text(), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('NOW()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('NOW()'), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )

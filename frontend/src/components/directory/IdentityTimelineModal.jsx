@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Spinner } from '../ui/Spinner';
-import { History, Calendar, User, Shield, ArrowRight } from 'lucide-react';
+import { History, User } from 'lucide-react';
 import userService from '../../services/userService';
 
 export function IdentityTimelineModal({
@@ -29,7 +29,7 @@ export function IdentityTimelineModal({
         if (isMounted) {
           setEvents(res.data || []);
         }
-      } catch (err) {
+      } catch {
         if (isMounted) setEvents([]);
       } finally {
         if (isMounted) setLoading(false);

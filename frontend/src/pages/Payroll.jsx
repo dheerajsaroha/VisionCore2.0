@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Download, RefreshCw, DollarSign, Calendar, CreditCard } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { RefreshCw, DollarSign, Calendar, CreditCard } from 'lucide-react';
 import { payrollService } from '../services/payrollService';
 import { useAuthStore } from '../store/authStore';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
+import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Spinner } from '../components/ui/Spinner';
@@ -18,11 +18,7 @@ export default function Payroll() {
   const { user } = useAuthStore();
   const isAdmin = ['Admin', 'Manager'].includes(user?.role?.name);
 
-  useEffect(() => {
-    fetchPayroll();
-  }, [month, year]);
-
-  const fetchPayroll = async () => {
+  const fetchPayroll = useCallback(async () => {
     setLoading(true);
     try {
       const res = await payrollService.getPayrolls(month, year);
@@ -30,7 +26,11 @@ export default function Payroll() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [month, year]);
+
+  useEffect(() => {
+    fetchPayroll();
+  }, [fetchPayroll]);
 
   const handleGenerate = async () => {
     if (!isAdmin) return;
@@ -200,4 +200,3 @@ export default function Payroll() {
     </div>
   );
 }
-

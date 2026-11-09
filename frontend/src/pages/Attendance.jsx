@@ -40,7 +40,6 @@ export default function Attendance() {
   const [requestedOut, setRequestedOut] = useState('');
   const [correctionLoading, setCorrectionLoading] = useState(false);
   const [correctionError, setCorrectionError] = useState('');
-  const [myCorrections, setMyCorrections] = useState([]);
 
 
   const { user }  = useAuthStore();
@@ -73,10 +72,8 @@ export default function Attendance() {
   const fetchCorrections = useCallback(async () => {
     if (!canRequestCorrection) return;
     try {
-      const response = await workforceService.corrections.listMine();
-      setMyCorrections(response.data?.requests || []);
+      await workforceService.corrections.listMine();
     } catch {
-      setMyCorrections([]);
     }
   }, [canRequestCorrection]);
 

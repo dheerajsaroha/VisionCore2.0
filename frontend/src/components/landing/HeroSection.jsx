@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ShieldCheck, Zap, ChevronRight, Activity, Users, Lock, Sparkles, CheckCircle2 } from "lucide-react";
+import { ArrowRight, ShieldCheck, ChevronRight, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 
 const STATS = [

@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:15-alpine
+    image: pgvector/pgvector:pg15
     container_name: visioncore-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -37,7 +37,7 @@ services:
   backend:
     build:
       context: ../backend
-      dockerfile: ../Dockerfile.prod
+      dockerfile: Dockerfile
     container_name: visioncore-backend
     environment:
       POSTGRES_HOST: postgres
@@ -46,7 +46,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: ${POSTGRES_DB:-attendance_db}
       REDIS_URL: redis://redis:6379/0
-      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      SECRET_KEY: ${SECRET_KEY:-lSybLY2ZIQTa4NZ26tQVo00SfYJputFLm4MusMLobHg}
       ENVIRONMENT: production
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173}
     ports:
@@ -67,12 +67,12 @@ services:
   frontend:
     build:
       context: ../frontend
-      dockerfile: ../frontend/Dockerfile
+      dockerfile: Dockerfile
     container_name: visioncore-frontend
     environment:
       VITE_API_URL: http://localhost:8000/api/v1
     ports:
-      - "3000:80"
+      - "3000:3000"
     depends_on:
       - backend
     networks:

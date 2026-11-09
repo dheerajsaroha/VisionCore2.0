@@ -107,7 +107,7 @@ export const userService = {
         const url = URL.createObjectURL(new Blob([res.data], { type: res.headers?.['content-type'] || 'image/jpeg' }));
         facePhotoUrlCache.set(userId, url);
         return url;
-      } catch (err) {
+      } catch {
         return null;
       } finally {
         facePhotoInFlight.delete(userId);

@@ -6,14 +6,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Sparkles, Bot, Send, ShieldCheck, 
-  TrendingUp, Lightbulb, CheckCircle2, ArrowRight, Loader2 
+import {
+  Sparkles, Bot, Send, Lightbulb, ArrowRight, Loader2
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
+import '../ui/Input';
 import { Skeleton } from '../ui/Skeleton';
 import aiService from '../../services/aiService';
 
@@ -71,7 +70,7 @@ export function AIInsightsWidget({ roleName, insights = [], loading }) {
     try {
       const res = await aiService.copilotQuery({ prompt: query, role_scope: role });
       setCopilotResponse(res?.answer || res?.content || `AI Insight: Analysis for "${query}" completed within role scope. Organizational attendance compliance is running at target benchmark.`);
-    } catch (err) {
+    } catch {
       setCopilotResponse(`AI Copilot Analysis: Organizational attendance is running at 94.2% compliance. Approval center actions pending review before end-of-day.`);
     } finally {
       setAsking(false);
@@ -81,7 +80,7 @@ export function AIInsightsWidget({ roleName, insights = [], loading }) {
   return (
     <Card className="border-indigo-500/30 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-indigo-950/40 shadow-2xl relative overflow-hidden">
       <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
-      
+
       <CardHeader className="border-b border-slate-800/60 pb-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck, Copy, GitMerge, History, UserCheck, Layout, Plus,
-  RefreshCw, CheckCircle, AlertTriangle, ArrowRight, Layers, FileCode
+  RefreshCw, CheckCircle, AlertTriangle
 } from 'lucide-react';
 import dynamicRoleService from '../services/dynamicRoleService';
 
@@ -31,7 +31,7 @@ export default function DynamicRoleManagementPage() {
       setRoles(rData.roles || []);
       setTemplates(tData || []);
       setEffectiveAuth(effData);
-    } catch (err) {
+    } catch {
       setMsg({ type: 'error', text: 'Failed to load dynamic roles infrastructure.' });
     } finally {
       setLoading(false);
@@ -43,7 +43,7 @@ export default function DynamicRoleManagementPage() {
       await dynamicRoleService.seedTemplates();
       setMsg({ type: 'success', text: 'Seeded default enterprise role templates.' });
       loadData();
-    } catch (err) {
+    } catch {
       setMsg({ type: 'error', text: 'Failed to seed templates.' });
     }
   };

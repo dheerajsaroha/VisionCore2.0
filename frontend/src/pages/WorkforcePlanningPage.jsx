@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Users, Plus, RefreshCw, Briefcase, TrendingUp, Building2,
-  CheckCircle2, AlertCircle, FileText
+  Users, Plus, RefreshCw, Briefcase, TrendingUp, Building2
 } from 'lucide-react';
 import { workforceService } from '../services/workforceService';
 import { Button } from '../components/ui/Button';

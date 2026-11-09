@@ -2,16 +2,12 @@ import React, { useState, useEffect } from 'react';
 import {
   Briefcase,
   Plus,
-  RefreshCw,
-  Award,
-  Layers,
-  Users
+  RefreshCw
 } from 'lucide-react';
 import api from '../services/apiClient';
 
 export default function PositionManagementPage() {
   const [positions, setPositions] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({
     code: '',
@@ -23,17 +19,15 @@ export default function PositionManagementPage() {
 
   const fetchPositions = async () => {
     try {
-      setLoading(true);
       const res = await api.get('/positions');
       setPositions(res.data);
     } catch (err) {
       console.error('Failed to load positions:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetch remote positions after mount.
     fetchPositions();
   }, []);
 

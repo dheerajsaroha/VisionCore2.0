@@ -14,14 +14,36 @@ import { useSubscriptionStore } from '../store/subscriptionStore';
  *   if (isEnterprise()) { ... }
  */
 export function useSubscription() {
-  const store = useSubscriptionStore();
+  const isCacheHydrated = useSubscriptionStore((state) => state.isCacheHydrated);
+  const isLoadingState = useSubscriptionStore((state) => state.isLoading);
+  const fetchMySubscription = useSubscriptionStore((state) => state.fetchMySubscription);
+  const hasFeatureForOrg = useSubscriptionStore((state) => state.hasFeature);
+  const hasAllFeaturesForOrg = useSubscriptionStore((state) => state.hasAllFeatures);
+  const hasAnyFeatureForOrg = useSubscriptionStore((state) => state.hasAnyFeature);
+  const isEnterpriseForOrg = useSubscriptionStore((state) => state.isEnterprise);
+  const isProfessionalForOrg = useSubscriptionStore((state) => state.isProfessional);
+  const isStarterForOrg = useSubscriptionStore((state) => state.isStarter);
+  const isOnTrialForOrg = useSubscriptionStore((state) => state.isOnTrial);
+  const isActiveForOrg = useSubscriptionStore((state) => state.isActive);
+  const getLimitForOrg = useSubscriptionStore((state) => state.getLimit);
+  const isLimitExceededForOrg = useSubscriptionStore((state) => state.isLimitExceeded);
+  const planName = useSubscriptionStore((state) => state.planName);
+  const planCode = useSubscriptionStore((state) => state.planCode);
+  const planTier = useSubscriptionStore((state) => state.planTier);
+  const status = useSubscriptionStore((state) => state.status);
+  const billingCycle = useSubscriptionStore((state) => state.billingCycle);
+  const enabledFeatures = useSubscriptionStore((state) => state.enabledFeatures);
+  const featureCount = useSubscriptionStore((state) => state.featureCount);
+  const limits = useSubscriptionStore((state) => state.limits);
+  const usageStats = useSubscriptionStore((state) => state.usageStats);
+  const error = useSubscriptionStore((state) => state.error);
 
   // Hydrate subscription on mount if not already cached
   useEffect(() => {
-    if (!store.isCacheHydrated && !store.isLoading) {
-      store.fetchMySubscription();
+    if (!isCacheHydrated && !isLoadingState) {
+      fetchMySubscription();
     }
-  }, [store.isCacheHydrated, store.isLoading, store.fetchMySubscription]);
+  }, [isCacheHydrated, isLoadingState, fetchMySubscription]);
 
   /**
    * Check if a feature is enabled for the current organization.
@@ -30,9 +52,9 @@ export function useSubscription() {
   const hasFeature = useCallback(
     (featureCode) => {
       if (!featureCode) return true; // No feature required
-      return store.hasFeature(featureCode);
+      return hasFeatureForOrg(featureCode);
     },
-    [store]
+    [hasFeatureForOrg]
   );
 
   /**
@@ -41,9 +63,9 @@ export function useSubscription() {
   const hasAllFeatures = useCallback(
     (...featureCodes) => {
       if (featureCodes.length === 0) return true;
-      return store.hasAllFeatures(...featureCodes);
+      return hasAllFeaturesForOrg(...featureCodes);
     },
-    [store]
+    [hasAllFeaturesForOrg]
   );
 
   /**
@@ -52,31 +74,31 @@ export function useSubscription() {
   const hasAnyFeature = useCallback(
     (...featureCodes) => {
       if (featureCodes.length === 0) return true;
-      return store.hasAnyFeature(...featureCodes);
+      return hasAnyFeatureForOrg(...featureCodes);
     },
-    [store]
+    [hasAnyFeatureForOrg]
   );
 
   /**
    * Check subscription tier level.
    */
-  const isEnterprise = useCallback(() => store.isEnterprise(), [store]);
-  const isProfessional = useCallback(() => store.isProfessional(), [store]);
-  const isStarter = useCallback(() => store.isStarter(), [store]);
-  const isOnTrial = useCallback(() => store.isOnTrial(), [store]);
-  const isActive = useCallback(() => store.isActive(), [store]);
+  const isEnterprise = useCallback(() => isEnterpriseForOrg(), [isEnterpriseForOrg]);
+  const isProfessional = useCallback(() => isProfessionalForOrg(), [isProfessionalForOrg]);
+  const isStarter = useCallback(() => isStarterForOrg(), [isStarterForOrg]);
+  const isOnTrial = useCallback(() => isOnTrialForOrg(), [isOnTrialForOrg]);
+  const isActive = useCallback(() => isActiveForOrg(), [isActiveForOrg]);
 
   /**
    * Check licensing limits.
    */
   const getLimit = useCallback(
-    (limitType) => store.getLimit(limitType),
-    [store]
+    (limitType) => getLimitForOrg(limitType),
+    [getLimitForOrg]
   );
 
   const isLimitExceeded = useCallback(
-    (limitType, currentUsage) => store.isLimitExceeded(limitType, currentUsage),
-    [store]
+    (limitType, currentUsage) => isLimitExceededForOrg(limitType, currentUsage),
+    [isLimitExceededForOrg]
   );
 
   return {
@@ -97,21 +119,21 @@ export function useSubscription() {
     isLimitExceeded,
 
     // Raw data
-    planName: store.planName,
-    planCode: store.planCode,
-    planTier: store.planTier,
-    status: store.status,
-    billingCycle: store.billingCycle,
-    enabledFeatures: store.enabledFeatures,
-    featureCount: store.featureCount,
-    limits: store.limits,
-    usageStats: store.usageStats,
-    isLoading: store.isLoading && !store.isCacheHydrated,
-    isHydrated: store.isCacheHydrated,
-    error: store.error,
+    planName,
+    planCode,
+    planTier,
+    status,
+    billingCycle,
+    enabledFeatures,
+    featureCount,
+    limits,
+    usageStats,
+    isLoading: isLoadingState && !isCacheHydrated,
+    isHydrated: isCacheHydrated,
+    error,
 
     // Refresh
-    refresh: store.fetchMySubscription,
+    refresh: fetchMySubscription,
   };
 }
 
@@ -137,7 +159,7 @@ export function useFeature(featureCode) {
  *   if (!allowed) return <UpgradeRequired reason={reason} />;
  */
 export function useRequireFeature(featureCode) {
-  const { hasFeature, isLoading, isHydrated, planName, planTier } = useSubscription();
+  const { hasFeature, isLoading, isHydrated, planName } = useSubscription();
 
   if (isLoading || !isHydrated) {
     return { allowed: false, reason: 'loading' };

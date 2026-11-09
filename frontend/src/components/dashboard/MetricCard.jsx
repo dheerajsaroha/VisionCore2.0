@@ -54,7 +54,6 @@ export function MetricCard({
   icon: Icon,
   accent = 'indigo',
   trend,
-  trendLabel,
   loading = false,
   onClick,
   className,

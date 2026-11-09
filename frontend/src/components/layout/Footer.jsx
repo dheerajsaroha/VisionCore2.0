@@ -19,8 +19,8 @@ export const Footer = () => {
   const location = useLocation();
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const isAuthenticated = useAuthStore((state) => Boolean(state.user));
-  const onLanding = location.pathname === "/";
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- Close the transient menu after navigation.
   useEffect(() => setThemeMenuOpen(false), [location.pathname, location.hash]);
 
   const jumpToSection = useCallback(

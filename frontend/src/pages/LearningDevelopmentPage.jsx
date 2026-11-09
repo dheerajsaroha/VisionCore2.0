@@ -1,17 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  BookOpen, Award, CheckCircle, Video, Award as CertIcon, DollarSign,
-  TrendingUp, Users, Plus, Play, RefreshCw, BarChart2, Layers, Search
+  BookOpen, CheckCircle, Video, Award as CertIcon, DollarSign,
+  TrendingUp, RefreshCw, BarChart2, Layers
 } from 'lucide-react';
 import { learningService } from '../services/learningService';
-import { useAuthStore } from '../store/authStore';
 import { usePermission } from '../hooks/usePermission';
 
 export default function LearningDevelopmentPage() {
-  const { user } = useAuthStore();
   const { hasPermission } = usePermission();
   
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [requestedTab, setRequestedTab] = useState('dashboard');
   const [loading, setLoading] = useState(true);
   const [analytics, setAnalytics] = useState(null);
   const [courses, setCourses] = useState([]);
@@ -22,13 +20,7 @@ export default function LearningDevelopmentPage() {
   const [certificates, setCertificates] = useState([]);
   const [budgets, setBudgets] = useState([]);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    setLoading(true);
-
+  const fetchData = useCallback(async () => {
     // Analytics and budget are organization-wide and need `learning.view_org`,
     // which an ordinary employee deliberately does not hold. Requesting them
     // anyway is not merely wasteful: a 403 from either rejected the shared
@@ -66,7 +58,12 @@ export default function LearningDevelopmentPage() {
       console.error('Some L&D data failed to load:', failed.map((f) => f.reason?.message));
     }
     setLoading(false);
-  };
+  }, [hasPermission]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetch remote learning data after mount.
+    fetchData();
+  }, [fetchData]);
 
   // Filter tabs based on user permissions
   const allTabs = [
@@ -84,14 +81,9 @@ export default function LearningDevelopmentPage() {
   ];
 
   const tabs = allTabs.filter(tab => hasPermission(tab.permission));
-
-  // `activeTab` defaults to the overview, which an employee cannot see. Without
-  // this the tab strip renders with nothing selected and no content at all.
-  useEffect(() => {
-    if (tabs.length && !tabs.some(t => t.id === activeTab)) {
-      setActiveTab(tabs[0].id);
-    }
-  }, [tabs, activeTab]);
+  const activeTab = tabs.some((tab) => tab.id === requestedTab)
+    ? requestedTab
+    : tabs[0]?.id ?? requestedTab;
 
   return (
     <div className="min-h-screen bg-slate-900 text-white p-6 space-y-6">
@@ -123,7 +115,7 @@ export default function LearningDevelopmentPage() {
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => setRequestedTab(tab.id)}
               className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap transition ${
                 isActive
                   ? 'bg-blue-600/30 text-blue-400 border border-blue-500/50'

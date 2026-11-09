@@ -8,19 +8,19 @@
  * Backed by actual data from the workforce-breakdown API.
  */
 import React, { useState } from 'react';
-import { 
-  Users, Building, PieChart as PieIcon, BarChart3, 
-  MapPin, Briefcase, Filter, ChevronRight 
+import {
+  Users, PieChart as PieIcon, BarChart3,
+  MapPin, Briefcase
 } from 'lucide-react';
-import { 
-  ResponsiveContainer, AreaChart, Area, XAxis, YAxis, 
-  Tooltip, CartesianGrid, PieChart, Pie, Cell, BarChart, Bar 
+import {
+  ResponsiveContainer, AreaChart, Area, XAxis, YAxis,
+  Tooltip, CartesianGrid, PieChart, Pie, Cell, BarChart, Bar
 } from 'recharts';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Select } from '../ui/Select';
 import { Skeleton } from '../ui/Skeleton';
-import { EmptyState } from '../ui/EmptyState';
+import '../ui/EmptyState';
 
 const COLORS = ['#6366f1', '#a855f7', '#ec4899', '#3b82f6', '#10b981', '#f59e0b', '#06b6d4'];
 
@@ -194,12 +194,12 @@ export function WorkforceOverview({ data, departments = [], onDepartmentChange, 
                     <XAxis dataKey="month" stroke="#475569" fontSize={11} tickLine={false} axisLine={false} />
                     <YAxis stroke="#475569" fontSize={11} tickLine={false} axisLine={false} />
                     <Tooltip content={<CustomTooltip />} />
-                    <Area 
-                      type="monotone" 
-                      dataKey="headcount" 
-                      stroke="#6366f1" 
-                      strokeWidth={2.5} 
-                      fill="url(#hcGrad)" 
+                    <Area
+                      type="monotone"
+                      dataKey="headcount"
+                      stroke="#6366f1"
+                      strokeWidth={2.5}
+                      fill="url(#hcGrad)"
                     />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -269,7 +269,7 @@ export function WorkforceOverview({ data, departments = [], onDepartmentChange, 
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {locationDistribution.map((loc) => (
-              <div 
+              <div
                 key={loc.name}
                 className="p-3 rounded-xl bg-slate-950/40 border border-slate-800/60 flex items-center justify-between"
               >

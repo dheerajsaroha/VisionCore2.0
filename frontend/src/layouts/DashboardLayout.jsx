@@ -16,7 +16,6 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   ShieldCheck,
   Package,
   Calendar,
@@ -40,14 +39,7 @@ import {
   Activity,
   FileSpreadsheet,
   Layers,
-  Sun,
-  Moon,
-  X,
-  CheckCheck,
-  Command,
   Building2,
-  Sparkle,
-  Snowflake,
   Wallet,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
@@ -173,7 +165,7 @@ const NavLink = ({ item, isActive, sidebarOpen }) => {
 
 export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [, setMobileOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
 
   // ── Theme Engine Hook ─────────────────────────────────────────────
@@ -215,6 +207,7 @@ export default function DashboardLayout({ children }) {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetch remote notifications on mount and on the polling interval.
     fetchNotifications();
     const id = setInterval(fetchNotifications, 30000);
     return () => clearInterval(id);

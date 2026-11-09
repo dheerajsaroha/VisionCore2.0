@@ -9,13 +9,12 @@
  * Readable, responsive, theme-aware, and data-driven.
  */
 import React, { useState } from 'react';
-import { 
-  BarChart3, TrendingUp, Calendar, Users, 
-  DollarSign, Activity, PieChart as PieIcon, Award 
+import {
+  BarChart3, Activity
 } from 'lucide-react';
-import { 
-  ResponsiveContainer, AreaChart, Area, BarChart, Bar, 
-  XAxis, YAxis, Tooltip, CartesianGrid, Legend 
+import {
+  ResponsiveContainer, AreaChart, Area, BarChart, Bar,
+  XAxis, YAxis, Tooltip, CartesianGrid, Legend
 } from 'recharts';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card';
 import { Skeleton } from '../ui/Skeleton';

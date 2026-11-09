@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  SunMedium, Plus, RefreshCw, Calendar, Tag, CheckCircle2
+  SunMedium, Plus, RefreshCw
 } from 'lucide-react';
 import { workforceService } from '../services/workforceService';
 import { Button } from '../components/ui/Button';

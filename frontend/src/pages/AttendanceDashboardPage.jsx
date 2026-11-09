@@ -6,7 +6,7 @@ import {
   , FileEdit
 } from 'lucide-react';
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  AreaChart, Area, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
 import { workforceService } from '../services/workforceService';
@@ -15,7 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
 import { Input } from '../components/ui/Input';
-import { Select } from '../components/ui/Select';
+import '../components/ui/Select';
 import { usePermission } from '../hooks/usePermission';
 import { useToast } from '../components/ui/Toast';
 
@@ -38,18 +38,6 @@ const STATUS_COLORS = {
   HOLIDAY: '#14b8a6',
   WEEKEND: '#64748b',
   MISSED_PUNCH: '#f97316',
-};
-
-const STATUS_VARIANTS = {
-  PRESENT: 'success',
-  LATE: 'warning',
-  ABSENT: 'danger',
-  HALF_DAY: 'primary',
-  WFH: 'primary',
-  ON_LEAVE: 'secondary',
-  HOLIDAY: 'secondary',
-  WEEKEND: 'secondary',
-  MISSED_PUNCH: 'warning',
 };
 
 const CHANNELS = ['FACE', 'QR', 'GPS', 'BLE', 'NFC', 'WiFi', 'KIOSK', 'MANUAL'];

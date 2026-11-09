@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Users, Building2, CreditCard, Settings as SettingsIcon, AlertCircle, CheckCircle, Search, Plus, MoreVertical } from 'lucide-react';
+import { Shield, Users, Building2, CreditCard, Settings as SettingsIcon, AlertCircle, Search, Plus } from 'lucide-react';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { Spinner } from '../components/ui/Spinner';
-import { Avatar } from '../components/ui/Avatar';
+import '../components/ui/Avatar';
 import { EmptyState } from '../components/ui/EmptyState';
 
 export default function TenantAdminPage() {

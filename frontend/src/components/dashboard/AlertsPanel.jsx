@@ -12,13 +12,12 @@
  */
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { 
-  AlertTriangle, ShieldAlert, Clock, 
-  FileCheck, Ticket, UserCheck, ArrowRight, CheckCircle2 
+import {
+  AlertTriangle, CheckCircle2
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card';
+import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
-import { Button } from '../ui/Button';
+import '../ui/Button';
 import { Skeleton } from '../ui/Skeleton';
 import { EmptyState } from '../ui/EmptyState';
 import { AlertItem } from './AlertItem';

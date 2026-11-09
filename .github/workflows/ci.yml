@@ -10,29 +10,31 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.13.6'
       - name: Install dependencies
         run: |
           cd backend
-          pip install -r requirements.txt
-          pip install flake8 black
+          uv sync --locked --group dev
       - name: Lint backend
         run: |
           cd backend
-          flake8 app/ --max-line-length=120
-          black --check app/
+          uv run --locked flake8 app/ --max-line-length=120
+          uv run --locked black --check app/
       - name: Set up Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '22'
       - name: Lint frontend
         run: |
           cd frontend
-          npm install
+          npm ci
           npm run lint
 
   test:
@@ -61,22 +63,25 @@ jobs:
           - 6379:6379
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.13.6'
       - name: Install backend dependencies
         run: |
           cd backend
-          pip install -r requirements.txt
+          uv sync --locked --group dev
       - name: Run backend tests
         env:
           POSTGRES_PASSWORD: postgres
           SECRET_KEY: test-secret-key-that-is-at-least-32-chars-long-for-ci
         run: |
           cd backend
-          python -m pytest app/tests/ -v
+          uv run --locked python -m pytest app/tests/ -v
 
   validate:
     runs-on: ubuntu-latest
@@ -95,22 +100,25 @@ jobs:
           - 6379:6379
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.13.6'
       - name: Install dependencies
         run: |
           cd backend
-          pip install -r requirements.txt
+          uv sync --locked --group dev
       - name: Start server
         env:
           POSTGRES_PASSWORD: postgres
           SECRET_KEY: test-secret-key-that-is-at-least-32-chars-long-for-ci
         run: |
           cd backend
-          python main.py &
+          uv run --locked python main.py &
           sleep 5
       - name: Run platform validation
         env:
@@ -118,7 +126,7 @@ jobs:
           SECRET_KEY: test-secret-key-that-is-at-least-32-chars-long-for-ci
         run: |
           cd backend
-          python runtime_validation_platform.py
+          uv run --locked python runtime_validation_platform.py
 
   deploy:
     runs-on: ubuntu-latest

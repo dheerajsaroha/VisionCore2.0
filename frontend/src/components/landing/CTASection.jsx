@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ShieldCheck, CheckCircle2, Zap, Sparkles } from "lucide-react";
+import { ArrowRight, ShieldCheck, CheckCircle2, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 
 export const CTASection = () => {

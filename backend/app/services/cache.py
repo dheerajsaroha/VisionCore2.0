@@ -2,6 +2,8 @@ import functools
 import hashlib
 import json
 import logging
+import os
+import tempfile
 from typing import Any, Optional
 try:
     from diskcache import Cache
@@ -15,7 +17,12 @@ logger = logging.getLogger(__name__)
 # In a real 2026 prod env, this would be Redis.
 # DiskCache is a high-performance alternative for edge/local deployments.
 if Cache is not None:
-    cache = Cache(settings.CACHE_DIR if hasattr(settings, "CACHE_DIR") else "/tmp/visioncore_cache")
+    cache_dir = getattr(settings, "CACHE_DIR", None) or os.path.join(tempfile.gettempdir(), "visioncore_cache")
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+    except Exception as _err:
+        logger.warning(f"Could not initialize cache directory {cache_dir}: {_err}")
+    cache = Cache(cache_dir)
 else:
     # Non-blocking no-op cache when diskcache isn't installed.
     class _NoOpCache:

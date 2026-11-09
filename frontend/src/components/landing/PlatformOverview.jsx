@@ -1,5 +1,5 @@
 import React from "react";
-import { ArrowRight, ShieldCheck, Database, Cpu, BrainCircuit, Users, DollarSign, Layers, CheckCircle2 } from "lucide-react";
+import { Database, Cpu, BrainCircuit, DollarSign, Layers } from "lucide-react";
 import { motion } from "framer-motion";
 
 const STAGES = [

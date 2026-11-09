@@ -2,22 +2,16 @@ import React, { useState, useEffect } from 'react';
 import {
   Building2,
   GitBranch,
-  MapPin,
-  Briefcase,
-  Users,
   ShieldCheck,
   Zap,
   CheckCircle2,
   RefreshCw,
-  Plus,
-  Layers,
-  DollarSign
+  Layers
 } from 'lucide-react';
 import api from '../services/apiClient';
 
 export default function OrganizationDashboard() {
   const [hierarchy, setHierarchy] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [provisionModal, setProvisionModal] = useState(false);
   const [provForm, setProvForm] = useState({
     org_name: '',
@@ -26,29 +20,25 @@ export default function OrganizationDashboard() {
     admin_name: '',
     primary_color: '#4F46E5'
   });
-  const [provStatus, setProvStatus] = useState(null);
 
   const fetchHierarchy = async () => {
     try {
-      setLoading(true);
       const res = await api.get('/organizations/hierarchy');
       setHierarchy(res.data);
     } catch (err) {
       console.error('Failed to load hierarchy:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetch the organization hierarchy after mount.
     fetchHierarchy();
   }, []);
 
   const handleProvision = async (e) => {
     e.preventDefault();
     try {
-      const res = await api.post('/organizations/provision', provForm);
-      setProvStatus(res.data);
+      await api.post('/organizations/provision', provForm);
       setProvisionModal(false);
       fetchHierarchy();
     } catch (err) {

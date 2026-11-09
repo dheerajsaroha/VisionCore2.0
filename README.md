@@ -56,8 +56,8 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design.
 
 ### Prerequisites
 
-- Python 3.12+
-- Node.js 18+
+- Python 3.12.x (managed through [`uv`](https://docs.astral.sh/uv/))
+- Node.js 22.12 or later in the 22.x LTS line
 - PostgreSQL 15+ with `pgvector` extension
 - Redis (optional — falls back to local rate limiting)
 
@@ -66,25 +66,21 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full design.
 ```bash
 cd backend
 
-# Create and activate virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
+# Install the locked Python 3.12 environment
+uv sync --locked --group dev
 
 # Copy and edit environment variables
 cp .env.example .env
 # Edit .env: set SECRET_KEY, POSTGRES_PASSWORD, etc.
 
 # Run database migrations
-alembic upgrade head
+uv run --locked alembic upgrade head
 
 # Seed initial data (creates roles, default org, admin user)
-python3 -m app.util.init
+uv run --locked python -m app.util.init
 
 # Start development server
-uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+uv run --locked uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 Backend available at: `http://localhost:8000`
@@ -95,8 +91,8 @@ Interactive API docs: `http://localhost:8000/docs`
 ```bash
 cd frontend
 
-# Install dependencies
-npm install
+# Install exact dependencies from the lockfile
+npm ci
 
 # Copy and edit environment
 cp .env.example .env   # or create frontend/.env

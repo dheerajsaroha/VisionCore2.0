@@ -5,9 +5,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  Building2, Camera, RefreshCw, Plus, 
-  Calendar, ShieldCheck, UserCheck, Sparkles 
+import {
+  Building2, Camera, RefreshCw, UserCheck
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -35,7 +34,7 @@ export function DashboardHeader({ user, roleName, onRefresh, refreshing, onCheck
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-100 tracking-tight">
             Command Center
           </h1>
-          <Badge 
+          <Badge
             variant={getRoleBadgeVariant(roleName)}
             className="px-3 py-1 font-semibold text-xs tracking-wide uppercase shadow-sm"
           >

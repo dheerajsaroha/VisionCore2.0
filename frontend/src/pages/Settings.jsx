@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../store/authStore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
@@ -8,62 +8,20 @@ import { Badge } from '../components/ui/Badge';
 import { Avatar } from '../components/ui/Avatar';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/Tabs';
 import { useToast } from '../components/ui/Toast';
-import { adminService } from '../services/adminService';
+import '../services/adminService';
 import { orgService } from '../services/orgService';
 import { userService } from '../services/userService';
 import { useTheme } from '../hooks/useTheme';
 
 import {
-  Bell, Shield, User, Building, Moon, Sun, Key, Plus, Trash2,
-  Zap, ZapOff, Save, RefreshCw, Loader2, CheckCircle2, Circle,
+  Shield, User, Building, Moon, Sun, Key, Plus, Trash2, CheckCircle2, Circle,
 } from 'lucide-react';
 import { authService } from '../services/authService';
 import { checkPassword } from '../utils/passwordPolicy';
 
 const adaptiveText = 'text-gray-100';
 const adaptiveTextMuted = 'text-gray-400';
-const adaptiveBg = 'bg-gray-800';
-const adaptiveBgHover = 'hover:bg-gray-700';
 const adaptiveBorder = 'border-gray-700';
-
-const Section = ({ title, description, icon: Icon, children }) => (
-  <Card>
-    <CardHeader className={`border-b ${adaptiveBorder}/50 pb-4`}>
-      <div className="flex items-center gap-3">
-        <div className="h-9 w-9 rounded-xl bg-indigo-500/10 flex items-center justify-center">
-          <Icon className="h-5 w-5 text-indigo-400" />
-        </div>
-        <div>
-          <CardTitle className={`text-base ${adaptiveText}`}>{title}</CardTitle>
-          {description && (
-            <CardDescription className={`text-xs mt-0.5 ${adaptiveTextMuted}`}>{description}</CardDescription>
-          )}
-        </div>
-      </div>
-    </CardHeader>
-    <CardContent className="pt-5">{children}</CardContent>
-  </Card>
-);
-
-const Toggle = ({ enabled, onToggle, loading, disabled }) => (
-  <button
-    onClick={onToggle}
-    disabled={loading || disabled}
-    aria-pressed={enabled}
-    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed ${
-      enabled ? 'bg-indigo-600' : 'bg-gray-700'
-    }`}
-  >
-    <span className="sr-only">{enabled ? 'Disable' : 'Enable'}</span>
-    <span
-      className={`inline-flex h-4 w-4 items-center justify-center rounded-full bg-white shadow-md transform transition-transform duration-300 ${
-        enabled ? 'translate-x-6' : 'translate-x-1'
-      }`}
-    >
-      {loading && <Loader2 className="h-3 w-3 text-indigo-500 animate-spin" />}
-    </span>
-  </button>
-);
 
 const ChangePasswordCard = () => {
   const toast = useToast();
@@ -267,7 +225,7 @@ export default function Settings() {
 
   const isSuperAdmin = user?.role?.name === 'SuperAdmin';
 
-  const loadApiKeys = async () => {
+  const loadApiKeys = useCallback(async () => {
     if (!isAdmin) return;
     try {
       const keys = await orgService.getApiKeys();
@@ -275,9 +233,9 @@ export default function Settings() {
     } catch (err) {
       console.error("Failed to load API keys", err);
     }
-  };
+  }, [isAdmin]);
 
-  const loadOrganization = async () => {
+  const loadOrganization = useCallback(async () => {
     if (!isAdmin) return;
     setOrgLoading(true);
     setOrgError('');
@@ -295,12 +253,12 @@ export default function Settings() {
     } finally {
       setOrgLoading(false);
     }
-  };
+  }, [isAdmin]);
 
   useEffect(() => {
     loadApiKeys();
     loadOrganization();
-  }, [isAdmin]);
+  }, [loadApiKeys, loadOrganization]);
 
   const updateOrgField = (field, value) => {
     setOrgForm((current) => ({ ...current, [field]: value }));

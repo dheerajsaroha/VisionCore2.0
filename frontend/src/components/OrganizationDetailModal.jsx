@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Building2, ShieldCheck, Users, Calendar, Sparkles, CheckCircle2, AlertCircle } from 'lucide-react';
+import { X, Building2, AlertCircle } from 'lucide-react';
 import { orgService } from '../services/orgService';
 import { Badge } from './ui/Badge';
 
@@ -12,6 +12,7 @@ export function OrganizationDetailModal({ isOpen, onClose }) {
     if (!isOpen) return;
 
     let isMounted = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Show loading state while organization details are fetched.
     setLoading(true);
     setError('');
 

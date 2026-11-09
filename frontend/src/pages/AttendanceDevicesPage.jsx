@@ -6,9 +6,9 @@ import {
 import { workforceService } from '../services/workforceService';
 import { Button } from '../components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
+import '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
-import { Input } from '../components/ui/Input';
+import '../components/ui/Input';
 
 const CHANNELS = ['FACE', 'QR', 'GPS', 'BLE', 'NFC', 'WiFi', 'KIOSK', 'MANUAL'];
 

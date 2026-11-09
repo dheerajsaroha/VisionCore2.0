@@ -1,25 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   ShieldCheck,
-  Building2,
-  Mail,
   CheckCircle2,
   ArrowRight,
   ArrowLeft,
-  Lock,
-  Globe,
-  Sparkles,
-  Calendar,
-  Clock,
-  Layers,
-  Award,
   AlertCircle,
-  UserCheck,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { onboardingService } from '../services/onboardingService';
-import { Button, Card, CardContent, Badge, Select } from '../components/ui';
+import { Button, Card, CardContent, Badge } from '../components/ui';
 
 const ONBOARDING_STEPS = [
   { id: 1, title: 'Account & Org Name', desc: 'Initialize tenant session' },
@@ -47,8 +37,8 @@ export default function OnboardingPage() {
   const [selectedPlan, setSelectedPlan] = useState('growth');
   const [timezone, setTimezone] = useState('America/New_York');
   const [currency, setCurrency] = useState('USD');
-  const [brandColor, setBrandColor] = useState('#6366f1');
-  const [workingDays, setWorkingDays] = useState(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
+  const [brandColor] = useState('#6366f1');
+  const [workingDays] = useState(['Mon', 'Tue', 'Wed', 'Thu', 'Fri']);
   const [biometricsRequired, setBiometricsRequired] = useState(true);
 
   // ── Step 1: Start Session ──────────────────────────────────────────
@@ -124,7 +114,7 @@ export default function OnboardingPage() {
         currency,
       });
       setCurrentStep(6);
-    } catch (err) {
+    } catch {
       // Fallback skip if endpoint error
       setCurrentStep(6);
     } finally {
@@ -144,7 +134,7 @@ export default function OnboardingPage() {
       });
       await onboardingService.complete(sessionId);
       setCurrentStep(7);
-    } catch (err) {
+    } catch {
       setCurrentStep(7);
     } finally {
       setLoading(false);

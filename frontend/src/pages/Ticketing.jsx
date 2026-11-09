@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Search, MessageSquare, Filter } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Plus, Search, MessageSquare } from 'lucide-react';
 import { ticketService } from '../services/ticketService';
 import { useAuthStore } from '../store/authStore';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
+import { Card, CardContent } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
@@ -27,11 +27,7 @@ export default function Ticketing() {
     priority: 'medium',
   });
 
-  useEffect(() => {
-    fetchTickets();
-  }, [statusFilter]);
-
-  const fetchTickets = async () => {
+  const fetchTickets = useCallback(async () => {
     setLoading(true);
     try {
       const params = statusFilter ? { status: statusFilter } : {};
@@ -40,7 +36,11 @@ export default function Ticketing() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [statusFilter]);
+
+  useEffect(() => {
+    fetchTickets();
+  }, [fetchTickets]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -275,4 +275,3 @@ export default function Ticketing() {
     </div>
   );
 }
-

@@ -16,9 +16,10 @@ import { useAuthStore } from '../../store/authStore';
 import { usePermission } from '../../hooks/usePermission';
 
 export function BiometricAvatar({ userId, name, size = 'h-9 w-9', textClass = 'text-sm', className = '' }) {
-  const [photoUrl, setPhotoUrl] = useState(null);
+  const [photo, setPhoto] = useState(null);
   const user = useAuthStore((s) => s.user);
   const { hasPermission } = usePermission();
+  const photoUrl = photo?.userId === userId ? photo.url : null;
 
   // The photo is either the viewer's own, or one the viewer may read for
   // someone else. Anything else resolves to the initials fallback.
@@ -31,11 +32,10 @@ export function BiometricAvatar({ userId, name, size = 'h-9 w-9', textClass = 't
 
   useEffect(() => {
     let active = true;
-    setPhotoUrl(null);
     if (!userId || !canView) return undefined;
 
     userService.getFacePhotoUrl(userId).then((url) => {
-      if (active) setPhotoUrl(url);
+      if (active) setPhoto({ userId, url });
     });
 
     return () => {

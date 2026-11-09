@@ -6,7 +6,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import aiService from '../services/aiService';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Select } from '../components/ui/Select';
+import '../components/ui/Select';
 import { Spinner } from '../components/ui/Spinner';
 import { Badge } from '../components/ui/Badge';
 

@@ -1,5 +1,5 @@
 # --- BACKEND PROD ---
-FROM python:3.10-slim-bullseye AS backend
+FROM python:3.12-slim-bookworm AS backend
 
 WORKDIR /app
 
@@ -12,22 +12,24 @@ RUN apt-get update && apt-get install -y \
     cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# Install UV for fast dependency matching
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
+# Install the pinned UV release used by the project lockfile.
+COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /bin/uv
 
-COPY backend/pyproject.toml .
-RUN uv pip install --system -r pyproject.toml
+COPY backend/pyproject.toml backend/uv.lock backend/.python-version ./
+RUN uv sync --locked --no-dev --extra biometrics --no-install-project
 
 COPY backend/ .
+
+ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8000
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 # --- FRONTEND BUILD ---
-FROM node:18-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 WORKDIR /app
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm ci
 COPY frontend/ .
 RUN npm run build
 

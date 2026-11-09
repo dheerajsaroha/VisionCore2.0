@@ -10,7 +10,8 @@ venv/
 .venv/
 ENV/
 env/
-.example
+.cache/
+.pytest_cache/
 
 # Node
 node_modules/
@@ -33,10 +34,7 @@ dist/
 # OS
 Thumbs.db
 .venv_old
-<<<<<<< HEAD
-docs
-=======
-.md
+
 # Local planning
 TODO_PHASE*.md
 
@@ -45,7 +43,6 @@ installed_packages.txt
 
 # Backup folders
 archive_models/
->>>>>>> refs/remotes/origin/main
-dev_mail
+dev_mail/
 .node
 .kilo

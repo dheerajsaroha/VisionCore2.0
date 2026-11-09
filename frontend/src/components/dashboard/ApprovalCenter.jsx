@@ -12,12 +12,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  CheckSquare, CheckCircle, XCircle, Clock, 
-  ArrowRight, DollarSign, Palmtree, Package, 
-  FileText, Award, ShieldCheck 
+import {
+  CheckSquare, CheckCircle,
+  ArrowRight
 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card';
+import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Skeleton } from '../ui/Skeleton';
@@ -54,7 +53,7 @@ export function ApprovalCenter({ items = [], onApprove, onReject, loading, canAc
         await onReject(item);
       }
       setToastMessage({ type: 'success', text: `${item.title} ${action}d successfully.` });
-    } catch (err) {
+    } catch {
       setToastMessage({ type: 'error', text: 'Failed to process request. Please try again.' });
     } finally {
       setProcessingId(null);
@@ -154,8 +153,8 @@ export function ApprovalCenter({ items = [], onApprove, onReject, loading, canAc
 
       {toastMessage && (
         <div className={`mt-3 p-3 rounded-xl border text-xs font-medium flex items-center justify-between ${
-          toastMessage.type === 'success' 
-            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+          toastMessage.type === 'success'
+            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
             : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
         }`}>
           <span>{toastMessage.text}</span>

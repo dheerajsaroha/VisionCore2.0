@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { Zap, ChevronRight, Sparkles } from "lucide-react";
+import { ChevronRight, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 
 export const AnnouncementBanner = () => {

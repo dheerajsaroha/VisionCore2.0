@@ -85,6 +85,31 @@ def _create_check(name: str, condition: str) -> None:
 
 def upgrade() -> None:
     """Upgrade schema."""
+    bind = op.get_bind()
+    if not bind.dialect.has_table(bind, "payrolls"):
+        op.create_table(
+            'payrolls',
+            sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
+            sa.Column('user_id', sa.Integer(), nullable=False),
+            sa.Column('org_id', postgresql.UUID(as_uuid=True), nullable=False),
+            sa.Column('month', sa.Integer(), nullable=False),
+            sa.Column('year', sa.Integer(), nullable=False),
+            sa.Column('base_salary', sa.Numeric(precision=12, scale=2), nullable=False),
+            sa.Column('deductions', sa.Numeric(precision=12, scale=2), server_default=sa.text('0.0'), nullable=False),
+            sa.Column('reimbursements_total', sa.Numeric(precision=12, scale=2), server_default=sa.text('0.0'), nullable=False),
+            sa.Column('total_salary', sa.Numeric(precision=12, scale=2), nullable=False),
+            sa.Column('status', sa.String(length=30), server_default=sa.text("'draft'"), nullable=False),
+            sa.Column('generated_at', sa.DateTime(timezone=True), server_default=sa.text('NOW()'), nullable=False),
+            sa.CheckConstraint("status IN ('draft','pending','paid')", name='ck_payroll_status'),
+            sa.ForeignKeyConstraint(['org_id'], ['organizations.id'], ondelete='CASCADE'),
+            sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+            sa.PrimaryKeyConstraint('id'),
+            sa.UniqueConstraint('user_id', 'month', 'year', name='uq_user_monthly_payroll')
+        )
+        op.create_index(op.f('ix_payrolls_id'), 'payrolls', ['id'], unique=False)
+        op.create_index(op.f('ix_payrolls_org_id'), 'payrolls', ['org_id'], unique=False)
+        op.create_index(op.f('ix_payrolls_user_id'), 'payrolls', ['user_id'], unique=False)
+
     legacy = _table_exists()
 
     if not legacy:

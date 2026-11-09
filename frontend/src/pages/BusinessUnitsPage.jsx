@@ -3,16 +3,13 @@ import {
   GitBranch,
   DollarSign,
   Plus,
-  RefreshCw,
-  Search,
-  Building2
+  RefreshCw
 } from 'lucide-react';
 import api from '../services/apiClient';
 
 export default function BusinessUnitsPage() {
   const [businessUnits, setBusinessUnits] = useState([]);
   const [costCenters, setCostCenters] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('units');
 
   const [buModal, setBuModal] = useState(false);
@@ -23,7 +20,6 @@ export default function BusinessUnitsPage() {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
       const [buRes, ccRes] = await Promise.all([
         api.get('/business-units'),
         api.get('/cost-centers')
@@ -32,12 +28,11 @@ export default function BusinessUnitsPage() {
       setCostCenters(ccRes.data);
     } catch (err) {
       console.error('Failed to load BU/CC data:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Fetch remote business units and cost centers after mount.
     fetchData();
   }, []);
 

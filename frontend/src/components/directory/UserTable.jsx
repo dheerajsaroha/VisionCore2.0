@@ -4,7 +4,7 @@
  * empty state, keyboard navigation, and responsive layout.
  */
 import React from 'react';
-import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '../ui/Table';
+import { Table, TableHeader, TableBody, TableHead, TableRow } from '../ui/Table';
 import { Skeleton } from '../ui/Skeleton';
 import { EmptyState } from '../ui/EmptyState';
 import { Avatar } from '../ui/Avatar';
@@ -16,7 +16,6 @@ import { Users, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 export function UserTable({
   users = [],
   loading = false,
-  total = 0,
   sortBy = 'created_at',
   sortOrder = 'desc',
   onSortChange,

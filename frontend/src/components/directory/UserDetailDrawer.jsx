@@ -15,27 +15,21 @@ import {
   Building2,
   Briefcase,
   Shield,
-  Key,
   Fingerprint,
-  History,
   MapPin,
   Clock,
   Calendar,
   Laptop,
   CheckCircle2,
-  XCircle,
   AlertCircle,
   Edit3,
   UserX,
   UserCheck,
-  Trash2,
   ArrowUpRight,
-  Trophy,
-  CreditCard,
   Activity,
 } from 'lucide-react';
 import { Avatar } from '../ui/Avatar';
-import { Badge } from '../ui/Badge';
+import '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Spinner } from '../ui/Spinner';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
@@ -49,14 +43,12 @@ export function UserDetailDrawer({
   onClose,
   currentUserId,
   canEdit = false,
-  canDelete = false,
   canAssignRole = false,
   onEdit,
   onAssignRole,
   onActivate,
   onSuspend,
   onEnroll,
-  onDelete,
 }) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('identity');

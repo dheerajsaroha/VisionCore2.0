@@ -153,6 +153,25 @@ class TestHappyPath:
         r = client.post("/api/v1/auth/forgot-password", json={"email": u.email})
         assert "/reset-password?token=" in r.json()["reset_url"]
 
+    def test_reset_link_works_without_redis_one_time_store(
+        self, client, db, tenant, monkeypatch
+    ):
+        u = _user(db, tenant, "no_redis")
+        token = _issue(client, u.email)
+
+        async def redis_unavailable(*_args, **_kwargs):
+            return False
+
+        monkeypatch.setattr(security, "consume_one_time_token", redis_unavailable)
+        response = client.post(
+            "/api/v1/auth/reset-password",
+            json={"token": token, "new_password": REPLACED},
+        )
+
+        assert response.status_code == 200, response.text[:200]
+        db.expire_all()
+        assert verify_password(REPLACED, db.query(User).get(u.id).hashed_password)
+
 
 class TestTokenIsSingleUse:
     def test_replaying_a_consumed_token_is_rejected(self, client, db, tenant):

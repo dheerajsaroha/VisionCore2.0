@@ -83,19 +83,6 @@ def upgrade() -> None:
     op.create_index(op.f('ix_role_permissions_id'), 'role_permissions', ['id'], unique=False)
     op.create_index(op.f('ix_role_permissions_role_id'), 'role_permissions', ['role_id'], unique=False)
     op.create_index(op.f('ix_role_permissions_permission_id'), 'role_permissions', ['permission_id'], unique=False)
-    op.create_table('user_roles',
-    sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-    sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('role_id', sa.Integer(), nullable=False),
-    sa.Column('assigned_at', sa.DateTime(timezone=True), server_default=sa.text('NOW()'), nullable=False),
-    sa.ForeignKeyConstraint(['role_id'], ['roles.id'], ondelete='CASCADE'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-    sa.PrimaryKeyConstraint('id'),
-    sa.UniqueConstraint('user_id', 'role_id', name='uq_user_role')
-    )
-    op.create_index(op.f('ix_user_roles_id'), 'user_roles', ['id'], unique=False)
-    op.create_index(op.f('ix_user_roles_user_id'), 'user_roles', ['user_id'], unique=False)
-    op.create_index(op.f('ix_user_roles_role_id'), 'user_roles', ['role_id'], unique=False)
     op.create_table('departments',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('org_id', sa.UUID(), nullable=False),
@@ -197,6 +184,19 @@ def upgrade() -> None:
     op.create_index(op.f('ix_users_role_id'), 'users', ['role_id'], unique=False)
     op.create_index(op.f('ix_users_shift_id'), 'users', ['shift_id'], unique=False)
     op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
+    op.create_table('user_roles',
+    sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('role_id', sa.Integer(), nullable=False),
+    sa.Column('assigned_at', sa.DateTime(timezone=True), server_default=sa.text('NOW()'), nullable=False),
+    sa.ForeignKeyConstraint(['role_id'], ['roles.id'], ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id'),
+    sa.UniqueConstraint('user_id', 'role_id', name='uq_user_role')
+    )
+    op.create_index(op.f('ix_user_roles_id'), 'user_roles', ['id'], unique=False)
+    op.create_index(op.f('ix_user_roles_user_id'), 'user_roles', ['user_id'], unique=False)
+    op.create_index(op.f('ix_user_roles_role_id'), 'user_roles', ['role_id'], unique=False)
     op.create_table('reports',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('org_id', sa.UUID(), nullable=False),

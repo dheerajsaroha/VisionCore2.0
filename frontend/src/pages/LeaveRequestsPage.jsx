@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Calendar, Plus, RefreshCw, CheckCircle2, XCircle, Clock,
-  User, Check, X, AlertTriangle, FileText
+  Calendar, Plus, RefreshCw,
+  User, Check, X, FileText
 } from 'lucide-react';
 import { leaveService } from '../services/leaveService';
 import { Button } from '../components/ui/Button';

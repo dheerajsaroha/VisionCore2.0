@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
-  Calendar, Clock, CheckCircle2, XCircle, AlertCircle, Plus, Filter,
-  FileText, User, ChevronRight, RefreshCw, Shield, Sparkles, Layers, Check, X
+  Calendar, Clock, CheckCircle2, AlertCircle, Plus, Filter,
+  FileText, RefreshCw, Layers, Check, X
 } from 'lucide-react';
 import { leaveService } from '../services/leaveService';
 import { useAuthStore } from '../store/authStore';
@@ -10,7 +10,7 @@ import { usePermission } from '../hooks/usePermission';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
-import { Spinner } from '../components/ui/Spinner';
+import '../components/ui/Spinner';
 import { LeaveTemplatePicker } from '../components/leave/LeaveTemplatePicker';
 import { LeavePolicyEditor } from '../components/leave/LeavePolicyEditor';
 import { formatDate, titleCase } from '../lib/utils';
@@ -50,7 +50,6 @@ export default function LeaveManagementPage() {
 
   const canApprove = hasPermission('leave.approve');
   const canManage = hasPermission('leave.manage');
-  const canViewTeam = hasPermission('leave.view_team') || hasPermission('leave.view_org');
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -65,8 +64,10 @@ export default function LeaveManagementPage() {
       setLeaveTypes(typeRes.data || []);
       setRequests(reqRes.data || []);
 
-      if (typeRes.data?.length > 0 && !applyForm.leave_type_id) {
-        setApplyForm((prev) => ({ ...prev, leave_type_id: typeRes.data[0].id }));
+      if (typeRes.data?.length > 0) {
+        setApplyForm((prev) => (
+          prev.leave_type_id ? prev : { ...prev, leave_type_id: typeRes.data[0].id }
+        ));
       }
     } catch (err) {
       setErrorMsg(err.response?.data?.detail || 'Failed to load leave management data');
