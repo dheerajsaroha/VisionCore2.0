@@ -70,6 +70,11 @@ api_router.include_router(notifications.router, prefix="/notifications", tags=["
 # privacy requests, retention policies and payroll-cost metrics to any
 # authenticated session. Those gates are applied inside the routers.
 api_router.include_router(analytics_router.router, prefix="/analytics", tags=["analytics"])
+# Register real‑time routers
+from .ws_video import router as ws_video_router
+from .sse_audit import router as sse_audit_router
+api_router.include_router(ws_video_router, tags=["realtime"])
+api_router.include_router(sse_audit_router, tags=["audit-sse"])
 api_router.include_router(compliance_router.router, prefix="/compliance", tags=["compliance"])
 api_router.include_router(copilot_router.router, prefix="/copilot", tags=["copilot"])
 # Prefix avoids colliding with the existing /enterprise/audit surface.

@@ -1,6 +1,11 @@
+import os
 import pytest
 from typing import Generator
 from fastapi.testclient import TestClient
+
+# Signal to the rate-limit dependency that we are running under pytest so it
+# can bypass per-IP throttling (tests make many requests from the same address).
+os.environ.setdefault("TESTING", "true")
 
 from main import app
 from app.core import rate_limit

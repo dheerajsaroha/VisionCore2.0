@@ -1,16 +1,20 @@
-# ---------- Builder ----------
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim-bookworm
+
 WORKDIR /app
-# Install build dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends gcc build-essential && rm -rf /var/lib/apt/lists/*
-COPY backend/pyproject.toml backend/poetry.lock ./
-# Install Poetry and project dependencies (no dev packages)
-RUN pip install --upgrade pip && pip install poetry && poetry install --no-root --only main
-# ---------- Runtime ----------
-FROM python:3.12-slim
-WORKDIR /app
-COPY --from=builder /app /app
-COPY backend/app ./app
-ENV PYTHONUNBUFFERED=1
+
+# Install system dependencies for PostgreSQL, OpenCV headless, and healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:0.13.6 /uv /bin/uv
+COPY pyproject.toml uv.lock .python-version ./
+RUN uv sync --locked --no-dev --no-install-project
+
+COPY . .
+
+ENV PATH="/app/.venv/bin:$PATH"
+
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

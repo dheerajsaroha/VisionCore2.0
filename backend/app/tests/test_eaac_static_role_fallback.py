@@ -95,7 +95,10 @@ def _eaac_permissions_demanded_by_routers() -> set[str]:
     demanded: set[str] = set()
     for path in (REPO_BACKEND / "app" / "routers").glob("*.py"):
         demanded |= set(re.findall(
-            r'require_eaac_authorization\(\s*"([^"]+)"', path.read_text()))
+            r'require_eaac_authorization\(\s*"([^"]+)"',
+            # Explicit UTF-8 with replacement avoids cp1252 UnicodeDecodeError
+            # on Windows when router files contain non-ASCII bytes.
+            path.read_text(encoding="utf-8", errors="replace")))
     return demanded
 
 
