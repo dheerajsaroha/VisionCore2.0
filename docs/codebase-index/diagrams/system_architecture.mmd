@@ -1,0 +1,107 @@
+graph TB
+    subgraph Client["Client Tier (Web Browser)"]
+        UI["React 19 SPA (Vite + Tailwind CSS v4)"]
+        Webcam["Webcam & MediaPipe Client Face Detection"]
+        Router["React Router v7 + ProtectedRoute"]
+        State["Zustand State Stores (Auth, Permissions, Subscriptions)"]
+        AxiosClient["Axios HTTP Client (In-memory JWT + HttpOnly Cookies)"]
+        
+        UI --> Router
+        Router --> State
+        UI --> Webcam
+        State --> AxiosClient
+        Webcam --> AxiosClient
+    end
+
+    subgraph Ingress["Ingress & Gateway Tier"]
+        NGINX["Nginx Reverse Proxy (SSL/TLS, Rate Limiting, Headers)"]
+        Gateway["FastAPI API Gateway (Port 8000 Prototype)"]
+    end
+
+    subgraph Backend["Core Application Tier (FastAPI Modular Monolith)"]
+        Main["FastAPI Entry Point (backend/main.py)"]
+        
+        subgraph Middleware["Middleware Pipeline"]
+            SecHeaders["SecurityHeadersMiddleware"]
+            MetricsMid["MetricsMiddleware (Prometheus)"]
+            CORS["CORSMiddleware"]
+            ReqLog["Request Logging & Timing"]
+            RateLimit["RateLimit Dependency (100 req/min)"]
+        end
+        
+        subgraph Routers["API Routers (48 Mounted Router Modules / 756 Endpoints)"]
+            AuthRtr["Auth & Sessions (/api/v1/auth)"]
+            OrgRtr["Organization & Depts (/api/v1/org)"]
+            AttRtr["Attendance (/api/v1/attendance)"]
+            BioRtr["Biometrics / Verification"]
+            HcmRtr["HCM & Workforce (/api/v1/hcm, /workforce)"]
+            PayRtr["Payroll & Finance (/api/v1/payroll, /finance-admin)"]
+            LeaveRtr["Leave Management (/api/v1/leave)"]
+            AIRtr["AI Platform & Copilots (/api/v1/ai, /copilot)"]
+            PolicyRtr["Policy & Compliance (/api/v1/policy, /compliance)"]
+            AssetRtr["Asset Management (/api/v1/assets)"]
+            WorkflowRtr["Workflow Engine (/api/v1/workflow)"]
+            TenantRtr["Tenant Admin & EAAC (/tenant, /eaac, /scope)"]
+        end
+
+        subgraph ServiceLayer["Business Logic Layer (128 Services)"]
+            AttPipeline["Attendance Pipeline Service"]
+            AuthSvc["Authentication & Token Service"]
+            BiometricSvc["Biometric Matching Service"]
+            PayrollSvc["Statutory Payroll Engine"]
+            LeaveSvc["Leave Policy & Balance Engine"]
+            WorkflowEngine["Approval Workflow Engine"]
+            AuditSvc["Audit & Compliance Service"]
+            TenantContext["Tenant Context & Isolation Engine"]
+        end
+
+        subgraph DAL["Data Access Layer"]
+            Crud["CRUD Operations (22 Modules)"]
+            Repos["Repositories (4 Modules)"]
+            ORM["SQLAlchemy 2.0 ORM Models (all_models.py - 224 Tables)"]
+        end
+    end
+
+    subgraph AIService["AI & Biometrics Microservice (ai-service: Port 8002)"]
+        AIFastAPI["FastAPI Biometrics Engine"]
+        FaceEngine["FaceEngine (DeepFace / Facenet)"]
+        LivenessEngine["Liveness Detection (Strict Anti-Spoof)"]
+        EmotionEngine["Emotion Analysis"]
+    end
+
+    subgraph Persistence["Persistence & Infrastructure Tier"]
+        PG[("PostgreSQL 15+ with pgvector\n- Vector Embeddings (128-dim)\n- HNSW Cosine Index (m=16, ef=64)\n- pgcrypto & uuid-ossp")]
+        RedisDB[("Redis 7.0+\n- Rate Limiting Windows\n- Session Blacklist / Revocation\n- Dynamic Permission Cache")]
+        RabbitMQ["RabbitMQ 3.12 (Optional Event Broker)"]
+        Blockchain["Ethereum / EVM Smart Contract (AttendanceAudit.sol)"]
+    end
+
+    subgraph External["External Integrations"]
+        EmailSMTP["Email Delivery (Console / SMTP / Brevo / Resend)"]
+        CloudStorage["File Uploads (Local app_data / S3)"]
+    end
+
+    %% Client to Ingress
+    AxiosClient -->|"HTTPS / REST API"| NGINX
+    NGINX -->|"Proxy Pass"| Main
+    NGINX -.->|"Optional Routing"| Gateway
+
+    %% Backend Flow
+    Main --> Middleware
+    Middleware --> Routers
+    Routers --> ServiceLayer
+    ServiceLayer --> DAL
+    DAL --> ORM
+    
+    %% Service Interactions
+    AttPipeline -->|"HNSW Cosine Match"| PG
+    AttPipeline -->|"Biometric Inference"| AIService
+    AuthSvc -->|"Revocation Check"| RedisDB
+    AuthSvc -->|"Session State"| PG
+    AuditSvc -->|"Log Anchoring"| Blockchain
+    PayrollSvc -->|"Payslip PDF Generation"| CloudStorage
+    AuthSvc -->|"Password Reset / Invites"| EmailSMTP
+    
+    %% Data Persistence
+    ORM -->|"SQLAlchemy / asyncpg / psycopg2"| PG
+    RateLimit -->|"Token Bucket"| RedisDB

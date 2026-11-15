@@ -1,0 +1,108 @@
+graph LR
+    subgraph Presentation["Presentation & API Endpoints"]
+        R_AUTH["routers.auth & sessions"]
+        R_ATT["routers.attendance & corrections"]
+        R_ORG["routers.org & departments"]
+        R_HCM["routers.hcm & workforce"]
+        R_PAY["routers.payroll & finance_admin"]
+        R_LEAVE["routers.leave"]
+        R_AI["routers.ai & copilots"]
+        R_POLICY["routers.policy & compliance"]
+        R_ASSET["routers.asset"]
+        R_WORKFLOW["routers.workflow & dynamic_roles"]
+    end
+
+    subgraph DependencyInjection["Dependency Injection (app.api.deps)"]
+        DEP_DB["get_db()"]
+        DEP_USER["get_current_user()"]
+        DEP_PERM["require_permission()"]
+        DEP_ROLE["require_role()"]
+        DEP_SUB["require_feature() / require_subscription()"]
+        DEP_ADMIN["require_admin() / get_current_superadmin()"]
+    end
+
+    subgraph CoreUtilities["Core Infrastructure (app.core)"]
+        CONF["core.config (Settings)"]
+        SEC["core.security (JWT, Bcrypt)"]
+        RL["core.rate_limit (Redis / Sliding Window)"]
+        OBS["core.observability (Prometheus Metrics)"]
+        CACHE["core.cache (DiskCache / In-Memory)"]
+        CRYPTO["core.biometric_crypto (AES Vector Encryption)"]
+    end
+
+    subgraph DomainServices["Domain Service Layer (app.services)"]
+        S_AUTH["auth_service & password_reset_service"]
+        S_ATT["attendance_controller & attendance_pipeline"]
+        S_BIO["biometrics_service & biometric_queue"]
+        S_PAY["payroll_service & statutory_engine"]
+        S_LEAVE["leave_service & leave_policy_engine"]
+        S_WF["workflow_engine & approval_service"]
+        S_AUDIT["audit_service & blockchain_anchor"]
+        S_TENANT["tenant_context & isolation_service"]
+        S_AI["ai_provider_manager & copilot_service"]
+        S_ASSET["asset_engine & maintenance_service"]
+    end
+
+    subgraph DataAccess["Data Access & Repositories"]
+        CRUD_USER["crud.crud_user & crud_session"]
+        CRUD_ATT["crud.crud_attendance & crud_event"]
+        CRUD_ORG["crud.crud_org & crud_department"]
+        CRUD_LEAVE["crud.crud_leave"]
+        CRUD_PAY["crud.crud_payroll"]
+        REPOS["repositories (user, attendance, org, audit)"]
+    end
+
+    subgraph Models["Persistence Entity Models (app.db.models.all_models)"]
+        M_CORE["Identity: User, Role, Permission, UserRole, Session"]
+        M_ORG["Tenant: Organization, OrgApiKey, Department, Shift"]
+        M_BIO["Biometrics: FaceEmbedding, SpoofDetectionLog, RecognitionEvent"]
+        M_ATT["Attendance: AttendanceLog, ManualOverride, AttendanceSession"]
+        M_HCM["Workforce: ShiftTemplate, Roster, EmployeeProfile, Capacity"]
+        M_LEAVE["Leave: LeaveType, LeavePolicy, LeaveBalance, LeaveRequest"]
+        M_PAY["Payroll: SalaryStructure, PayrollRun, StatutoryRule, Payslip"]
+        M_WF["Workflow: ApprovalWorkflow, ApprovalStage, ApprovalRequest"]
+        M_SUB["SaaS: SubscriptionPlan, FeatureFlag, LicensingLimit"]
+        M_ASSET["Assets: Asset, AssetCategory, AssetAssignment, Vendor"]
+        M_AI["AI: AIModelConfig, PromptTemplate, CopilotMessage"]
+    end
+
+    %% Wiring Routers to Dependencies
+    Presentation --> DependencyInjection
+    DependencyInjection --> CoreUtilities
+    DependencyInjection --> Models
+
+    %% Routers to Services
+    R_AUTH --> S_AUTH
+    R_ATT --> S_ATT
+    R_ATT --> S_BIO
+    R_PAY --> S_PAY
+    R_LEAVE --> S_LEAVE
+    R_WORKFLOW --> S_WF
+    R_AI --> S_AI
+    R_ASSET --> S_ASSET
+    R_POLICY --> S_AUDIT
+    R_ORG --> S_TENANT
+
+    %% Services to CRUD and Repositories
+    S_AUTH --> CRUD_USER
+    S_ATT --> CRUD_ATT
+    S_ATT --> S_BIO
+    S_PAY --> CRUD_PAY
+    S_LEAVE --> CRUD_LEAVE
+    S_TENANT --> CRUD_ORG
+    DomainServices --> REPOS
+
+    %% CRUD / Repos to Models
+    CRUD_USER --> M_CORE
+    CRUD_ATT --> M_ATT
+    CRUD_ATT --> M_BIO
+    CRUD_ORG --> M_ORG
+    CRUD_LEAVE --> M_LEAVE
+    CRUD_PAY --> M_PAY
+    REPOS --> Models
+    DomainServices --> Models
+
+    %% Cross-cutting
+    S_BIO --> CRYPTO
+    S_AUDIT --> Models
+    S_WF --> Models

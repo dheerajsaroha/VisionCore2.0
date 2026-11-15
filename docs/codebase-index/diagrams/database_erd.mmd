@@ -1,0 +1,185 @@
+erDiagram
+    ORGANIZATIONS ||--o{ DEPARTMENTS : "has"
+    ORGANIZATIONS ||--o{ SHIFTS : "defines"
+    ORGANIZATIONS ||--o{ USERS : "employs"
+    ORGANIZATIONS ||--o{ ORGANIZATION_SUBSCRIPTIONS : "holds"
+    ORGANIZATIONS ||--o{ ATTENDANCE_LOGS : "records"
+    ORGANIZATIONS ||--o{ LEAVE_POLICIES : "sets"
+    ORGANIZATIONS ||--o{ PAYROLL_RUNS : "executes"
+    ORGANIZATIONS ||--o{ ASSETS : "owns"
+
+    SUBSCRIPTION_PLANS ||--o{ ORGANIZATION_SUBSCRIPTIONS : "subscribed_by"
+    SUBSCRIPTION_PLANS ||--o{ PLAN_FEATURES : "includes"
+    SUBSCRIPTION_PLANS ||--o{ LICENSING_LIMITS : "enforces"
+
+    DEPARTMENTS ||--o{ USERS : "contains"
+    SHIFTS ||--o{ USERS : "assigned_to"
+
+    ROLES ||--o{ USER_ROLES : "assigned_via"
+    ROLES ||--o{ ROLE_PERMISSIONS : "grants"
+    PERMISSIONS ||--o{ ROLE_PERMISSIONS : "granted_by"
+
+    USERS ||--o{ USER_ROLES : "has"
+    USERS ||--o{ USER_SESSIONS : "authenticates"
+    USERS ||--o{ FACE_EMBEDDINGS : "enrolled_with"
+    USERS ||--o{ ATTENDANCE_LOGS : "logs"
+    USERS ||--o{ LEAVE_BALANCES : "maintains"
+    USERS ||--o{ LEAVE_REQUESTS : "submits"
+    USERS ||--o{ PAYSLIPS : "receives"
+    USERS ||--o{ ASSET_ASSIGNMENTS : "assigned"
+    USERS ||--o{ APPROVAL_REQUESTS : "initiates"
+
+    ATTENDANCE_LOGS ||--o{ ATTENDANCE_CORRECTIONS : "subject_to"
+    ATTENDANCE_LOGS ||--o{ RECOGNITION_EVENTS : "correlates"
+
+    LEAVE_TYPES ||--o{ LEAVE_BALANCES : "tracked_for"
+    LEAVE_TYPES ||--o{ LEAVE_REQUESTS : "requested_as"
+
+    APPROVAL_WORKFLOWS ||--o{ APPROVAL_STAGES : "contains"
+    APPROVAL_STAGES ||--o{ APPROVAL_STAGE_APPROVERS : "assigned_to"
+    APPROVAL_WORKFLOWS ||--o{ APPROVAL_REQUESTS : "executes"
+    APPROVAL_REQUESTS ||--o{ APPROVAL_ACTIONS : "receives"
+
+    PAYROLL_RUNS ||--o{ PAYSLIPS : "generates"
+    PAYSLIPS ||--o{ PAYROLL_LINE_ITEMS : "details"
+
+    ASSET_CATEGORIES ||--o{ ASSETS : "classifies"
+    ASSETS ||--o{ ASSET_ASSIGNMENTS : "allocated_in"
+    ASSETS ||--o{ ASSET_MAINTENANCE : "serviced_in"
+
+    ORGANIZATIONS {
+        int id PK
+        string name
+        string slug
+        string status
+        datetime created_at
+    }
+
+    USERS {
+        int id PK
+        int org_id FK
+        int role_id FK
+        int department_id FK
+        int shift_id FK
+        string employee_id
+        string email
+        string full_name
+        string hashed_password
+        boolean is_active
+        int is_deleted
+        datetime created_at
+    }
+
+    ROLES {
+        int id PK
+        string name
+        string tier
+        boolean is_system
+        string description
+    }
+
+    PERMISSIONS {
+        int id PK
+        string name
+        string module
+        string action
+        string description
+    }
+
+    ROLE_PERMISSIONS {
+        int id PK
+        int role_id FK
+        int permission_id FK
+    }
+
+    USER_ROLES {
+        int id PK
+        int user_id FK
+        int role_id FK
+    }
+
+    USER_SESSIONS {
+        int id PK
+        int user_id FK
+        string session_token
+        string jti
+        string refresh_token_hash
+        boolean is_active
+        datetime expires_at
+    }
+
+    FACE_EMBEDDINGS {
+        int id PK
+        int user_id FK
+        int org_id FK
+        vector embedding
+        string model_name
+        boolean is_active
+        datetime created_at
+    }
+
+    ATTENDANCE_LOGS {
+        int id PK
+        int user_id FK
+        int org_id FK
+        datetime timestamp
+        string status
+        string verification_method
+        float confidence_score
+        float liveness_score
+        string location
+        string blockchain_tx_hash
+    }
+
+    LEAVE_REQUESTS {
+        int id PK
+        int user_id FK
+        int org_id FK
+        int leave_type_id FK
+        date start_date
+        date end_date
+        float total_days
+        string status
+        int approved_by FK
+        datetime approved_at
+    }
+
+    PAYSLIPS {
+        int id PK
+        int user_id FK
+        int org_id FK
+        int payroll_run_id FK
+        string payslip_number
+        numeric net_pay
+        numeric gross_pay
+        numeric total_deductions
+        string pdf_url
+        string status
+    }
+
+    SUBSCRIPTION_PLANS {
+        int id PK
+        string name
+        string code
+        string tier
+        numeric price_monthly
+        boolean is_active
+    }
+
+    ORGANIZATION_SUBSCRIPTIONS {
+        int id PK
+        int org_id FK
+        int plan_id FK
+        string status
+        date current_period_end
+    }
+
+    ASSETS {
+        int id PK
+        int org_id FK
+        int category_id FK
+        string asset_tag
+        string name
+        string status
+        string serial_number
+    }

@@ -1,0 +1,85 @@
+graph TD
+    subgraph ExternalLibraries["External Dependencies"]
+        FASTAPI["fastapi / starlette / uvicorn"]
+        SQLALCHEMY["sqlalchemy 2.0 / alembic"]
+        PG_DRIVERS["psycopg2-binary / asyncpg"]
+        PGVECTOR["pgvector (Vector / HNSW)"]
+        AUTH_LIB["python-jose / passlib / bcrypt"]
+        AI_STACK["deepface / face-recognition / torch / mediapipe"]
+        CACHE_LIB["redis / diskcache"]
+        WEB3_LIB["web3 (Ethereum)"]
+        PDF_LIB["reportlab / matplotlib"]
+        HTTP_LIB["httpx / requests"]
+    end
+
+    subgraph BackendApp["backend/app Internal Package Graph"]
+        MAIN["main.py"]
+        CORE["app.core\n- config\n- security\n- rate_limit\n- observability\n- cache"]
+        DB["app.db\n- database (SessionLocal/engine)\n- models.all_models (224 tables)\n- models.base (Base)"]
+        API_DEPS["app.api\n- deps (get_db, get_current_user, require_perm)\n- dynamic_role_deps\n- scope_deps"]
+        MIDDLEWARE["app.middleware\n- tenant_context\n- tenant_isolation\n- correlation_id\n- metrics"]
+        CRUD["app.crud\n- crud_user\n- crud_attendance\n- crud_leave\n- crud_payroll\n- 22 modules"]
+        SERVICES["app.services\n- attendance_pipeline\n- biometrics_service\n- payroll_service\n- leave_service\n- 128 modules"]
+        REPOSITORIES["app.repositories\n- user_repository\n- attendance_repository\n- org_repository"]
+        SCHEMAS["app.schema & app.schemas\n- Pydantic models (32 modules)"]
+        ROUTERS["app.routers\n- 48 mounted routers\n- 756 endpoints"]
+    end
+
+    subgraph FrontendApp["frontend/src Package Graph"]
+        F_MAIN["main.jsx & App.jsx"]
+        F_PAGES["pages (60 components)"]
+        F_COMPONENTS["components (UI, modals, layout)"]
+        F_SERVICES["services (34 Axios wrappers)"]
+        F_STORE["store (Zustand: auth, permission, subscription)"]
+        F_HOOKS["hooks (useApi, usePermission, useSubscription)"]
+    end
+
+    %% Backend internal import flows
+    MAIN --> CORE
+    MAIN --> MIDDLEWARE
+    MAIN --> ROUTERS
+    MAIN --> DB
+
+    ROUTERS --> API_DEPS
+    ROUTERS --> SCHEMAS
+    ROUTERS --> SERVICES
+    ROUTERS --> CRUD
+    ROUTERS --> DB
+
+    API_DEPS --> CORE
+    API_DEPS --> DB
+    API_DEPS --> CRUD
+    API_DEPS --> SCHEMAS
+
+    SERVICES --> DB
+    SERVICES --> CRUD
+    SERVICES --> REPOSITORIES
+    SERVICES --> CORE
+    SERVICES --> SCHEMAS
+
+    CRUD --> DB
+    CRUD --> SCHEMAS
+    REPOSITORIES --> DB
+
+    DB --> CORE
+
+    %% External bindings to backend
+    CORE --> AUTH_LIB
+    CORE --> CACHE_LIB
+    DB --> SQLALCHEMY
+    DB --> PG_DRIVERS
+    DB --> PGVECTOR
+    ROUTERS --> FASTAPI
+    SERVICES --> AI_STACK
+    SERVICES --> WEB3_LIB
+    SERVICES --> PDF_LIB
+    SERVICES --> HTTP_LIB
+
+    %% Frontend internal import flows
+    F_MAIN --> F_STORE
+    F_MAIN --> F_PAGES
+    F_PAGES --> F_COMPONENTS
+    F_PAGES --> F_SERVICES
+    F_PAGES --> F_HOOKS
+    F_SERVICES --> F_STORE
+    F_HOOKS --> F_STORE

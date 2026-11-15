@@ -1,0 +1,51 @@
+sequenceDiagram
+    autonumber
+    actor Employee as User / Employee
+    participant UI as Frontend (React 19)
+    participant Nginx as Nginx Proxy
+    participant FastAPIMain as FastAPI (main.py)
+    participant RateLimiter as Rate Limit (Redis)
+    participant AuthGuard as Auth & RBAC (deps.py)
+    participant AttendanceRouter as Attendance Router
+    participant BioService as Biometrics & AI Service
+    participant Database as PostgreSQL (pgvector)
+    participant AuditLog as Blockchain / Audit Engine
+    participant Notify as Notification Engine
+
+    Employee->>UI: Present Face at Webcam Clock-In
+    Note over UI: MediaPipe verifies face presence & landmarks
+    UI->>Nginx: POST /api/v1/attendance/verify-checkin (Image Base64/Multipart)
+    Nginx->>FastAPIMain: Forward Request with Headers
+    FastAPIMain->>RateLimiter: Check IP Sliding Window (100 req/min)
+    RateLimiter-->>FastAPIMain: Allow
+    FastAPIMain->>AuthGuard: Validate Bearer JWT & Session JTI
+    AuthGuard->>Database: Query User & Active UserSession
+    Database-->>AuthGuard: User & Org Context
+    AuthGuard-->>AttendanceRouter: Authorized (user_id, org_id)
+
+    AttendanceRouter->>BioService: Verify Liveness & Extract Embedding (128-dim)
+    Note over BioService: Anti-spoof analysis & Facenet embedding
+    BioService-->>AttendanceRouter: Embedding Vector + Liveness Confirmed
+
+    AttendanceRouter->>Database: Query HNSW Cosine Distance (<-> operator)
+    Note over Database: SELECT user_id FROM face_embeddings WHERE org_id=:org ORDER BY embedding <-> :vector LIMIT 1
+    Database-->>AttendanceRouter: Matched User & Distance (< 0.40 threshold)
+
+    AttendanceRouter->>Database: Check Cooldown (5 min) & Fetch Shift Rules
+    Database-->>AttendanceRouter: Eligible for Clock-in
+
+    AttendanceRouter->>Database: INSERT INTO attendance_logs (status='present', timestamp=NOW())
+    Database-->>AttendanceRouter: Log Created (log_id)
+
+    opt Blockchain Audit Anchoring Enabled
+        AttendanceRouter->>AuditLog: Anchor Hash to Smart Contract (Web3)
+        AuditLog-->>AttendanceRouter: Tx Hash Recorded
+    end
+
+    AttendanceRouter->>Notify: Dispatch In-Memory Event (Clock-in Success)
+    Notify-->>AttendanceRouter: Event Queued
+
+    AttendanceRouter-->>FastAPIMain: 200 OK (Checkin Successful, timestamp, user)
+    FastAPIMain-->>Nginx: 200 OK + Process-Time Header
+    Nginx-->>UI: 200 OK JSON Response
+    UI-->>Employee: Display Attendance Confirmation & Status Badge
